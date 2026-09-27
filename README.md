@@ -4,6 +4,10 @@ A self-hosted web app for managing EmulationStation `gamelist.xml` metadata and 
 
 > **No games or media included.** RetroManager is a tool for organising a library you already have. This project does not supply, link to or help obtain ROMs, BIOS files, disc images, or game artwork, screenshots or videos. Only use games you own and are legally allowed to copy where you live. Metadata and artwork downloaded through the scrapers come from ScreenScraper and IGDB under their own terms.
 
+## AI Disclosure
+This entire project has been created with Claude Code based on my own design and iterative feedback. If you are against AI coding...  I hate that I use it but it has enabled me to make tools that otherwise I wouldn't have the time to learn to build myself, so I'll live with my hypocrisy. AI for art is just bad though - don't do that.
+
+
 ## Features
 
 - **System discovery**: every folder under the ROMs mount is treated as a system. Nothing is hard-coded.
