@@ -21,6 +21,30 @@ A self-hosted web app for managing EmulationStation `gamelist.xml` metadata and 
 - **Timeline**: every game on one timeline at `/timeline`, filtered by system or series. See [Timeline](#timeline).
 - **Dashboard stats**: `/api/stats` feeds a Homepage dashboard tile. See [homepage-widget/README.md](homepage-widget/README.md).
 
+## Screenshots
+
+**Library**: systems, games and the details editor.
+
+![Library page with Game Boy Advance games and The Legend of Zelda: The Minish Cap open](docs/screenshots/library.webp)
+
+**Bookcase**: one shelf per system; hovering turns a box to face you.
+
+![Bookcase with Atari 2600 games, Asteroids turned to face out](docs/screenshots/bookcase.webp)
+
+Click a box to take it off the shelf:
+
+![A SNES box taken off the shelf, with its details card](docs/screenshots/bookcase-open.webp)
+
+**Timeline**: every game by release year. Pick series to join their games with a line.
+
+![Timeline with the Star Wars and The Legend of Zelda series lines](docs/screenshots/timeline.webp)
+
+![Timeline grouped by decade](docs/screenshots/timeline-decades.webp)
+
+**Library health**: every system's scan in one table.
+
+![Library health table](docs/screenshots/library-health.webp)
+
 ## Stack
 
 | Part | Details |
@@ -486,4 +510,4 @@ Request and response shapes are in [SCRAPING.md](SCRAPING.md).
 
 [MIT](LICENSE) © [DeltaGemini](https://github.com/DeltaGemini). Use it, change it and share it freely; copies and forks must keep the licence and credit.
 
-The repository contains no artwork: box art, screenshots and videos come from your own library and the scrapers, and the app icon is drawn by the backend.
+The app contains no artwork: box art, screenshots and videos come from your own library and the scrapers, and the app icon is drawn by the backend. Game artwork seen in the README screenshots belongs to its respective owners and is shown only to illustrate the app.
