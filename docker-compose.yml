@@ -1,0 +1,52 @@
+services:
+  retromanager:
+    build: .
+    container_name: retromanager
+    ports:
+      - "${RETROMANAGER_PORT:-5000}:5000"
+    volumes:
+      # Your library: set RETRO_DIR in .env (see .env.example). The folders
+      # inside it are the EmulationStation/RetroPie layout: roms/<system>/ and
+      # media/<System name>/<type>/, with saves and states beside them.
+      - ${RETRO_DIR:?Set RETRO_DIR in .env}/roms:/roms
+      - ${RETRO_DIR}/media:/media
+      # Saves are writable so Syncthing conflicts can be resolved (the version not
+      # kept is moved to save-backups, never deleted). Add :ro to only view them.
+      - ${RETRO_DIR}/saves:/saves
+      - ${RETRO_DIR}/savestates:/savestates
+      # New games: drop files here (in a subfolder named after the system to skip
+      # choosing it) and add them from the Add games page. Uploads are staged here too.
+      - ${RETRO_DIR}/inbox:/inbox
+      # RetroManager's own files (library-scrape memory, duplicates moved aside,
+      # picture thumbnails). Keep it outside any synced folders.
+      - ${RETRO_DIR}/retromanager:/data
+      # Zipped save backups and versions set aside when resolving conflicts
+      - ${RETRO_DIR}/save-backups:/save-backups
+    environment:
+      - ROMS_PATH=/roms
+      - MEDIA_PATH=/media
+      - SAVES_PATH=/saves
+      - SAVESTATES_PATH=/savestates
+      - SAVE_BACKUP_PATH=/save-backups
+      - INBOX_PATH=/inbox
+      - DATA_PATH=/data
+      # Scaled pictures for the Bookcase and Timeline, kept across updates
+      - THUMB_DIR=/data/thumbs
+      # Per-person folders inside saves/ and savestates/ (optional)
+      - SAVE_PROFILES=${SAVE_PROFILES:-}
+      # Scraping. Without these the library still works, but can't scrape.
+      - SCREENSCRAPER_LOGIN=${SCREENSCRAPER_LOGIN:-}
+      - SCREENSCRAPER_PASSWORD=${SCREENSCRAPER_PASSWORD:-}
+      - SCREENSCRAPER_DEBUG_PASSWORD=${SCREENSCRAPER_DEBUG_PASSWORD:-}
+      - SCREENSCRAPER_USER=${SCREENSCRAPER_USER:-}
+      - SCREENSCRAPER_USER_PASSWORD=${SCREENSCRAPER_USER_PASSWORD:-}
+      - IGDB_CLIENT_ID=${IGDB_CLIENT_ID:-}
+      - IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET:-}
+      - NAME_STYLE_SERIES=${NAME_STYLE_SERIES:-}
+    restart: unless-stopped
+    networks:
+      - retromanager-net
+
+networks:
+  retromanager-net:
+    driver: bridge

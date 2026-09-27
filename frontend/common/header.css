@@ -1,0 +1,71 @@
+/* The header every RetroManager page shares (common/header.js). Colours come
+   from the page's own theme variables. */
+:root { --rm-header-h: 52px; }
+
+.rm-header {
+    position: sticky; top: 0; z-index: 30;
+    height: var(--rm-header-h);
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 16px; padding-top: env(safe-area-inset-top);
+    background: var(--bg-secondary); border-bottom: 1px solid var(--border-color);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Ubuntu', 'Helvetica Neue', sans-serif;
+    font-size: 13px; color: var(--text-primary);
+}
+.rm-brand {
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0; text-decoration: none;
+    color: var(--accent-pink); font-weight: 700; letter-spacing: 1px; text-transform: uppercase; font-size: 14px;
+}
+.rm-brand img { width: 26px; height: 26px; border-radius: 6px; }
+
+.rm-nav { display: flex; gap: 2px; align-self: stretch; }
+.rm-nav a {
+    display: flex; align-items: center; gap: 6px; padding: 0 12px; text-decoration: none;
+    color: var(--text-secondary); border-bottom: 3px solid transparent; margin-bottom: -1px; font-weight: 600;
+}
+.rm-nav a:hover { color: var(--text-primary); }
+.rm-nav a[aria-current="page"] { color: var(--text-primary); border-bottom-color: var(--accent-pink); }
+
+.rm-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.rm-btn {
+    font: inherit; font-size: 13px; color: var(--text-primary); background: var(--bg-tertiary);
+    border: 1px solid var(--border-color); border-radius: 4px; padding: 6px 10px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px; text-decoration: none; line-height: 1.2;
+    box-shadow: none; text-transform: none; letter-spacing: 0; font-weight: 400; white-space: nowrap;
+}
+.rm-btn:hover { border-color: var(--accent-pink); background: var(--bg-tertiary); }
+.rm-btn[aria-current="page"] { border-color: var(--accent-pink); }
+.rm-chip { font-variant-numeric: tabular-nums; border-color: var(--accent-pink); }
+
+.rm-menu-wrap { position: relative; }
+.rm-menu {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 1200; width: 270px; max-width: calc(100vw - 24px);
+    background: var(--bg-modal, var(--bg-secondary)); border: 1px solid var(--border-color); border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); padding: 4px;
+}
+.rm-menu button {
+    display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; background: none; border: none;
+    border-radius: 4px; padding: 8px 10px; cursor: pointer; font: inherit; font-size: 13px; color: var(--text-primary);
+    box-shadow: none; text-transform: none; letter-spacing: 0; font-weight: 400;
+}
+.rm-menu button:hover, .rm-menu button:focus-visible { background: var(--bg-tertiary); }
+.rm-menu .rm-help { display: block; font-size: 11px; color: var(--text-secondary); }
+
+/* The page's own controls, under the header */
+.rm-subbar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 8px 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color);
+    font-size: 13px; color: var(--text-secondary);
+}
+
+/* Narrow screens: icons only, except the page you're on */
+@media (max-width: 760px) {
+    .rm-header { gap: 8px; padding: 0 10px; }
+    .rm-brand span, .rm-actions .rm-label { display: none; }
+    .rm-nav a { padding: 0 9px; }
+    .rm-nav a:not([aria-current="page"]) .rm-label { display: none; }
+    .rm-btn { padding: 6px 8px; font-size: 15px; }
+    .rm-subbar { padding: 8px 10px; }
+}
+@media (max-width: 380px) {
+    .rm-brand { display: none; }
+}

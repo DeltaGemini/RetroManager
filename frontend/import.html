@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RetroManager Add Games</title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#0f1535">
+    <link rel="icon" href="/icons/icon-192.png">
+    <script>
+        try { if (localStorage.getItem('retromanager.theme') === 'light') document.documentElement.dataset.theme = 'light'; } catch (e) {}
+        if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('/sw.js').catch(() => {});
+    </script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
+    <link rel="stylesheet" href="/common/header.css">
+    <script src="/common/header.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        /* Same palette as the library page (index.html) */
+        :root {
+            color-scheme: dark;
+            --bg-primary: #0a0e27;
+            --bg-secondary: #0f1535;
+            --bg-tertiary: #14194f;
+            --text-primary: #e0e0e0;
+            --text-secondary: #999999;
+            --accent-pink: #ff6b9d;
+            --accent-orange: #ff9d3d;
+            --success: #3ccf91;
+            --border-color: #2a2d4a;
+        }
+        :root[data-theme="light"] {
+            color-scheme: light;
+            --bg-primary: #f4f5fb;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #eceef7;
+            --text-primary: #1c1f33;
+            --text-secondary: #5f6480;
+            --accent-pink: #d6336c;
+            --accent-orange: #c2560c;
+            --success: #16935f;
+            --border-color: #d3d7e8;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Ubuntu', 'Helvetica Neue', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            font-size: 14px;
+        }
+
+        .steps { display: flex; gap: 6px; padding: 12px 16px 0; max-width: 900px; margin: 0 auto; font-size: 12px; color: var(--text-secondary); }
+        .steps span { flex: 1; padding-bottom: 6px; border-bottom: 3px solid var(--border-color); }
+        .steps span.on { color: var(--text-primary); border-color: var(--accent-pink); }
+
+        main { max-width: 900px; margin: 0 auto; padding: 16px 16px 120px; }
+        h2 { font-size: 16px; margin: 20px 0 8px; }
+        h2:first-child { margin-top: 0; }
+        .muted { color: var(--text-secondary); font-size: 13px; line-height: 1.45; }
+        .small { font-size: 12px; }
+
+        button, select, input { font: inherit; color: inherit; }
+        .btn {
+            border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary);
+            border-radius: 4px; padding: 8px 14px; cursor: pointer; font-size: 13px; text-decoration: none; display: inline-block;
+        }
+        .btn:hover { border-color: var(--accent-pink); }
+        .btn.primary { background: var(--accent-pink); border-color: var(--accent-pink); color: #fff; font-weight: 600; }
+        .btn.small { padding: 4px 10px; font-size: 12px; }
+        .btn:disabled { opacity: 0.5; cursor: default; }
+        .link { background: none; border: none; color: var(--accent-pink); cursor: pointer; padding: 0; font-size: 12px; }
+
+        input[type="text"], input[type="search"], select {
+            background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px 10px; min-width: 0;
+        }
+        input[type="text"]:focus, input[type="search"]:focus, select:focus { outline: none; border-color: var(--accent-pink); }
+
+        .drop {
+            border: 2px dashed var(--border-color); border-radius: 8px; padding: 28px 16px; text-align: center;
+            background: var(--bg-secondary); cursor: pointer; transition: border-color 0.15s, background 0.15s;
+        }
+        .drop.over { border-color: var(--accent-pink); background: var(--bg-tertiary); }
+        .drop .big { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+
+        .list { display: flex; flex-direction: column; gap: 6px; }
+        .row {
+            display: flex; gap: 10px; align-items: center; padding: 8px 10px;
+            background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px;
+        }
+        .row .grow { flex: 1; min-width: 0; }
+        .row .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .bar { height: 4px; background: var(--bg-tertiary); border-radius: 2px; overflow: hidden; margin-top: 6px; }
+        .bar > div { height: 100%; background: var(--accent-pink); transition: width 0.3s; }
+        .bar.done > div { background: var(--success); }
+
+        .card {
+            background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px;
+            display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px;
+        }
+        .card.off { opacity: 0.5; }
+        .card .cover { width: 96px; height: 128px; border-radius: 4px; background: var(--bg-tertiary); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+        .card .cover img { width: 100%; height: 100%; object-fit: cover; }
+        .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+        .field label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+        .pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+        .badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; border: 1px solid currentColor; white-space: nowrap; }
+        .warn { color: var(--accent-orange); font-size: 12px; margin-top: 4px; }
+        .error { color: var(--accent-pink); font-size: 12px; margin-top: 4px; }
+        .ok { color: var(--success); }
+
+        .footer {
+            position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color); padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+        }
+        .footer > div { max-width: 900px; margin: 0 auto; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .footer .note { flex: 1; min-width: 160px; font-size: 12px; color: var(--text-secondary); }
+
+        .checks { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+        .checks label, label.check { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+        .notice { background: var(--bg-tertiary); border-radius: 6px; padding: 10px 12px; font-size: 13px; margin-bottom: 12px; }
+
+        @media (max-width: 600px) {
+            .card { grid-template-columns: 64px minmax(0, 1fr); }
+            .card .cover { width: 64px; height: 86px; }
+            .pair { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+        const API_BASE = window.location.origin;
+        const CHUNK = 8 * 1024 * 1024;
+
+        const MEDIA = [
+            { key: 'box2d', label: 'Box 2D' }, { key: 'screenshot', label: 'Screenshot' },
+            { key: 'screenshottitle', label: 'Title screen' }, { key: 'wheel', label: 'Wheel' },
+            { key: 'mix', label: 'Mix' }, { key: 'box3d', label: 'Box 3D' },
+            { key: 'boxside', label: 'Spine' }, { key: 'fanart', label: 'Fanart' }, { key: 'manuals', label: 'Manual' },
+        ];
+        const CONFIDENCE = {
+            exact: { label: 'Exact', color: 'var(--success)' },
+            likely: { label: 'Likely', color: 'var(--accent-orange)' },
+            unsure: { label: 'Unsure', color: 'var(--accent-pink)' },
+            none: { label: 'No match', color: 'var(--text-secondary)' },
+        };
+
+        const formatBytes = (n) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB`
+            : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(2)} GB`;
+        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+        const api = async (path, options = {}) => {
+            const res = await fetch(`${API_BASE}${path}`, options);
+            const data = await res.json().catch(() => ({ success: false, error: `HTTP ${res.status}` }));
+            return { status: res.status, ...data };
+        };
+        const post = (path, body) => api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const gameLink = (system, romPath) => `/?${new URLSearchParams({ system, game: `./${romPath}` })}`;
+
+
+        // ------------------------------------------------------------------
+        // Uploading: 8 MB chunks; a dropped connection retries and resumes
+        // ------------------------------------------------------------------
+        function useUploader(onFinished) {
+            const [jobs, setJobs] = useState([]); // {key, file, id, name, size, received, state, error, speed}
+            const queue = useRef([]);
+            const running = useRef(false);
+            const cancelled = useRef(new Set());
+
+            const update = (key, changes) => setJobs(list => list.map(j => j.key === key ? { ...j, ...changes } : j));
+
+            const runOne = async (job) => {
+                const { file, key } = job;
+                let start = await post('/api/uploads', { name: file.name, size: file.size, key });
+                if (!start.success) { update(key, { state: 'failed', error: start.error }); return; }
+                let received = start.received;
+                update(key, { id: start.id, received, state: received >= file.size ? 'done' : 'uploading' });
+                let failures = 0;
+                let lastTime = performance.now(), lastBytes = received;
+                while (received < file.size) {
+                    if (cancelled.current.has(key)) return;
+                    try {
+                        const res = await fetch(`${API_BASE}/api/uploads/${start.id}?offset=${received}`, {
+                            method: 'PUT', body: file.slice(received, Math.min(received + CHUNK, file.size)),
+                            headers: { 'Content-Type': 'application/octet-stream' },
+                        });
+                        const data = await res.json();
+                        if (!data.success && res.status !== 409) throw new Error(data.error || `HTTP ${res.status}`);
+                        received = data.received;
+                        failures = 0;
+                        const now = performance.now();
+                        const speed = now - lastTime > 1000 ? (received - lastBytes) / ((now - lastTime) / 1000) : undefined;
+                        if (speed !== undefined) { lastTime = now; lastBytes = received; }
+                        update(key, { received, state: 'uploading', error: null, ...(speed !== undefined ? { speed } : {}) });
+                    } catch (err) {
+                        // Wait and pick up where the server says it got to
+                        failures++;
+                        const wait = Math.min(30, 2 ** Math.min(failures, 5));
+                        update(key, { state: 'retrying', error: `Connection lost, retrying in ${wait}s` });
+                        await sleep(wait * 1000);
+                        const status = await api(`/api/uploads/${start.id}`).catch(() => null);
+                        if (status && status.success) received = status.received;
+                    }
+                }
+                update(key, { state: 'done', received: file.size, error: null });
+                onFinished && onFinished();
+            };
+
+            const pump = async () => {
+                if (running.current) return;
+                running.current = true;
+                let wakeLock = null;
+                try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (e) {}
+                while (queue.current.length) {
+                    const job = queue.current.shift();
+                    if (!cancelled.current.has(job.key)) await runOne(job);
+                }
+                try { wakeLock && wakeLock.release(); } catch (e) {}
+                running.current = false;
+            };
+
+            const add = (files) => {
+                const fresh = [];
+                [...files].forEach(file => {
+                    const key = `${file.name}|${file.size}|${file.lastModified}`;
+                    cancelled.current.delete(key);
+                    fresh.push({ key, file, name: file.name, size: file.size, received: 0, state: 'waiting' });
+                });
+                setJobs(list => [...list.filter(j => !fresh.some(f => f.key === j.key)), ...fresh]);
+                queue.current.push(...fresh);
+                pump();
+            };
+            const cancel = async (job) => {
+                cancelled.current.add(job.key);
+                queue.current = queue.current.filter(j => j.key !== job.key);
+                setJobs(list => list.filter(j => j.key !== job.key));
+                if (job.id) await api(`/api/uploads/${job.id}`, { method: 'DELETE' });
+            };
+            const busy = jobs.some(j => j.state !== 'done' && j.state !== 'failed');
+            return { jobs, add, cancel, busy };
+        }
+
+        // ------------------------------------------------------------------
+        // Step 1: pick files (this device, or the inbox)
+        // ------------------------------------------------------------------
+        function ChooseStep({ pending, reload, uploader, selected, setSelected, shared }) {
+            const inputRef = useRef(null);
+            const [over, setOver] = useState(false);
+            const uploads = pending?.uploads || [];
+            const inbox = pending?.inbox || [];
+            // Files uploading now, then earlier uploads the server already has
+            const liveKeys = new Set(uploader.jobs.map(j => j.id).filter(Boolean));
+            const earlier = uploads.filter(u => !liveKeys.has(u.id));
+            // Finished uploads that have since been added to the library drop off
+            const pendingIds = new Set(uploads.map(u => u.id));
+            const jobs = uploader.jobs.filter(j => j.state !== 'done' || !j.id || pendingIds.has(j.id));
+
+            const toggle = (ref) => setSelected(prev => {
+                const next = new Set(prev);
+                next.has(ref) ? next.delete(ref) : next.add(ref);
+                return next;
+            });
+            const onDrop = (e) => { e.preventDefault(); setOver(false); if (e.dataTransfer.files.length) uploader.add(e.dataTransfer.files); };
+
+            return (
+                <>
+                    {shared > 0 && <div className="notice">{shared} file{shared > 1 ? 's' : ''} shared to RetroManager {shared > 1 ? 'are' : 'is'} ready below.</div>}
+                    <h2>From this device</h2>
+                    <div className={`drop${over ? ' over' : ''}`} role="button" tabIndex={0}
+                        onClick={() => inputRef.current.click()}
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inputRef.current.click(); } }}
+                        onDragOver={e => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
+                        <div className="big">Choose ROM files</div>
+                        <div className="muted">or drop them here. Pick all of a game's files together: a .cue with its .bin tracks, or every disc.</div>
+                        <input ref={inputRef} type="file" multiple hidden onChange={e => { uploader.add(e.target.files); e.target.value = ''; }} />
+                    </div>
+
+                    {(jobs.length > 0 || earlier.length > 0) && (
+                        <div className="list" style={{ marginTop: 12 }}>
+                            {jobs.map(job => {
+                                const ref = job.id ? `upload:${job.id}` : null;
+                                const done = job.state === 'done';
+                                const pct = job.size ? Math.floor((job.received / job.size) * 100) : 100;
+                                return (
+                                    <div className="row" key={job.key}>
+                                        <input type="checkbox" aria-label={`Include ${job.name}`} disabled={!done}
+                                            checked={done && selected.has(ref)} onChange={() => toggle(ref)} />
+                                        <div className="grow">
+                                            <div className="name">{job.name}</div>
+                                            <div className="muted small">
+                                                {formatBytes(job.size)} · {done ? <span className="ok">Uploaded</span>
+                                                    : job.state === 'waiting' ? 'Waiting'
+                                                    : job.state === 'failed' ? <span className="error">{job.error}</span>
+                                                    : job.error ? <span style={{ color: 'var(--accent-orange)' }}>{pct}% · {job.error}</span>
+                                                    : `${pct}%${job.speed ? ` · ${formatBytes(job.speed)}/s` : ''}`}
+                                            </div>
+                                            {!done && <div className="bar"><div style={{ width: `${pct}%` }} /></div>}
+                                        </div>
+                                        <button className="btn small" onClick={() => uploader.cancel(job)} aria-label={`Remove ${job.name}`}>{done ? 'Remove' : 'Cancel'}</button>
+                                    </div>
+                                );
+                            })}
+                            {earlier.map(u => (
+                                <div className="row" key={u.id}>
+                                    <input type="checkbox" aria-label={`Include ${u.name}`} disabled={!u.complete}
+                                        checked={u.complete && selected.has(u.ref)} onChange={() => toggle(u.ref)} />
+                                    <div className="grow">
+                                        <div className="name">{u.name}</div>
+                                        <div className="muted small">
+                                            {formatBytes(u.size)} · {u.complete ? 'Uploaded earlier' : `Stopped at ${Math.floor((u.received / u.size) * 100)}%. Choose the same file again to finish it.`}
+                                        </div>
+                                    </div>
+                                    <button className="btn small" onClick={async () => { await api(`/api/uploads/${u.id}`, { method: 'DELETE' }); reload(); }}>Remove</button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <h2>From the inbox folder</h2>
+                    {!pending ? <div className="muted">Looking...</div> : !pending.inbox_available ? (
+                        <div className="muted">
+                            No inbox folder is mounted. Add one in docker-compose.yml (see the README) to add games you've copied to the NAS.
+                        </div>
+                    ) : inbox.length === 0 ? (
+                        <div className="muted">
+                            Empty. Copy games into the <code>inbox</code> folder on the NAS; put them in a folder named after the system (<code>inbox/snes/</code>) to skip choosing it.
+                            {' '}<button className="link" onClick={reload}>Check again</button>
+                        </div>
+                    ) : (
+                        <>
+                            <div style={{ display: 'flex', gap: 12, marginBottom: 6 }}>
+                                <button className="link" onClick={() => setSelected(prev => new Set([...prev, ...inbox.map(i => i.ref)]))}>Select all</button>
+                                <button className="link" onClick={() => setSelected(prev => new Set([...prev].filter(r => !r.startsWith('inbox:'))))}>None</button>
+                                <button className="link" onClick={reload}>Check again</button>
+                            </div>
+                            <div className="list">
+                                {inbox.map(i => (
+                                    <label className="row" key={i.ref} style={{ cursor: 'pointer' }}>
+                                        <input type="checkbox" checked={selected.has(i.ref)} onChange={() => toggle(i.ref)} />
+                                        <div className="grow">
+                                            <div className="name">{i.name}</div>
+                                            <div className="muted small">{formatBytes(i.size)}{i.folder ? ` · inbox/${i.folder}` : ''}</div>
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                        </>
+                    )}
+                </>
+            );
+        }
+
+        // ------------------------------------------------------------------
+        // Step 2: one card per game: system, match, name
+        // ------------------------------------------------------------------
+        function GameCard({ game, allSystems, onChange }) {
+            const match = game.match;
+            const top = match && match.alternatives ? match.alternatives.find(a => String(a.id) === String(game.gameId)) : null;
+            const [query, setQuery] = useState('');
+            const blocked = match && match.file_exists;
+            const systems = [...game.systems, ...allSystems.filter(s => !game.systems.some(g => g.system === s.system))];
+
+            return (
+                <div className={`card${game.include ? '' : ' off'}`}>
+                    <div className="cover">
+                        {top && top.image ? <img src={top.image} alt="" loading="lazy" /> : <span style={{ fontSize: 28, opacity: 0.4 }}>🎮</span>}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                        <label className="check" style={{ marginBottom: 8, fontWeight: 600 }}>
+                            <input type="checkbox" checked={game.include} disabled={blocked} onChange={e => onChange({ include: e.target.checked })} />
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{game.main}</span>
+                        </label>
+                        <div className="muted small" style={{ marginBottom: 8 }}>
+                            {game.discs ? `${game.discs.length} discs, one .m3u playlist will be made`
+                                : game.files.length > 1 ? `${game.files.length} files (a .cue and its tracks)` : '1 file'} · {formatBytes(game.size)}
+                        </div>
+                        {game.missing.length > 0 && <div className="warn">The .cue names files you didn't pick: {game.missing.join(', ')}</div>}
+
+                        <div className="pair">
+                            <div className="field">
+                                <label>System</label>
+                                <select value={game.system || ''} onChange={e => onChange({ system: e.target.value, match: null, gameId: null })}>
+                                    {!game.system && <option value="">Choose a system</option>}
+                                    {game.systems.length > 0 && <optgroup label="Suggested">{game.systems.map(s => <option key={s.system} value={s.system}>{s.full_name}</option>)}</optgroup>}
+                                    <optgroup label="All systems">{systems.slice(game.systems.length).map(s => <option key={s.system} value={s.system}>{s.full_name}</option>)}</optgroup>
+                                </select>
+                                <span className="muted small">{game.systems.length ? `Suggested because ${game.reason}` : 'Choose the system: the file type doesn\'t say'}</span>
+                            </div>
+                            <div className="field">
+                                <label>Name</label>
+                                <input type="text" value={game.nameEdited ? game.name : (top ? top.nom : game.name)}
+                                    onChange={e => onChange({ name: e.target.value, nameEdited: true })} />
+                                <span className="muted small">
+                                    {game.nameEdited ? 'Your name will be used' : top ? "ScreenScraper's name (put in your house style when added)" : 'From the file name'}
+                                    {game.nameEdited && <> · <button className="link" onClick={() => onChange({ nameEdited: false })}>Reset</button></>}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="field">
+                            <label>ScreenScraper match</label>
+                            {!game.system ? <span className="muted small">Choose a system first.</span>
+                                : game.identifying ? <span className="muted small">Looking it up...</span>
+                                : game.identifyError ? <span className="error">{game.identifyError}</span>
+                                : match && (
+                                    <>
+                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                            <select value={game.gameId || ''} onChange={e => onChange({ gameId: e.target.value || null })} style={{ flex: '1 1 220px' }}>
+                                                <option value="">Don't scrape (add the file only)</option>
+                                                {(match.alternatives || []).map(a => (
+                                                    <option key={a.id} value={a.id}>{a.nom}{a.year ? ` (${a.year})` : ''}{a.systemenom ? ` · ${a.systemenom}` : ''}</option>
+                                                ))}
+                                            </select>
+                                            {game.gameId && String(game.gameId) === String(match.match_id) && (
+                                                <span className="badge" style={{ color: CONFIDENCE[match.confidence].color }}>{CONFIDENCE[match.confidence].label}</span>
+                                            )}
+                                        </div>
+                                        <form style={{ display: 'flex', gap: 6, marginTop: 6 }} onSubmit={e => { e.preventDefault(); if (query.trim()) onChange({ search: query.trim() }); }}>
+                                            <input type="search" placeholder="Search another name" value={query} onChange={e => setQuery(e.target.value)} style={{ flex: 1 }} />
+                                            <button className="btn small" type="submit">Search</button>
+                                        </form>
+                                    </>
+                                )}
+                        </div>
+
+                        {match && match.file_exists && <div className="error">{match.target} already exists, so this can't be added. Remove or rename it first.</div>}
+                        {match && !match.file_exists && match.in_library.length > 0 && (
+                            <div className="warn">Already in the library: {match.in_library.map(g => g.name || g.path).join(', ')}. You can still add it.</div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        function ImportApp() {
+            const params = new URLSearchParams(window.location.search);
+            const shared = Number(params.get('shared') || 0);
+            const preferredSystem = params.get('system');
+            const [step, setStep] = useState('choose'); // choose | review | adding | done
+            const [pending, setPending] = useState(null);
+            const [selected, setSelected] = useState(new Set());
+            const [games, setGames] = useState([]);
+            const [allSystems, setAllSystems] = useState([]);
+            const [media, setMedia] = useState(() => Object.fromEntries(MEDIA.map(m => [m.key, true])));
+            const [results, setResults] = useState([]);
+            const [error, setError] = useState(null);
+            const autoSelected = useRef(false);
+
+            const reload = useCallback(async () => {
+                const d = await api('/api/import/pending');
+                if (d.success) setPending(d); else setError(d.error);
+                return d;
+            }, []);
+            useEffect(() => {
+                reload().then(d => {
+                    // Shared files (and anything already uploaded) start ticked
+                    if (d && d.success && !autoSelected.current) {
+                        autoSelected.current = true;
+                        setSelected(new Set(d.uploads.filter(u => u.complete).map(u => u.ref)));
+                    }
+                });
+            }, []);
+            const uploader = useUploader(reload);
+            // A finished upload is ticked for review
+            useEffect(() => {
+                uploader.jobs.filter(j => j.state === 'done' && j.id).forEach(j => {
+                    setSelected(prev => prev.has(`upload:${j.id}`) ? prev : new Set([...prev, `upload:${j.id}`]));
+                });
+            }, [uploader.jobs]);
+            useEffect(() => {
+                const warn = (e) => { if (uploader.busy || step === 'adding') { e.preventDefault(); e.returnValue = ''; } };
+                window.addEventListener('beforeunload', warn);
+                return () => window.removeEventListener('beforeunload', warn);
+            }, [uploader.busy, step]);
+
+            const updateGame = (index, changes) => setGames(list => list.map((g, i) => i === index ? { ...g, ...changes } : g));
+
+            const identify = async (index, game, search) => {
+                updateGame(index, { identifying: true, identifyError: null });
+                const d = await post('/api/import/identify', { refs: game.refs, system: game.system, query: search || null, name: game.nameEdited ? game.name : null });
+                if (!d.success) { updateGame(index, { identifying: false, identifyError: d.error || 'Lookup failed' }); return; }
+                const confident = d.confidence === 'exact' || d.confidence === 'likely';
+                updateGame(index, {
+                    identifying: false, match: d,
+                    // Confident matches are picked; a search picks its best result
+                    gameId: (confident || search) && d.match_id ? d.match_id : null,
+                    include: d.file_exists ? false : game.include,
+                });
+            };
+
+            const review = async () => {
+                setError(null);
+                const d = await post('/api/import/analyze', { refs: [...selected] });
+                if (!d.success) { setError(d.error); return; }
+                setAllSystems(d.all_systems);
+                const prepared = d.games.map(g => {
+                    const preferred = preferredSystem && g.systems.some(s => s.system === preferredSystem) ? preferredSystem : null;
+                    return { ...g, system: preferred || (g.systems.length === 1 ? g.systems[0].system : (g.systems[0]?.system || '')),
+                             include: true, nameEdited: false, match: null, gameId: null };
+                });
+                setGames(prepared);
+                setStep('review');
+                // Look them up one after another (ScreenScraper allows few at once)
+                for (let i = 0; i < prepared.length; i++) {
+                    if (prepared[i].system) await identify(i, prepared[i]);
+                }
+            };
+
+            // Changing the system (or searching) looks the game up again
+            const change = (index, changes) => {
+                const game = { ...games[index], ...changes };
+                updateGame(index, changes);
+                if ('system' in changes && game.system) identify(index, game);
+                if (changes.search) identify(index, game, changes.search);
+            };
+
+            const add = async () => {
+                setStep('adding');
+                const chosen = games.filter(g => g.include && g.system);
+                const out = chosen.map(g => ({ name: g.nameEdited ? g.name : (g.match?.alternatives?.find(a => String(a.id) === String(g.gameId))?.nom || g.name), state: 'waiting' }));
+                setResults(out);
+                for (let i = 0; i < chosen.length; i++) {
+                    const g = chosen[i];
+                    out[i] = { ...out[i], state: 'adding' };
+                    setResults([...out]);
+                    const d = await post('/api/import/commit', {
+                        refs: g.refs, system: g.system, name: g.nameEdited ? g.name : '',
+                        game_id: g.gameId || null, media: MEDIA.filter(m => media[m.key]).map(m => m.key),
+                    }).catch(err => ({ success: false, error: err.message }));
+                    out[i] = { ...out[i], state: d.success ? 'added' : 'failed', ...d };
+                    setResults([...out]);
+                }
+                setStep('done');
+                setSelected(new Set());
+                reload();
+            };
+
+            const selectedCount = [...selected].filter(ref => ref.startsWith('inbox:')
+                ? (pending?.inbox || []).some(i => i.ref === ref)
+                : (pending?.uploads || []).some(u => u.ref === ref && u.complete) || uploader.jobs.some(j => `upload:${j.id}` === ref && j.state === 'done')).length;
+            const toAdd = games.filter(g => g.include && g.system).length;
+            const stillLooking = games.some(g => g.identifying);
+            const STEPS = [['choose', '1. Choose files'], ['review', '2. Check details'], ['adding', '3. Add']];
+            const stepIndex = { choose: 0, review: 1, adding: 2, done: 2 }[step];
+
+            return (
+                <>
+                    <RM.Header active="import" />
+                    <div className="steps">{STEPS.map(([key, label], i) => <span key={key} className={i <= stepIndex ? 'on' : ''}>{label}</span>)}</div>
+                    <main>
+                        {error && <div className="notice error">{error}</div>}
+
+                        {step === 'choose' && (
+                            <ChooseStep pending={pending} reload={reload} uploader={uploader} selected={selected} setSelected={setSelected} shared={shared} />
+                        )}
+
+                        {step === 'review' && (
+                            <>
+                                <div className="notice">
+                                    <div style={{ marginBottom: 6 }}>Download for games you scrape:</div>
+                                    <div className="checks">
+                                        {MEDIA.map(m => (
+                                            <label key={m.key}><input type="checkbox" checked={!!media[m.key]} onChange={e => setMedia(prev => ({ ...prev, [m.key]: e.target.checked }))} /> {m.label}</label>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="list" style={{ gap: 10 }}>
+                                    {games.map((g, i) => <GameCard key={g.refs.join('|')} game={g} allSystems={allSystems} onChange={changes => change(i, changes)} />)}
+                                </div>
+                            </>
+                        )}
+
+                        {(step === 'adding' || step === 'done') && (
+                            <div className="list">
+                                {results.map((r, i) => (
+                                    <div className="row" key={i}>
+                                        <div className="grow">
+                                            <div className="name">{r.name}</div>
+                                            <div className="muted small">
+                                                {r.state === 'waiting' ? 'Waiting'
+                                                    : r.state === 'adding' ? 'Adding and scraping...'
+                                                    : r.state === 'failed' ? <span className="error">{r.error}</span>
+                                                    : <>
+                                                        <span className="ok">Added to {r.system}</span>
+                                                        {r.downloaded?.length ? ` · ${r.downloaded.length} media downloaded` : ''}
+                                                        {r.errors?.length ? <span className="warn"> · {r.errors.join('; ')}</span> : ''}
+                                                    </>}
+                                            </div>
+                                        </div>
+                                        {r.state === 'added' && <a className="btn small" href={gameLink(r.system, r.rom_path)}>Open</a>}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </main>
+
+                    <div className="footer">
+                        <div>
+                            {step === 'choose' && (
+                                <>
+                                    <span className="note">
+                                        {uploader.busy ? 'Uploading... keep this page open (the upload resumes if the connection drops).'
+                                            : selectedCount ? `${selectedCount} file${selectedCount > 1 ? 's' : ''} ticked` : 'Tick the files to add'}
+                                    </span>
+                                    <button className="btn primary" disabled={!selectedCount} onClick={review}>Next: check details</button>
+                                </>
+                            )}
+                            {step === 'review' && (
+                                <>
+                                    <button className="btn" onClick={() => setStep('choose')}>Back</button>
+                                    <span className="note">{stillLooking ? 'Looking games up on ScreenScraper...' : `${toAdd} of ${games.length} game${games.length > 1 ? 's' : ''} ticked`}</span>
+                                    <button className="btn primary" disabled={!toAdd || stillLooking} onClick={add}>Add {toAdd} game{toAdd === 1 ? '' : 's'}</button>
+                                </>
+                            )}
+                            {step === 'adding' && <span className="note">Adding... keep this page open.</span>}
+                            {step === 'done' && (
+                                <>
+                                    <span className="note">Done.</span>
+                                    <button className="btn" onClick={() => { setStep('choose'); setGames([]); setResults([]); }}>Add more</button>
+                                    <a className="btn primary" href="/">Library</a>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<ImportApp />);
+    </script>
+</body>
+</html>

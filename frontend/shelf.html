@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RetroManager Bookcase</title>
+    <script>
+        try { if (localStorage.getItem('retromanager.theme') === 'light') document.documentElement.dataset.theme = 'light'; } catch (e) {}
+    </script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
+    <link rel="stylesheet" href="/common/header.css">
+    <script src="/common/header.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        /* Same palette as the library page (index.html) */
+        :root {
+            color-scheme: dark;
+            --bg-primary: #0a0e27;
+            --bg-secondary: #0f1535;
+            --bg-tertiary: #14194f;
+            --text-primary: #e0e0e0;
+            --text-secondary: #999999;
+            --accent-pink: #ff6b9d;
+            --accent-orange: #ff9d3d;
+            --border-color: #2a2d4a;
+            /* Mahogany */
+            --mahogany-back: #2b0f0a;
+            --mahogany-back-2: #1d0906;
+            --mahogany: #5e1f14;
+            --mahogany-light: #8a3421;
+            --mahogany-dark: #3a120b;
+            --mahogany-edge: #a34a2e;
+            --wood-shadow: rgba(0, 0, 0, 0.6);
+            --brass: linear-gradient(180deg, #f2d98a 0%, #c9a24a 45%, #9c7a2c 100%);
+            --brass-text: #3b2a08;
+        }
+
+        :root[data-theme="light"] {
+            color-scheme: light;
+            --bg-primary: #f4f5fb;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #eceef7;
+            --text-primary: #1c1f33;
+            --text-secondary: #5f6480;
+            --accent-pink: #d6336c;
+            --accent-orange: #c2560c;
+            --border-color: #d3d7e8;
+            /* Mahogany, a touch lighter against the light page */
+            --mahogany-back: #4a1d13;
+            --mahogany-back-2: #36140d;
+            --mahogany: #7a2c1b;
+            --mahogany-light: #a5462b;
+            --mahogany-dark: #521b10;
+            --mahogany-edge: #c0613f;
+            --wood-shadow: rgba(60, 20, 10, 0.4);
+            --brass: linear-gradient(180deg, #f5e2a0 0%, #d4b05a 45%, #a88636 100%);
+            --brass-text: #3b2a08;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Ubuntu', 'Helvetica Neue', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* The page's own controls, under the shared header (common/header.css) */
+        .top-bar {
+            position: sticky;
+            top: var(--rm-header-h);
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            padding: 8px 16px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 13px;
+        }
+
+        .top-bar a, .top-bar button, .top-bar select, .top-bar input {
+            font: inherit;
+            color: var(--text-primary);
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 6px 10px;
+            text-decoration: none;
+        }
+
+        .top-bar a:hover, .top-bar button:hover { border-color: var(--accent-pink); }
+        .top-bar input[type="search"] { flex: 1 1 180px; min-width: 0; }
+        .top-bar label { display: flex; gap: 6px; align-items: center; color: var(--text-secondary); cursor: pointer; }
+        .opts-wrap { position: relative; }
+        .opts-menu {
+            position: absolute; right: 0; top: calc(100% + 6px); z-index: 35; width: 290px; max-width: calc(100vw - 24px);
+            padding: 12px; border-radius: 6px; background: var(--bg-secondary); border: 1px solid var(--border-color);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); display: flex; flex-direction: column; gap: 12px;
+        }
+        .opts-menu fieldset { border: none; display: flex; flex-direction: column; gap: 6px; }
+        .opts-menu legend { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 4px; }
+        .top-bar .opts-menu label { color: var(--text-primary); }
+        .opts-help { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
+        .opts-progress { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary); }
+        .opts-progress .bar { height: 4px; border-radius: 2px; background: var(--bg-tertiary); overflow: hidden; }
+        .opts-progress .bar > div { height: 100%; background: var(--accent-pink); transition: width 0.3s; }
+        .top-bar .hint { color: var(--text-secondary); font-size: 12px; margin-left: auto; }
+
+        /* The cabinet: mahogany side panels, carved top and plinth */
+        .bookcase {
+            position: relative;
+            /* Full page width, leaving room for the carved trim to overhang */
+            margin: 24px 10px 60px;
+            padding: 30px 22px 34px;
+            display: flex;
+            flex-direction: column;
+            background:
+                repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.10) 0 1px, transparent 1px 9px, rgba(255, 255, 255, 0.03) 9px 10px, transparent 10px 23px),
+                linear-gradient(90deg, var(--mahogany-dark) 0%, var(--mahogany) 10%, var(--mahogany-light) 50%, var(--mahogany) 90%, var(--mahogany-dark) 100%);
+            border-radius: 6px;
+            box-shadow: 0 18px 40px var(--wood-shadow), inset 0 0 0 1px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+        }
+        /* Crown moulding along the top and the plinth along the bottom */
+        .bookcase::before, .bookcase::after {
+            content: '';
+            position: absolute;
+            left: -8px; right: -8px;
+            border-radius: 4px;
+            background: linear-gradient(180deg, var(--mahogany-edge) 0%, var(--mahogany-light) 30%, var(--mahogany) 60%, var(--mahogany-dark) 100%);
+            box-shadow: 0 4px 10px var(--wood-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+        }
+        .bookcase::before { top: -14px; height: 22px; }
+        .bookcase::after { bottom: -10px; height: 18px; }
+
+        section.shelf { position: relative; }
+
+        /* The back panel behind each shelf, and the boxes on it. It scrolls
+           sideways when full, without a visible scrollbar */
+        .shelf-row {
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            padding: 44px 16px 0;
+            background:
+                linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 38px),
+                linear-gradient(90deg, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0) 22px, rgba(0, 0, 0, 0) calc(100% - 22px), rgba(0, 0, 0, 0.45) 100%),
+                repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.12) 0 1px, transparent 1px 7px, rgba(255, 255, 255, 0.025) 7px 8px, transparent 8px 19px),
+                linear-gradient(180deg, var(--mahogany-back) 0%, var(--mahogany-back-2) 100%);
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: none;
+            perspective: 1400px;
+        }
+        .shelf-row::-webkit-scrollbar { display: none; }
+
+        /* Shading and ‹ › buttons at an edge where the shelf carries on */
+        /* The shading lets the mouse through to the boxes; only the small
+           round button takes clicks, and only while it's showing */
+        .shelf-fade {
+            position: absolute; top: 0; bottom: 0; width: 56px; z-index: 4;
+            pointer-events: none; opacity: 0; transition: opacity 0.2s ease;
+        }
+        .shelf-fade.left { left: 0; background: linear-gradient(90deg, rgba(20, 5, 3, 0.8), rgba(20, 5, 3, 0)); }
+        .shelf-fade.right { right: 0; background: linear-gradient(270deg, rgba(20, 5, 3, 0.8), rgba(20, 5, 3, 0)); }
+        .shelf-fade.show { opacity: 1; }
+        .shelf-more {
+            position: absolute; top: 50%; z-index: 5; width: 34px; height: 34px; margin-top: -17px;
+            border-radius: 50%; border: 1px solid rgba(243, 227, 192, 0.5); padding: 0 0 3px;
+            background: rgba(30, 8, 4, 0.75); color: #f3e3c0; font-size: 22px; line-height: 1; cursor: pointer;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+        }
+        .shelf-more.left { left: 8px; }
+        .shelf-more.right { right: 8px; }
+        .shelf-frame:hover .shelf-more.show, .shelf-more.show:focus-visible { opacity: 1; pointer-events: auto; }
+        @media (hover: none) { .shelf-more.show { opacity: 0.85; pointer-events: auto; } }
+        .shelf-frame { position: relative; }
+
+        /* The shelf board the boxes stand on, with a brass nameplate on its front */
+        .plank {
+            position: relative;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            padding: 0 14px;
+            background:
+                repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.08) 0 1px, transparent 1px 5px),
+                linear-gradient(180deg, var(--mahogany-edge) 0%, var(--mahogany-light) 14%, var(--mahogany) 55%, var(--mahogany-dark) 100%);
+            box-shadow: 0 6px 12px var(--wood-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+            margin: 0 -6px 18px;
+            border-radius: 2px;
+        }
+        section.shelf:last-child .plank { margin-bottom: 0; }
+
+        .shelf-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            max-width: calc(100% - 8px);
+            padding: 2px 10px 2px 4px;
+            border-radius: 3px;
+            background: var(--brass);
+            color: var(--brass-text);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .shelf-label img { width: 30px; height: 20px; object-fit: cover; border-radius: 2px; flex-shrink: 0; }
+        .shelf-label .count { font-weight: 500; opacity: 0.75; }
+
+        .spine {
+            position: relative;
+            flex-shrink: 0;
+            border-radius: 2px;
+            overflow: hidden;
+            cursor: pointer;
+            outline: none;
+            transform-origin: 50% 100%;
+            transition: transform 0.22s ease, filter 0.22s ease, opacity 0.2s ease, width 0.25s ease;
+            box-shadow: inset -2px 0 3px rgba(0, 0, 0, 0.45), inset 2px 0 2px rgba(255, 255, 255, 0.12), 0 2px 3px rgba(0, 0, 0, 0.4);
+            background: #222;
+        }
+
+        .spine img.spine-art { width: 100%; height: 100%; object-fit: fill; display: block; }
+
+        /* Made-up spine when there's no spine art: the cover's left edge, sharp,
+           with a darker band behind the title */
+        .spine .spine-cover {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: left center;
+        }
+
+        .spine .spine-cover + .spine-title {
+            background: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.55) 25%, rgba(0, 0, 0, 0.55) 75%, transparent 100%);
+        }
+
+        .spine .spine-title {
+            position: absolute;
+            inset: 6px 0;
+            writing-mode: vertical-rl;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            font-size: 11px;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            letter-spacing: 0.3px;
+        }
+
+        /* Hover (or keyboard focus) turns the box to face you: it widens to its
+           Box 2D cover and the boxes beside it slide over to make room */
+        .spine.hovered {
+            transform: translateY(-6px);
+            filter: brightness(1.08);
+            z-index: 3;
+            box-shadow: 0 10px 18px rgba(0, 0, 0, 0.55);
+        }
+        .spine .spine-front {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: fill;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        .spine.hovered .spine-front { opacity: 1; }
+        /* The shelf row works out which box the mouse is on (ShelfScroller's
+           onPoint), so the boxes themselves ignore the mouse */
+        .spine { pointer-events: none; }
+        .shelf-row.pointing { cursor: pointer; }
+        /* No cover to show: grow the spine where it stands instead */
+        .spine.hovered.no-front { transform: translateY(-8px) scale(1.14); }
+
+        /* The game's name under the hovered box */
+        .hover-label {
+            position: fixed;
+            z-index: 30;
+            transform: translateX(-50%);
+            max-width: min(320px, calc(100vw - 32px));
+            padding: 5px 10px;
+            border-radius: 4px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 600;
+            text-align: center;
+            pointer-events: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .hover-label .year { color: var(--text-secondary); font-weight: 400; margin-left: 6px; }
+        .spine.dimmed { opacity: 0.18; filter: grayscale(1); }
+        .spine:focus-visible { outline: 2px solid var(--accent-pink); outline-offset: 2px; }
+
+        /* While its card is open the box is off the shelf, leaving a gap */
+        .spine.out { visibility: hidden; }
+
+        /* Sliding back into the gap when the card closes */
+        .spine.returning { animation: spine-return 0.35s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+        @keyframes spine-return {
+            from { transform: translateY(-40px); opacity: 0; }
+            to { transform: none; opacity: 1; }
+        }
+
+        /* A copy of the spine that does the pulling-out, drawn above the page so
+           the shelf doesn't clip it: it slides up out of the shelf, then swings
+           towards you while flying to the middle of the screen, where the card opens */
+        .spine-clone {
+            position: fixed;
+            z-index: 45;
+            pointer-events: none;
+            margin: 0;
+            transform-origin: 50% 100%;
+            animation: pull-from-shelf 0.6s cubic-bezier(0.45, 0, 0.35, 1) forwards;
+        }
+
+        /* Every step uses the same list of transforms so the browser blends them
+           smoothly (mismatched lists get blended as matrices and can flip) */
+        @keyframes pull-from-shelf {
+            0% { transform: translate(0, 0) perspective(700px) rotateY(0deg) scale(1); opacity: 1; }
+            35% { transform: translate(0, -36px) perspective(700px) rotateY(0deg) scale(1.05); opacity: 1; }
+            100% { transform: translate(var(--tx), var(--ty)) perspective(700px) rotateY(-75deg) scale(2.2); opacity: 0; }
+        }
+
+        .info-card-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 40;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            animation: backdrop-in 0.2s ease both;
+        }
+
+        @keyframes backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+
+        .info-card { animation: card-in 0.25s ease both; }
+        @keyframes card-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+
+        .info-card img.box-art { animation: box-art-in 0.45s cubic-bezier(0.2, 0.8, 0.25, 1.1) both; transform-origin: 50% 100%; }
+        @keyframes box-art-in {
+            from { opacity: 0; transform: perspective(700px) rotateY(75deg) scale(0.7); }
+            to { opacity: 1; transform: none; }
+        }
+
+        .info-card {
+            display: flex;
+            gap: 24px;
+            max-width: 960px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 20px;
+            border-radius: 8px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 50% larger than before (220px) */
+        .info-card img.box-art { width: 330px; max-width: 45%; height: auto; align-self: flex-start; filter: drop-shadow(0 10px 14px rgba(0,0,0,0.5)); }
+        .info-card h2 { font-size: 20px; margin-bottom: 4px; }
+        .info-card .meta { color: var(--text-secondary); font-size: 13px; margin-bottom: 12px; }
+        .info-card p { font-size: 14px; line-height: 1.5; margin-bottom: 16px; }
+        .info-card .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .info-card .actions a, .info-card .actions button {
+            font: inherit; font-size: 13px; padding: 8px 14px; border-radius: 4px; cursor: pointer; text-decoration: none;
+            border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary);
+        }
+        .info-card .actions a.primary { background: var(--accent-pink); border-color: var(--accent-pink); color: #fff; }
+
+        .empty { color: var(--text-secondary); text-align: center; padding: 60px 0; }
+
+        @media (max-width: 700px) {
+            .info-card { flex-direction: column; }
+            .info-card img.box-art { max-width: 60%; align-self: center; }
+            .top-bar .hint { display: none; }
+        }
+
+        /* Less motion: hover still enlarges (instantly), nothing slides or swings,
+           and clicking opens the card straight away (see reducedMotion() in the script) */
+        @media (prefers-reduced-motion: reduce) {
+            .spine, .spine .spine-front { transition: none; }
+            .spine.returning, .info-card, .info-card img.box-art, .info-card-backdrop { animation: none; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef, useCallback } = React;
+        const API_BASE = window.location.origin;
+
+        // Physical box size in mm: w = cover width, h = height, d = spine thickness.
+        // Approximate retail boxes/cases per system (folder name). Unknown systems use DEFAULT_BOX.
+        const BOX_SIZES = {
+            snes: { w: 140, h: 192, d: 32 }, sfc: { w: 140, h: 192, d: 32 },
+            nes: { w: 127, h: 178, d: 25 }, famicom: { w: 127, h: 178, d: 25 }, fds: { w: 127, h: 178, d: 25 },
+            n64: { w: 190, h: 135, d: 38 },
+            gb: { w: 127, h: 127, d: 25 }, gbc: { w: 127, h: 127, d: 25 }, gba: { w: 127, h: 127, d: 25 },
+            nds: { w: 125, h: 137, d: 14 }, '3ds': { w: 128, h: 137, d: 14 },
+            psx: { w: 142, h: 125, d: 10 }, ps2: { w: 135, h: 190, d: 14 }, psp: { w: 105, h: 180, d: 14 },
+            gc: { w: 135, h: 190, d: 14 }, wii: { w: 135, h: 190, d: 14 }, nsw: { w: 105, h: 170, d: 11 },
+            megadrive: { w: 132, h: 184, d: 22 }, genesis: { w: 132, h: 184, d: 22 }, mastersystem: { w: 132, h: 184, d: 22 },
+            gamegear: { w: 127, h: 127, d: 25 }, atari2600: { w: 127, h: 178, d: 38 }, atari5200: { w: 150, h: 200, d: 45 },
+            nvb: { w: 160, h: 235, d: 50 }, virtualboy: { w: 160, h: 235, d: 50 },
+            pokemini: { w: 80, h: 100, d: 18 },
+        };
+        const DEFAULT_BOX = { w: 135, h: 190, d: 14 };
+        const PX_PER_MM = 1.3;
+        const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const MIN_SPINE_PX = 14;
+        const SPINE_GAP = 2;   // matches .shelf-row's gap
+
+
+        const encodePath = (p) => p.split('/').map(encodeURIComponent).join('/');
+        // version: the picture's change time from /api/shelf, so the browser can keep it
+        const thumb = (mediaPath, height, spine = false, version = null) =>
+            `${API_BASE}/api/thumb/${height}/${encodePath(mediaPath)}?${new URLSearchParams({ ...(spine ? { spine: '1' } : {}), ...(version ? { v: String(version) } : {}) })}`;
+        const pic = (game, field, height, spine = false) => game[field] ? thumb(game[field], height, spine, game.v && game.v[field]) : null;
+
+        const cleanTitle = (name) => (name || '').replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/\s+/g, ' ').trim() || name;
+
+        const SORTS = {
+            name: (a, b) => cleanTitle(a.name).localeCompare(cleanTitle(b.name), undefined, { sensitivity: 'base', numeric: true }),
+            year: (a, b) => (a.year || '9999').localeCompare(b.year || '9999') || SORTS.name(a, b),
+            file: (a, b) => (a.path || '').localeCompare(b.path || '', undefined, { sensitivity: 'base', numeric: true }),
+        };
+
+
+        // Cover shapes (width / height) learned from the loaded images
+        const coverAspects = {};
+
+        function Spine({ game, box, dimmed, hovered, out, returning, onHover, onUnhover, onPull, onKeyNav, onReturned, registerRef }) {
+            const spineWidth = Math.max(MIN_SPINE_PX, Math.round(box.d * PX_PER_MM));
+            const height = Math.round(box.h * PX_PER_MM);
+            const title = cleanTitle(game.name);
+            const [aspect, setAspect] = useState(() => game.box2d_ratio || coverAspects[game.box2d]);
+            const front = pic(game, 'box2d', 480);
+            // Facing you, the box is as wide as its cover (the system's box shape until it loads)
+            const width = hovered && front ? Math.round(height * (aspect || box.w / box.h)) : spineWidth;
+
+            const classes = ['spine', hovered && 'hovered', !front && 'no-front', dimmed && 'dimmed', out && 'out', returning && 'returning'].filter(Boolean).join(' ');
+            return (
+                <div
+                    ref={registerRef}
+                    className={classes}
+                    style={{ width, height }}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`${title}${game.year ? `, ${game.year}` : ''}`}
+                    onFocus={(e) => onHover(game, e.currentTarget)}
+                    onBlur={onUnhover}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPull(game, e.currentTarget); }
+                        else onKeyNav(e);
+                    }}
+                    onAnimationEnd={(e) => { if (e.animationName === 'spine-return') onReturned(); }}
+                >
+                    {game.boxside ? (
+                        <img className="spine-art" src={pic(game, 'boxside', 320, true)} alt="" loading="lazy" decoding="async" draggable={false} />
+                    ) : (
+                        <>
+                            {game.box2d && <img className="spine-cover" src={pic(game, 'box2d', 160)} alt="" loading="lazy" decoding="async" draggable={false} />}
+                            <div className="spine-title">{title}</div>
+                        </>
+                    )}
+                    {front && hovered && (
+                        <img className="spine-front" src={front} alt="" decoding="async" draggable={false}
+                            onLoad={(e) => {
+                                const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
+                                // Only when the NAS didn't know the shape, so the box doesn't resize twice
+                                if (w && h && !game.box2d_ratio) { coverAspects[game.box2d] = w / h; setAspect(w / h); }
+                            }} />
+                    )}
+                </div>
+            );
+        }
+
+        // A shelf's row of boxes. It scrolls sideways (touch, trackpad, Shift+wheel,
+        // arrow keys) with no visible scrollbar; shading and a ‹ › button show at
+        // an edge where more boxes are out of sight.
+        //
+        // Which box the mouse is on comes from its position as if every box were
+        // closed (all spines on a shelf are the same width): slot = x / (spine + gap).
+        // Opening a box to show its cover then can't change which box you're on,
+        // so moving along a shelf never flickers, and one spine-width to the right
+        // is always the next box. onPoint(index | -1, event), onPick(index).
+        function ShelfScroller({ minHeight, slotWidth, slotHeight, count, onPoint, onPick, children }) {
+            const ref = useRef(null);
+            const [edges, setEdges] = useState({ left: false, right: false });
+            const measure = useCallback(() => {
+                const el = ref.current;
+                if (!el) return;
+                const left = el.scrollLeft > 4;
+                const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+                setEdges(e => (e.left === left && e.right === right ? e : { left, right }));
+            }, []);
+            useEffect(() => {
+                measure();
+                const el = ref.current;
+                const ro = new ResizeObserver(measure);
+                ro.observe(el);
+                // Boxes widen on hover, which changes how far the shelf reaches
+                const mo = new MutationObserver(measure);
+                mo.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+                return () => { ro.disconnect(); mo.disconnect(); };
+            }, [measure]);
+            const [pointing, setPointing] = useState(false);
+            const slotAt = (e) => {
+                const el = ref.current;
+                const r = el.getBoundingClientRect();
+                const pad = parseFloat(getComputedStyle(el).paddingLeft) || 0;
+                const x = e.clientX - r.left + el.scrollLeft - pad;
+                const i = Math.floor(x / slotWidth);
+                // Only over the boxes: not the empty space above them or past the last one
+                const overBoxes = e.clientY >= r.bottom - slotHeight;
+                return x >= 0 && i < count && overBoxes ? i : -1;
+            };
+            const nudge = (dir) => {
+                const el = ref.current;
+                el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: reducedMotion() ? 'auto' : 'smooth' });
+            };
+            return (
+                <div className="shelf-frame">
+                    <div ref={ref} className={`shelf-row${pointing ? ' pointing' : ''}`} style={{ minHeight }} onScroll={measure}
+                        onMouseMove={e => { const i = slotAt(e); setPointing(i >= 0); onPoint(i); }}
+                        onMouseLeave={() => { setPointing(false); onPoint(-1); }}
+                        onClick={e => { const i = slotAt(e); if (i >= 0) onPick(i); }}>{children}</div>
+                    <div className={`shelf-fade left${edges.left ? ' show' : ''}`} aria-hidden="true" />
+                    <div className={`shelf-fade right${edges.right ? ' show' : ''}`} aria-hidden="true" />
+                    <button className={`shelf-more left${edges.left ? ' show' : ''}`} onClick={() => nudge(-1)}
+                        aria-label="Scroll this shelf left" tabIndex={edges.left ? 0 : -1} aria-hidden={!edges.left}>‹</button>
+                    <button className={`shelf-more right${edges.right ? ' show' : ''}`} onClick={() => nudge(1)}
+                        aria-label="Scroll this shelf right" tabIndex={edges.right ? 0 : -1} aria-hidden={!edges.right}>›</button>
+                </div>
+            );
+        }
+
+        // The hovered game's name, under its box. Follows the box while it widens
+        // and while the page or shelf scrolls.
+        function HoverLabel({ el, game }) {
+            const [pos, setPos] = useState(null);
+            useEffect(() => {
+                if (!el) return;
+                let frame, until = performance.now() + 400;
+                const place = () => {
+                    const r = el.getBoundingClientRect();
+                    setPos({ left: r.left + r.width / 2, top: r.bottom + 8 });
+                };
+                const follow = () => { place(); if (performance.now() < until) frame = requestAnimationFrame(follow); };
+                follow();
+                const onScroll = () => { until = performance.now() + 50; cancelAnimationFrame(frame); follow(); };
+                window.addEventListener('scroll', onScroll, true);
+                window.addEventListener('resize', onScroll);
+                return () => {
+                    cancelAnimationFrame(frame);
+                    window.removeEventListener('scroll', onScroll, true);
+                    window.removeEventListener('resize', onScroll);
+                };
+            }, [el]);
+            if (!el || !pos) return null;
+            return (
+                <div className="hover-label" role="tooltip" style={{ left: pos.left, top: pos.top }}>
+                    {cleanTitle(game.name)}{game.year && <span className="year">{game.year}</span>}
+                </div>
+            );
+        }
+
+        // Plays the pull-out: a copy of the spine (the real one is hidden, leaving
+        // a gap) slides up out of the shelf and flies to the middle of the screen.
+        // Calls done() when it's finished.
+        function playPullOut(el, done) {
+            if (reducedMotion()) { done(); return; }
+            const rect = el.getBoundingClientRect();
+            const clone = el.cloneNode(true);
+            clone.className = 'spine spine-clone';
+            clone.removeAttribute('tabindex');
+            clone.removeAttribute('role');
+            clone.setAttribute('aria-hidden', 'true');
+            Object.assign(clone.style, {
+                left: `${rect.left}px`,
+                top: `${rect.top}px`,
+                width: `${rect.width}px`,
+                height: `${rect.height}px`,
+            });
+            // Fly from the spine's centre to the middle of the screen
+            clone.style.setProperty('--tx', `${window.innerWidth / 2 - (rect.left + rect.width / 2)}px`);
+            clone.style.setProperty('--ty', `${window.innerHeight / 2 - (rect.top + rect.height / 2)}px`);
+            document.body.appendChild(clone);
+            let finished = false;
+            const finish = () => {
+                if (finished) return;
+                finished = true;
+                clone.remove();
+                done();
+            };
+            clone.addEventListener('animationend', finish);
+            setTimeout(finish, 900); // in case the animation never reports finishing
+        }
+
+        // Closes an overlay only when the press AND the release are both on its backdrop.
+        // A plain onClick also fires when you press inside (e.g. selecting text in a
+        // field) and let go over the backdrop, which closed popups by accident.
+        let backdropPressTarget = null;
+        const backdropClose = (onClose) => ({
+            onMouseDown: (e) => { backdropPressTarget = e.target; },
+            onClick: (e) => {
+                const pressedHere = backdropPressTarget === e.currentTarget;
+                backdropPressTarget = null;
+                if (onClose && pressedHere && e.target === e.currentTarget) onClose();
+            },
+        });
+
+        // Pictures the popup can show; a game without the chosen one shows another
+        const POPUP_PICTURES = [['box2d', '2D box'], ['box3d', '3D box'], ['posters', 'Poster'], ['images', 'Image'], ['mix', 'Mix']];
+        const popupField = (game, preferred) => [preferred, 'box3d', 'box2d', 'mix', 'images', 'posters'].find(f => game[f]);
+
+        const DEFAULT_OPTIONS = { popup: 'box3d', preload: false };
+        function useBookcaseOptions() {
+            const [options, setOptions] = useState(() => {
+                try { return { ...DEFAULT_OPTIONS, ...JSON.parse(localStorage.getItem('retromanager.bookcase.options') || '{}') }; }
+                catch (e) { return DEFAULT_OPTIONS; }
+            });
+            const update = (changes) => setOptions(o => {
+                const next = { ...o, ...changes };
+                try { localStorage.setItem('retromanager.bookcase.options', JSON.stringify(next)); } catch (e) {}
+                return next;
+            });
+            return [options, update];
+        }
+
+        // Fetches pictures in the background (4 at a time) so the browser has them
+        // before they're needed. Returns progress; stops when switched off.
+        function usePreloader(enabled, urls) {
+            const [progress, setProgress] = useState({ done: 0, failed: 0, total: 0 });
+            const key = enabled ? urls.join('\n') : '';
+            useEffect(() => {
+                if (!enabled || !urls.length) { setProgress({ done: 0, failed: 0, total: 0 }); return; }
+                let cancelled = false, next = 0, done = 0, failed = 0;
+                setProgress({ done: 0, failed: 0, total: urls.length });
+                const worker = () => new Promise(resolve => {
+                    const step = () => {
+                        if (cancelled || next >= urls.length) return resolve();
+                        const img = new Image();
+                        img.decoding = 'async';
+                        const finish = (ok) => {
+                            ok ? done++ : failed++;
+                            if (!cancelled && ((done + failed) % 10 === 0 || done + failed === urls.length)) setProgress({ done, failed, total: urls.length });
+                            step();
+                        };
+                        img.onload = () => finish(true);
+                        img.onerror = () => finish(false);
+                        img.src = urls[next++];
+                    };
+                    step();
+                });
+                Promise.all([worker(), worker(), worker(), worker()]).then(() => { if (!cancelled) setProgress({ done, failed, total: urls.length }); });
+                return () => { cancelled = true; };
+            }, [key]);
+            return progress;
+        }
+
+        function OptionsMenu({ options, setOptions, progress }) {
+            const [open, setOpen] = useState(false);
+            const ref = useRef(null);
+            useEffect(() => {
+                if (!open) return;
+                const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+                const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
+                document.addEventListener('mousedown', close);
+                document.addEventListener('keydown', esc);
+                return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc); };
+            }, [open]);
+            const busy = options.preload && progress.total > 0 && progress.done + progress.failed < progress.total;
+            return (
+                <div className="opts-wrap" ref={ref}>
+                    <button onClick={() => setOpen(o => !o)} aria-haspopup="dialog" aria-expanded={open} title="Bookcase options">
+                        ⚙ Options{busy ? ` · ${Math.floor(((progress.done + progress.failed) / progress.total) * 100)}%` : ''}
+                    </button>
+                    {open && (
+                        <div className="opts-menu" role="dialog" aria-label="Bookcase options">
+                            <fieldset>
+                                <legend>Popup picture</legend>
+                                {POPUP_PICTURES.map(([field, label]) => (
+                                    <label key={field}>
+                                        <input type="radio" name="popup-picture" checked={options.popup === field} onChange={() => setOptions({ popup: field })} /> {label}
+                                    </label>
+                                ))}
+                                <div className="opts-help">A game without this picture shows another one it has.</div>
+                            </fieldset>
+                            <fieldset>
+                                <legend>Speed</legend>
+                                <label>
+                                    <input type="checkbox" checked={options.preload} onChange={e => setOptions({ preload: e.target.checked })} /> Preload pictures
+                                </label>
+                                <div className="opts-help">
+                                    Downloads every box's cover and popup picture in the background, so hovering and opening are instant. Kept by the browser, so later visits only fetch new ones.
+                                </div>
+                                {options.preload && progress.total > 0 && (
+                                    <div className="opts-progress">
+                                        <div className="bar"><div style={{ width: `${((progress.done + progress.failed) / progress.total) * 100}%` }} /></div>
+                                        <span>
+                                            {progress.done + progress.failed < progress.total
+                                                ? `${progress.done + progress.failed} of ${progress.total} pictures`
+                                                : `All ${progress.done} pictures ready`}
+                                            {progress.failed ? ` · ${progress.failed} couldn't load` : ''}
+                                        </span>
+                                    </div>
+                                )}
+                            </fieldset>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function InfoCard({ entry, onClose, popupType }) {
+            useEffect(() => {
+                if (!entry) return;
+                const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+                window.addEventListener('keydown', onKey);
+                return () => window.removeEventListener('keydown', onKey);
+            }, [entry, onClose]);
+            if (!entry) return null;
+            const { game, system, fullName } = entry;
+            const art = popupField(game, popupType);
+            const libraryUrl = `/?system=${encodeURIComponent(system)}&game=${encodeURIComponent(game.path)}`;
+            return (
+                <div className="info-card-backdrop" {...backdropClose(onClose)}>
+                    <div className="info-card" onClick={e => e.stopPropagation()} role="dialog" aria-label={game.name}>
+                        {art && <img className="box-art" src={pic(game, art, 480)} alt="" />}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <h2>{cleanTitle(game.name)}</h2>
+                            <div className="meta">
+                                {[fullName, game.year, game.genre, game.developer, game.players && `${game.players} players`].filter(Boolean).join(' · ')}
+                            </div>
+                            {game.desc ? <p>{game.desc}</p> : <p style={{ color: 'var(--text-secondary)' }}>No description yet.</p>}
+                            <div className="actions">
+                                <a className="primary" href={libraryUrl}>Open in RetroManager</a>
+                                <button onClick={onClose} autoFocus>Put it back</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function ShelfApp() {
+            const [shelves, setShelves] = useState(null);
+            const [error, setError] = useState(null);
+            const [search, setSearch] = useState('');
+            const [sortKey, setSortKey] = useState('name');
+            const [showAll, setShowAll] = useState(false);
+            const [options, setOptions] = useBookcaseOptions();
+            // '' = every system; remembered in this browser
+            const [systemFilter, setSystemFilter] = useState(() => {
+                try { return localStorage.getItem('retromanager.shelf.system') || ''; } catch (e) { return ''; }
+            });
+            const pickSystem = (value) => {
+                setSystemFilter(value);
+                try { localStorage.setItem('retromanager.shelf.system', value); } catch (e) {}
+            };
+            const [hovered, setHovered] = useState(null);   // {system, path, el, game}: the box facing you
+            const [outKey, setOutKey] = useState(null);     // "system|path" of the box off the shelf
+            const [returningKey, setReturningKey] = useState(null);
+            const [openEntry, setOpenEntry] = useState(null);
+            const [pulling, setPulling] = useState(false);
+            const spineRefs = useRef({}); // "system|index" -> element
+
+            useEffect(() => {
+                fetch(`${API_BASE}/api/shelf`).then(r => r.json())
+                    .then(d => d.success
+                        // By system name, so Nintendo 3DS sits with the other Nintendo systems
+                        ? setShelves(d.shelves.slice().sort((a, b) => a.full_name.localeCompare(b.full_name, undefined, { sensitivity: 'base', numeric: true })))
+                        : setError(d.error || 'Could not load the shelf'))
+                    .catch(err => setError(err.message));
+            }, []);
+
+            // What "Preload pictures" fetches: each shown game's hover cover and its
+            // popup picture (the whole library, whatever the search or system filter)
+            const preloadUrls = useMemo(() => {
+                if (!shelves) return [];
+                const urls = new Set();
+                shelves.forEach(shelf => shelf.games.forEach(g => {
+                    if (!showAll && !(g.has_metadata && g.rom_exists)) return;
+                    const cover = pic(g, 'box2d', 480);
+                    if (cover) urls.add(cover);
+                    const field = popupField(g, options.popup);
+                    if (field) urls.add(pic(g, field, 480));
+                }));
+                return [...urls];
+            }, [shelves, showAll, options.popup]);
+            const preload = usePreloader(options.preload, preloadUrls);
+
+            const visibleShelves = useMemo(() => {
+                if (!shelves) return [];
+                const query = search.trim().toLowerCase();
+                // A remembered system that's gone shows everything
+                const only = shelves.some(s => s.system === systemFilter) ? systemFilter : '';
+                return shelves.filter(shelf => !only || shelf.system === only).map(shelf => {
+                    const games = shelf.games.filter(g => showAll || (g.has_metadata && g.rom_exists)).slice().sort(SORTS[sortKey]);
+                    const matches = query ? new Set(games.filter(g =>
+                        [g.name, g.genre, g.developer, g.publisher].some(v => (v || '').toLowerCase().includes(query))).map(g => g.path)) : null;
+                    return { ...shelf, games, matches };
+                }).filter(s => s.games.length && (!s.matches || s.matches.size));
+            }, [shelves, search, sortKey, showAll, systemFilter]);
+
+            const pullOut = (shelf, game, el) => {
+                if (pulling || openEntry) return;
+                setPulling(true);
+                setHovered(null);
+                playPullOut(el, () => {
+                    setPulling(false);
+                    setOpenEntry({ game, system: shelf.system, fullName: shelf.full_name, key: `${shelf.system}|${game.path}` });
+                });
+                setOutKey(`${shelf.system}|${game.path}`);
+            };
+
+            // Closing the card slides the box back into its gap
+            const putBack = useCallback(() => {
+                setOpenEntry(prev => {
+                    if (prev) {
+                        setOutKey(null);
+                        if (!reducedMotion()) {
+                            setReturningKey(prev.key);
+                            // Normally cleared when the animation ends; this covers it not running
+                            setTimeout(() => setReturningKey(k => (k === prev.key ? null : k)), 500);
+                        }
+                        // Keyboard users land back on the box they took out
+                        setTimeout(() => {
+                            const el = document.querySelector(`[data-key="${CSS.escape(prev.key)}"]`);
+                            if (el) el.focus({ preventScroll: true });
+                        }, 0);
+                    }
+                    return null;
+                });
+            }, []);
+
+            const focusSpine = (shelfIndex, gameIndex) => {
+                const shelf = visibleShelves[shelfIndex];
+                if (!shelf) return;
+                const i = Math.min(Math.max(gameIndex, 0), shelf.games.length - 1);
+                const el = spineRefs.current[`${shelf.system}|${i}`];
+                if (el) { el.focus(); el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+            };
+
+            const keyNav = (shelfIndex, gameIndex) => (e) => {
+                if (e.key === 'ArrowRight') { e.preventDefault(); focusSpine(shelfIndex, gameIndex + 1); }
+                else if (e.key === 'ArrowLeft') { e.preventDefault(); focusSpine(shelfIndex, gameIndex - 1); }
+                else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    const target = shelfIndex + (e.key === 'ArrowDown' ? 1 : -1);
+                    const shelf = visibleShelves[target];
+                    if (!shelf) return;
+                    // Land on the box nearest the same horizontal position
+                    const x = e.currentTarget.getBoundingClientRect().left;
+                    let best = 0, bestDist = Infinity;
+                    shelf.games.forEach((_, i) => {
+                        const el = spineRefs.current[`${shelf.system}|${i}`];
+                        if (!el) return;
+                        const dist = Math.abs(el.getBoundingClientRect().left - x);
+                        if (dist < bestDist) { bestDist = dist; best = i; }
+                    });
+                    focusSpine(target, best);
+                }
+            };
+
+            const totalGames = visibleShelves.reduce((n, s) => n + (s.matches ? s.matches.size : s.games.length), 0);
+
+            return (
+                <>
+                    <RM.Header active="bookcase" />
+                    <div className="top-bar">
+                        <input type="search" placeholder="Search titles, genres, developers" value={search} onChange={e => setSearch(e.target.value)} />
+                        <select value={shelves && shelves.some(s => s.system === systemFilter) ? systemFilter : ''} onChange={e => pickSystem(e.target.value)} aria-label="System">
+                            <option value="">All systems</option>
+                            {(shelves || []).filter(s => s.games.some(g => showAll || (g.has_metadata && g.rom_exists))).map(s => (
+                                <option key={s.system} value={s.system}>{s.full_name}</option>
+                            ))}
+                        </select>
+                        <select value={sortKey} onChange={e => setSortKey(e.target.value)} aria-label="Sort">
+                            <option value="name">Sort: Name</option>
+                            <option value="year">Sort: Year</option>
+                            <option value="file">Sort: File name</option>
+                        </select>
+                        <label><input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} /> Include games without a gamelist entry</label>
+                        <OptionsMenu options={options} setOptions={setOptions} progress={preload} />
+                        <span className="hint">{shelves ? `${totalGames} games` : ''} · click a box to take it out · ← → ↑ ↓ · Enter</span>
+                    </div>
+
+                    {error && <div className="empty">{error}</div>}
+                    {!error && !shelves && <div className="empty">Loading the shelves...</div>}
+                    {shelves && !visibleShelves.length && <div className="empty">{search ? 'Nothing matches that search.' : 'No games to show.'}</div>}
+
+                    <div className="bookcase">
+                        {visibleShelves.map((shelf, shelfIndex) => {
+                            const box = BOX_SIZES[shelf.system.toLowerCase()] || DEFAULT_BOX;
+                            const hoveredIndex = hovered && hovered.system === shelf.system ? shelf.games.findIndex(g => g.path === hovered.path) : -1;
+                            return (
+                                <section key={shelf.system} className="shelf" aria-label={shelf.full_name}>
+                                    <ShelfScroller minHeight={Math.round(box.h * PX_PER_MM * 1.14) + 52}
+                                        slotWidth={Math.max(MIN_SPINE_PX, Math.round(box.d * PX_PER_MM)) + SPINE_GAP}
+                                        slotHeight={Math.round(box.h * PX_PER_MM) + 12}
+                                        count={shelf.games.length}
+                                        onPoint={i => {
+                                            if (i < 0) { setHovered(h => (h && h.system === shelf.system ? null : h)); return; }
+                                            const g = shelf.games[i];
+                                            setHovered(h => (h && h.system === shelf.system && h.path === g.path ? h
+                                                : { system: shelf.system, path: g.path, el: spineRefs.current[`${shelf.system}|${i}`], game: g }));
+                                        }}
+                                        onPick={i => pullOut(shelf, shelf.games[i], spineRefs.current[`${shelf.system}|${i}`])}>
+                                        {shelf.games.map((game, i) => {
+                                            const key = `${shelf.system}|${game.path}`;
+                                            return (
+                                                    <Spine
+                                                        key={game.path}
+                                                        game={game}
+                                                        box={box}
+                                                        dimmed={shelf.matches && !shelf.matches.has(game.path)}
+                                                        hovered={i === hoveredIndex}
+                                                        out={outKey === key}
+                                                        returning={returningKey === key}
+                                                        onHover={(g, el) => setHovered({ system: shelf.system, path: g.path, el, game: g })}
+                                                        onUnhover={() => setHovered(h => (h && h.system === shelf.system && h.path === game.path ? null : h))}
+                                                        onPull={(g, el) => pullOut(shelf, g, el)}
+                                                        onKeyNav={keyNav(shelfIndex, i)}
+                                                        onReturned={() => setReturningKey(k => (k === key ? null : k))}
+                                                        registerRef={el => {
+                                                            spineRefs.current[`${shelf.system}|${i}`] = el;
+                                                            if (el) el.dataset.key = key;
+                                                        }}
+                                                    />
+                                            );
+                                        })}
+                                    </ShelfScroller>
+                                    <div className="plank">
+                                        <div className="shelf-label">
+                                            {shelf.full_name}
+                                            <span className="count">{shelf.matches ? `${shelf.matches.size} of ${shelf.games.length}` : shelf.games.length} games</span>
+                                        </div>
+                                    </div>
+                                </section>
+                            );
+                        })}
+                    </div>
+
+                    {hovered && !openEntry && <HoverLabel key={`${hovered.system}|${hovered.path}`} el={hovered.el} game={hovered.game} />}
+                    <InfoCard entry={openEntry} onClose={putBack} popupType={options.popup} />
+                </>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<ShelfApp />);
+    </script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+# Local settings and credentials
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# Editors and OS
+.vscode/
+.idea/
+*.code-workspace
+.DS_Store
+Thumbs.db
+
+# Archives and working files
+*.zip
+*.psd
+*.whl
+*.log
