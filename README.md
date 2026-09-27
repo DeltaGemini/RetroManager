@@ -2,6 +2,8 @@
 
 A self-hosted web app for managing EmulationStation `gamelist.xml` metadata and media on a NAS. It runs as a single Docker container on the local network and has no login.
 
+> **No games or media included.** RetroManager is a tool for organising a library you already have. This project does not supply, link to or help obtain ROMs, BIOS files, disc images, or game artwork, screenshots or videos. Only use games you own and are legally allowed to copy where you live. Metadata and artwork downloaded through the scrapers come from ScreenScraper and IGDB under their own terms.
+
 ## Features
 
 - **System discovery**: every folder under the ROMs mount is treated as a system. Nothing is hard-coded.
