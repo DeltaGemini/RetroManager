@@ -52,7 +52,7 @@ Each media file is a ScreenScraper request, so a large batch uses a noticeable p
 
 ## Library scrape
 
-**🧰 Tools › Library scrape** runs the same matching over every system in the background, without a review step: **Exact** and **Likely** matches are applied straight away (empty fields and missing media only), and **Unsure** and **No match** games are listed under **Needs a look** for you to scrape by hand. Optionally it also covers games that have metadata but lack some media. Games it has checked are skipped for 30 days. Details are in the [README](README.md#library-scrape).
+**🧰 Tools › Library scrape** runs the same matching over every system in the background, without a review step: **Exact** and **Likely** matches are applied straight away (empty fields and missing media only), and **Unsure** and **No match** games are listed under **Needs a look** for you to scrape by hand. Optionally it also covers games that have metadata but lack some media. Games it has checked are skipped for 30 days. Details are in the [README](library.md#library-scrape).
 
 Names from ScreenScraper and IGDB are put in the house name style (`Series: Subtitle`, see the README's Scan section) before they're shown or saved.
 
@@ -104,7 +104,7 @@ Dates are converted to EmulationStation's `YYYYMMDDT000000`.
 | `box-2D` | box2d |
 | `box-3D` | box3d |
 | `box-2D-side` | boxside (the spine, used by the Shelf) |
-| `support-2D` | support (the cartridge or disc, used when [generating a Mix](README.md#generating-mix-pictures)) |
+| `support-2D` | support (the cartridge or disc, used when [generating a Mix](library.md#generating-mix-pictures)) |
 | `ss` | screenshot |
 | `sstitle` | screenshottitle |
 | `wheel-hd`, else `wheel` | wheel |

@@ -16,6 +16,21 @@ savestates/
 
 With profiles, the browser player and the phone app ask (or know) whose save to use, the game details show each person's saves, and with login switched on each person has their own play statuses, want list, achievements and preferences too.
 
+## Profiles and login
+
+RetroManager starts with **no profiles**: one set of saves, favourites and play statuses, shared by everyone, with games played on the saves RetroArch already keeps. The profile button is in the header all the same (a plain 👤): its menu has **Profiles and login**, where people are added. Adding one asks whether the saves there are already stay shared or move to that person. A profile's saves live in a folder of its own, which RetroArch has to be told to use: [PROFILES.md](profiles.md) goes through that, with the [RetroPie profiles](https://github.com/DeltaGemini/retropie_profiles) switcher for EmulationStation.
+
+Off to begin with: everyone shares one set of everything and anyone can change anything. **🧰 Tools › Profiles and login** sets it up.
+
+- **Profiles** are the people the saves folders are for (`saves/<name>/`, `savestates/<name>/`); to begin with, the names in `SAVE_PROFILES`. Each has a photo (click the round picture to choose one), and a role: **admin** or **player**. **Add a profile** makes a new person and their folders.
+- **Switching login on** needs an admin with a PIN (4 to 8 digits). The device you do it on is signed in as that admin, and the play statuses and want list kept until then become theirs.
+- **Signing in.** A device with nobody signed in shows **Who's playing?**: a player taps their photo; an admin's asks for the PIN. The device stays signed in (for over a year) until someone switches or signs out. The photo at the right of the header switches profile: a player's with one click, an admin's by asking for the PIN, every time.
+- **What's a person's own:** play status, the want list and hidden platforms in Missing in series, achievements (where their RetroAchievements account is in Settings), Continue playing on the Console page, which save the play page uses, and preferences (theme, sort orders, the details picture, touch layouts...), which follow them to another device. **Shared:** favourites (which any signed-in person can set, as EmulationStation shows them) and collections (which an admin edits).
+- **What only an admin can do:** edit, scrape, delete and add games, Scan and its fixes, the ROM check's fixes, backups, Settings, collections, series matching, and profiles. A player isn't shown those, and the server refuses them whatever asks. A player's saves and save states are their own: the play page can't read or write another person's.
+- **A forgotten PIN:** put an empty file called `reset-login` in RetroManager's data folder. Login switches itself off and the file is removed; set a new PIN and switch it on again.
+- PINs are kept hashed, in `accounts.json` in the data folder (in the nightly data backup), with the photos in `profiles/` (`backend/accounts.py`). Signing in is a signed cookie. This guards against a slip of the hand at home, not an attacker: players have no PIN, and over plain HTTP a PIN could be read by someone else on the network. For access from outside, keep it behind a VPN.
+
+
 ## Adding people
 
 The profile button is at the right of the header (a plain 👤 while nobody is signed in). **Profiles and login** in its menu, or **🧰 Tools › Profiles and login**, lists the people and adds new ones. Adding a person makes their folders in `saves/` and `savestates/`.

@@ -165,7 +165,7 @@ function ProfilesPanel({ onClose, showNotification }) {
                     )}
                     <div className="gd-note" style={{marginTop: 10, maxWidth: 680}}>
                         A profile's saves are kept in a folder of its own, so RetroArch has to be told to use it: <a href="https://github.com/DeltaGemini/retropie_profiles" target="_blank" rel="noopener noreferrer">RetroPie profiles</a> adds
-                        a profile switcher to EmulationStation that does. PROFILES.md, with RetroManager, goes through it.
+                        a profile switcher to EmulationStation that does. docs/profiles.md, with RetroManager, goes through it.
                     </div>
                     <div className="gd-note" style={{marginTop: 10}}>
                         Forgotten the PIN? Put an empty file called <code>reset-login</code> in RetroManager's data folder: login switches itself off, and you can set a new one here.

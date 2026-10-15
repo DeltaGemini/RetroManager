@@ -247,7 +247,7 @@ details.gd-group > summary { cursor: pointer; }
 .gd-edit-button .gd-icon-line { color: inherit; }
 /* The game's logo beside its name */
 .gd-head-logo { flex: 0 0 auto; width: 84px; height: 56px; object-fit: contain; align-self: center; }
-.gd-head-logo + .gd-heading { flex: 1 1 0; min-width: 0; }
+.gd-head-logo + .gd-heading { flex: 1 1 150px; min-width: 0; }
 .gd-more-button { min-width: 44px; min-height: 42px; padding: 0; font-size: 20px; line-height: 1; justify-content: center; }
 .gd-more {
     position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 220px; max-width: 86vw; padding: 5px;

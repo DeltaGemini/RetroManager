@@ -75,11 +75,20 @@ def _build(who):
         latest[key] = max(latest.get(key, 0), when)
     recent = [{**games[key], '_last_played': when} for key, when in sorted(latest.items(), key=lambda item: -item[1]) if key in games][:RECENT_GAMES]
     added = sorted(games.values(), key=lambda g: -g['_added'])[:RECENT_GAMES]
-    lists = [{'id': 'favourites', 'name': 'Favourites', 'kind': 'favourites', 'games': [g for g in games.values() if g.get('favorite')]}]
+    favourites = [g for g in games.values() if g.get('favorite')]
+    return {'recent': recent, 'added': added, 'favourites': favourites, '_games': games}
+
+
+def _lists(value):
+    """Favourites and each collection that has games. The collections are read
+    afresh each time (they're quick to put together), so a game taken out of
+    one, or put in, shows at once and not when the rest is next worked out."""
+    games = value['_games']
+    lists = [{'id': 'favourites', 'name': 'Favourites', 'kind': 'favourites', 'games': value['favourites']}]
     for collection in library_state.snapshot()['collections']:
         lists.append({'id': collection['id'], 'name': collection['name'], 'kind': 'collection',
-                      'games': [games[key] for key in collection['games'] if key in games]})
-    return {'recent': recent, 'added': added, 'lists': [entry for entry in lists if entry['games']]}
+                      'games': [{**games[key], 'collections': library_state.for_game(key)['collections']} for key in collection['games'] if key in games]})
+    return [entry for entry in lists if entry['games']]
 
 
 def refresh_in_background(who=None):
@@ -117,4 +126,4 @@ def console_home():
         refresh_in_background(who)
     if value is None:
         return jsonify(success=True, pending=True, recent=[], added=[], lists=[])
-    return jsonify(success=True, pending=False, **value)
+    return jsonify(success=True, pending=False, recent=value['recent'], added=value['added'], lists=_lists(value))

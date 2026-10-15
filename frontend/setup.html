@@ -131,7 +131,7 @@
             <li><b>Add games:</b> <b>➕ Add games</b> at the top of every page takes files from this device, or put them in the games folder, one folder per system.</li>
             <li><b>Fetch their details:</b> open a system and press <b>Scan</b>, then <b>Bulk</b> to scrape what's missing.</li>
             <li><b>More than one person?</b> <b>Tools › Profiles and login</b> gives each their own favourites and a sign-in, and their own saves where saves are kept in folders of their own.</li>
-            <li><b>On a phone:</b> the Android app plays the library in RetroArch; the README's "On a phone" section has it.</li>
+            <li><b>On a phone:</b> the Android app plays the library in RetroArch; the "Android app" page of the documentation (docs/phone.md) has it.</li>
         </ol>
         <div class="buttons"><button class="main" id="finish">Open RetroManager</button></div>
     </section>
@@ -179,7 +179,7 @@
         $('where').replaceChildren('On this machine the library is in ', el('code', { textContent: where }),
             where.startsWith('.') ? ' beside docker-compose.yml' : '', '. Games go in its ', el('code', { textContent: 'roms' }),
             ' folder, one folder per system (', el('code', { textContent: 'roms/snes' }), ', ', el('code', { textContent: 'roms/gba' }),
-            '…). To use folders you already have somewhere else, see "Paths" in the README: it is one line in a file, and the only thing that can’t be set from here.');
+            '…). To use folders you already have somewhere else, see "Paths" in the documentation (docs/setup.md): it is one line in a file, and the only thing that can’t be set from here.');
         // Where saves are kept: as set, else as the files found suggest
         const { location, beside_roms: beside, in_folders: separate } = state.saves;
         const many = (n) => (n >= 500 ? 'over 500' : String(n));

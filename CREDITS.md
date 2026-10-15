@@ -51,5 +51,5 @@ passes none of it on. No games, BIOS files or media are supplied.
 
 ## Related
 
-The profile switcher described in [PROFILES.md](PROFILES.md) is
+The profile switcher described in [docs/profiles.md](docs/profiles.md) is
 [retropie_profiles](https://github.com/DeltaGemini/retropie_profiles), MIT.

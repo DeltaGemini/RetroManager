@@ -59,6 +59,9 @@
         /* A game (Continue playing): its picture whole, on black */
         .console-tile-game { background: #000; }
         .console-tile-game img { object-fit: contain; padding: 6px; }
+        /* Console settings › Game tiles are › As wide as the picture: the height of a square tile, the picture's own width */
+        .fit-pictures .console-groups .console-tile-game:has(img) { width: auto; height: clamp(104px, 13vw, 190px); aspect-ratio: auto; max-width: clamp(240px, 32vw, 440px); background: none; }
+        .fit-pictures .console-groups .console-tile-game img { width: auto; height: 100%; max-width: 100%; padding: 0; object-fit: contain; }
         .console-tile-play { position: absolute; right: 7px; bottom: 7px; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; padding-left: 2px; background: var(--accent-pink); color: #fff; font-size: 11px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5); }
         /* In the phone app: how many of a system's games are on the phone; a tile
            that can't be played with no connection is greyed; and a game the phone

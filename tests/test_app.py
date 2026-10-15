@@ -402,3 +402,23 @@ def test_saves_can_be_kept_beside_the_games_and_are_then_everyones(client, root)
             if leftover.suffix != ".sfc":
                 leftover.unlink()
     assert client.get("/api/accounts/shared-saves").get_json()["beside_roms"] is False
+
+
+def test_the_consoles_collections_follow_a_change_at_once(client):
+    import time
+    made = client.post("/api/collections", json={"name": "Console test"}).get_json()["collection"]
+    game = {"system": "snes", "rom_path": "Game One (USA).sfc"}
+    assert client.put(f"/api/collections/{made['id']}/games", json={**game, "member": True}).get_json()["success"]
+
+    def lists():
+        for _ in range(100):
+            home = client.get("/api/console/home").get_json()
+            if not home["pending"]:
+                return {entry["id"]: [g["path"] for g in entry["games"]] for entry in home["lists"]}
+            time.sleep(0.05)
+        raise AssertionError("the Console's lists never came")
+    assert lists()[made["id"]] == ["./Game One (USA).sfc"]
+    # Taken out: gone from the list straight away, not when the rest is next worked out
+    assert made["id"] not in client.put(f"/api/collections/{made['id']}/games", json={**game, "member": False}).get_json()["collections"]
+    assert made["id"] not in lists()
+    client.delete(f"/api/collections/{made['id']}")

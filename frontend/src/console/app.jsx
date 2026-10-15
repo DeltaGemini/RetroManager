@@ -200,7 +200,7 @@ function ConsoleBubble({ el, children }) {
 
 // How the first screen is laid out, behind the button by the search (drawn
 // like the phone app's own settings, whose styles it borrows)
-function ConsoleSettings({ onClose, sortMode, setSortMode, view, setView, tilePicture, systemPictures, hidden, toggleRow, rows }) {
+function ConsoleSettings({ onClose, sortMode, setSortMode, view, setView, tilePicture, tileShape, setTileShape, systemPictures, hidden, toggleRow, rows }) {
     useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); onClose(); } };
         document.addEventListener('keydown', onKey, true);
@@ -238,6 +238,12 @@ function ConsoleSettings({ onClose, sortMode, setSortMode, view, setView, tilePi
                     <section className="rm-set-group"><h3>Game tiles show</h3>
                         <div className="rm-set-rows">{RM.consolePicture.OPTIONS.map(([key, label]) => pick(key, label, key === tilePicture, () => RM.consolePicture.set(key)))}</div>
                         <p className="rm-set-empty">A game without that picture shows another it has.</p>
+                    </section>
+                    <section className="rm-set-group"><h3>Game tiles are</h3>
+                        <div className="rm-set-rows">
+                            {pick('square', 'Square', tileShape !== 'picture', () => setTileShape('square'), 'every tile the same, the picture fitted inside')}
+                            {pick('picture', 'As wide as the picture', tileShape === 'picture', () => setTileShape('picture'), 'all the same height; a box is narrow, a screenshot wide')}
+                        </div>
                     </section>
                     <section className="rm-set-group"><h3>Sort the systems by</h3>
                         <div className="rm-set-rows">{SYSTEM_SORT_LABELS.map(([key, label]) => pick(key, label, key === sortMode, () => setSortMode(key)))}</div>
@@ -342,6 +348,9 @@ function ConsoleSystems({ systems, home, installed, pad }) {
         return () => window.removeEventListener('retromanager:system-pictures', changed);
     }, []);
     // Which of a game's pictures its tile shows (chosen in the Console settings)
+    // A game's tile square, or as wide as its picture (Console settings; kept by the browser)
+    const [tileShape, setTileShapeState] = React.useState(() => rememberedChoice('retromanager.console.tileShape', v => v === 'square' || v === 'picture', 'square'));
+    const setTileShape = (shape) => { setTileShapeState(shape); rememberChoice('retromanager.console.tileShape', shape); };
     const [tilePicture, setTilePicture] = React.useState(() => RM.consolePicture.get());
     useEffect(() => {
         const changed = () => setTilePicture(RM.consolePicture.get());
@@ -381,12 +390,13 @@ function ConsoleSystems({ systems, home, installed, pad }) {
             // A system picked by how many games it has, then one of its games (once they've loaded)
             let n = Math.random() * shown.reduce((sum, s) => sum + s.rom_count, 0);
             const system = shown.find(s => (n -= s.rom_count) < 0) || shown[0];
-            setOpen({ system, game: SURPRISE });
+            setOpen({ system, game: SURPRISE, fromHome: true });
         }
         else if (gdCanPlay(item.game) && !details) gdPlay(item.game._system, item.game.path);
         else {
             const system = systems.find(s => s.name === item.game._system);
-            if (system) setOpen({ system, game: item.game.path });
+            // (from a row on the first screen: Back from its page goes straight back there)
+            if (system) setOpen({ system, game: item.game.path, fromHome: true });
         }
     };
 
@@ -509,13 +519,13 @@ function ConsoleSystems({ systems, home, installed, pad }) {
     };
 
     if (open) {
-        return <ConsoleGames key={open.system ? `s:${open.system.name}` : `l:${open.list.id}`} system={open.system} list={open.list} startOn={open.game} pad={pad}
+        return <ConsoleGames key={open.system ? `s:${open.system.name}` : `l:${open.list.id}`} system={open.system} list={open.list} startOn={open.game} fromHome={!!open.fromHome} pad={pad}
             onBack={() => { setOpen(null); setConsoleAddress(null); }} />;
     }
     if (!rows.length) return <div className="console-screen"><div className="console-empty">No systems with games yet.</div></div>;
     const onGame = current && current.type === 'game';
     return (
-        <div className={`console-screen${single ? '' : ' grouped'}`}>
+        <div className={`console-screen${single ? '' : ' grouped'}${tileShape === 'picture' ? ' fit-pictures' : ''}`}>
             <div className="console-top">
                 <form className="console-search" role="search" onSubmit={e => { e.preventDefault(); search(); }}>
                     <input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search every system" aria-label="Search every system's games" />
@@ -536,7 +546,7 @@ function ConsoleSystems({ systems, home, installed, pad }) {
                 </div>
             )}
             {settingsOpen && <ConsoleSettings onClose={() => setSettingsOpen(false)} sortMode={sortMode} setSortMode={setSortMode} view={view} setView={setView}
-                tilePicture={tilePicture} systemPictures={systemPictures} hidden={hidden} toggleRow={toggleRow}
+                tilePicture={tilePicture} tileShape={tileShape} setTileShape={setTileShape} systemPictures={systemPictures} hidden={hidden} toggleRow={toggleRow}
                 rows={[['recent', 'Continue playing', home && home.recent && home.recent.length], ['added', 'Recently added', home && home.added && home.added.length],
                     ...(gdPhone ? [['installed', 'Installed games', installed && installed.length]] : [])]} />}
             <ConsoleBubble el={currentEl}>{bubble()}</ConsoleBubble>
@@ -552,7 +562,7 @@ function ConsoleSystems({ systems, home, installed, pad }) {
 
 // A system's games, or a list's (Favourites, a collection): the shared game
 // list, and the chosen game's details
-function ConsoleGames({ system, list, startOn, onBack, pad }) {
+function ConsoleGames({ system, list, startOn, fromHome, onBack, pad }) {
     const [games, setGames] = React.useState(list ? list.games : null);
     const [error, setError] = React.useState(null);
     // A list's games come from several systems, so each is known by system and path
@@ -563,6 +573,11 @@ function ConsoleGames({ system, list, startOn, onBack, pad }) {
     const narrowNow = React.useRef(narrow);
     narrowNow.current = narrow;
     const [showing, setShowing] = React.useState(() => !!startOn);
+    // A game opened from the first screen (Continue playing, Recently added...) goes back
+    // there, not to its system's list, until that list has been looked at
+    const [sawList, setSawList] = React.useState(false);
+    useEffect(() => { if (!showing) setSawList(true); }, [showing]);
+    const homeFirst = fromHome && !sawList;
     useEffect(() => {
         const onResize = () => setNarrow(window.innerWidth < 900);
         window.addEventListener('resize', onResize);
@@ -606,6 +621,19 @@ function ConsoleGames({ system, list, startOn, onBack, pad }) {
     const edit = React.useCallback(() => { window.dispatchEvent(new Event('retromanager:edit-game')); }, []);
     // The panel saved or removed a game: the list here follows
     const saved = (fields) => setGames(all => all && all.map(g => (keyOf(g) === chosen ? { ...g, ...fields } : g)));
+    // Favourite or collections changed on the game's page: the list it came from follows (the
+    // game stays in view here until you leave, so a slip can be undone; the list's tile and the
+    // list opened next time are right at once)
+    const statusChanged = (fields) => {
+        saved(fields);
+        if (!list || !game) return;
+        const belongs = list.kind === 'favourites' ? (fields.favorite === undefined ? null : !!fields.favorite)
+            : (fields.collections ? fields.collections.includes(list.id) : null);
+        if (belongs === null) return;
+        const others = list.games.filter(g => keyOf(g) !== keyOf(game));
+        list.games = belongs ? [...others, { ...game, ...fields }] : others;
+        window.dispatchEvent(new Event('retromanager:console-lists'));
+    };
     const removed = () => { setGames(all => all && all.filter(g => keyOf(g) !== chosen)); setShowing(false); };
 
     // Esc, Backspace or left goes back (the list has the other keys)
@@ -621,14 +649,14 @@ function ConsoleGames({ system, list, startOn, onBack, pad }) {
             }
             if (key !== 'back' && key !== 'left') return;
             e.preventDefault();
-            narrow && showing ? setShowing(false) : onBack();
+            narrow && showing && !homeFirst ? setShowing(false) : onBack();
         };
         // (the phone's Back does the same: see RMBack)
-        const onPhoneBack = (e) => { e.preventDefault(); narrow && showing ? setShowing(false) : onBack(); };
+        const onPhoneBack = (e) => { e.preventDefault(); narrow && showing && !homeFirst ? setShowing(false) : onBack(); };
         window.addEventListener('keydown', onKey);
         window.addEventListener('retromanager:back', onPhoneBack);
         return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('retromanager:back', onPhoneBack); };
-    }, [onBack, narrow, showing, game && keyOf(game)]);
+    }, [onBack, narrow, showing, homeFirst, game && keyOf(game)]);
 
     return (
         <div className="console-screen console-games">
@@ -648,10 +676,12 @@ function ConsoleGames({ system, list, startOn, onBack, pad }) {
                             autoSelect={!narrow && chosen !== SURPRISE} onEdit={edit} />
                     </div>
                     <div className="console-details">
-                        {narrow && <button className="gd-btn small" style={{marginBottom: 12}} onClick={() => setShowing(false)}>‹ Games</button>}
+                        {narrow && (homeFirst
+                            ? <button className="gd-btn small" style={{marginBottom: 12}} onClick={onBack}>‹ Home</button>
+                            : <button className="gd-btn small" style={{marginBottom: 12}} onClick={() => setShowing(false)}>‹ Games</button>)}
                         {game && (
                             <GameDetails system={systemOf(game, system)} systemLabel={game._system_label || systemName(system)} game={game}
-                                onSaved={(path, fields) => saved(fields)} onDeleted={removed} />
+                                onSaved={(path, fields) => saved(fields)} onChanged={statusChanged} onDeleted={removed} />
                         )}
                     </div>
                 </div>
@@ -694,7 +724,10 @@ function ConsoleApp() {
                 .then(d => { if (d && d.success && !d.pending && !fresh && !stopped) setHome(d); }).catch(() => {});
         }
         loadHome();
-        return () => { stopped = true; };
+        // A list changed here (a game's page): its tile is drawn again with the new count
+        const listsChanged = () => setHome(h => (h ? { ...h } : h));
+        window.addEventListener('retromanager:console-lists', listsChanged);
+        return () => { stopped = true; window.removeEventListener('retromanager:console-lists', listsChanged); };
     }, []);
     // In the phone app: how many of each system's games are on the phone, for the
     // tiles. Only the systems with files there are asked about, and asking keeps

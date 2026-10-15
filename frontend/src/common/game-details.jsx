@@ -155,7 +155,13 @@ function GDStatus({ system, game, notify, onChanged }) {
     }, [system, game.path]);
     // Fetched at first, and again each time the checklist opens (the Collections tool may have changed them)
     React.useEffect(() => {
-        fetch(`${GD_API}/api/library-state`).then(r => r.json()).then(d => { if (d.success) setCollections(d.collections); }).catch(() => {});
+        fetch(`${GD_API}/api/library-state`).then(r => r.json()).then(d => {
+            if (!d.success) return;
+            setCollections(d.collections);
+            // ...and which of them hold this game now (another page may have changed that)
+            const key = `${system}/${String(game.path).replace(/^(\.\/)+/, '')}`;
+            setMember(d.collections.filter(c => (c.games || []).includes(key)).map(c => c.id));
+        }).catch(() => {});
     }, [menuOpen]);
 
     const who = { system, rom_path: game.path };
@@ -185,8 +191,13 @@ function GDStatus({ system, game, notify, onChanged }) {
         const d = await send('/api/favorite', { ...who, favorite: !favorite });
         if (d.success) { setFavorite(d.favorite); changed({ favorite: d.favorite, has_metadata: true }); }
     };
+    // (one change at a time: a second click before the first is answered would be sent from the old state)
+    const [toggling, setToggling] = React.useState(null);
     const toggleCollection = async (id) => {
+        if (toggling) return;
+        setToggling(id);
         const d = await send(`/api/collections/${id}/games`, { ...who, member: !member.includes(id) });
+        setToggling(null);
         if (d.success) {
             setMember(d.collections);
             const key = `${system}/${String(game.path).replace(/^(\.\/)+/, '')}`;
@@ -227,7 +238,7 @@ function GDStatus({ system, game, notify, onChanged }) {
                             {collections && !collections.length && <div className="gd-note">No collections yet. Name one below to start it with this game.</div>}
                             {(collections || []).filter(c => c.name.toLowerCase().includes(find.trim().toLowerCase())).map(c => (
                                 <label key={c.id}>
-                                    <input type="checkbox" checked={member.includes(c.id)} onChange={() => toggleCollection(c.id)} />
+                                    <input type="checkbox" checked={member.includes(c.id)} disabled={!!toggling} onChange={() => toggleCollection(c.id)} />
                                     <span className="gd-menu-name">{c.name}</span>
                                     <span className="gd-note">{c.games.length}</span>
                                 </label>
