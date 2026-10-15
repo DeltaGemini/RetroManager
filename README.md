@@ -41,23 +41,23 @@ To run the published image instead of building it, put `image: ghcr.io/deltagemi
 
 ## Screenshots
 
-*The games, box art and logos in these screenshots are for illustration only: they belong to their publishers and are not included with RetroManager.*
+*These show a demo library of made-up games: every name, description and picture in them was invented and drawn by `tools/make_demo_library.py`, so they show no one else's games. No games of any kind are included with RetroManager.*
 
-**Library**: systems, games and the details editor.
+**Library**: systems, games and a game's details.
 
-![Library page with Game Boy Advance games and The Legend of Zelda: The Minish Cap open](docs/screenshots/library.webp)
+![Library page with a demo library's Game Boy Advance games and one made-up game open](docs/screenshots/library.webp)
 
-**Bookcase**: one shelf per system; hovering turns a box to face you.
+**Bookcase**: one shelf per system, each game's box spine out.
 
-![Bookcase with Atari 2600 games, Asteroids turned to face out](docs/screenshots/bookcase.webp)
+![Bookcase with made-up games on the Atari 2600 and Nintendo 64 shelves](docs/screenshots/bookcase.webp)
 
 Click a box to take it off the shelf:
 
-![A SNES box taken off the shelf, with its details card](docs/screenshots/bookcase-open.webp)
+![A made-up game's box taken off the shelf, with its details card](docs/screenshots/bookcase-open.webp)
 
-**Timeline**: every game by release year. Pick series to join their games with a line.
+**Timeline**: every game by release year, or grouped by decade. Pick series to join their games with a line.
 
-![Timeline with the Star Wars and The Legend of Zelda series lines](docs/screenshots/timeline.webp)
+![Timeline of the demo library by year](docs/screenshots/timeline.webp)
 
 ![Timeline grouped by decade](docs/screenshots/timeline-decades.webp)
 

@@ -15,10 +15,11 @@ that it fetches or talks to, and the terms each is under.
 | Star icons of the Switch colour themes | `frontend/themes/switch/star-*.svg` | The same theme | CC BY-NC-SA |
 | Oxygen font | `frontend/themes/switch/Oxygen-Regular.ttf` | Vernon Adams | SIL Open Font License 1.1 (`frontend/themes/switch/OFL.txt`) |
 
-The screenshots in `docs/screenshots/` show a library's games (titles, box
-art, logos and game screens) for illustration only. Those games and their
-artwork belong to their publishers and owners; none of them is part of
-RetroManager or included with it.
+The screenshots in `docs/screenshots/` show a demo library of made-up games,
+drawn by `tools/make_demo_library.py`: no real game, box art or logo is in
+them. Any real game that ever appears in a picture of RetroManager is there for
+illustration only, belongs to its publisher, and is not part of RetroManager
+or included with it.
 
 The consoles' and publishers' names and logos, wherever they appear (in the
 optional system pictures, and in pictures and names fetched for your games),
