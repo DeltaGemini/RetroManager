@@ -3,9 +3,11 @@ Screenscraper.fr API integration for metadata scraping
 https://www.screenscraper.fr/webapi2.php
 """
 
+import re
 import time
 import requests
 import logging
+from datetime import datetime
 from typing import Optional, List, Dict, Any
 
 from backend.name_style import style_name
@@ -24,13 +26,13 @@ class ScreenscraperNotFound(ScreenscraperError):
 # HTTP status codes ScreenScraper uses to report problems
 _HTTP_ERRORS = {
     400: "ScreenScraper rejected the request as malformed.",
-    401: "ScreenScraper has closed the API to non-members because it's overloaded. Set SCREENSCRAPER_USER to scrape with your account, or try later.",
-    403: "ScreenScraper rejected the developer credentials (SCREENSCRAPER_LOGIN / SCREENSCRAPER_PASSWORD).",
+    401: "ScreenScraper has closed the API to non-members because it's overloaded. Add your ScreenScraper user account in Tools > Settings, or try later.",
+    403: "ScreenScraper rejected the developer credentials. Check them in Tools > Settings.",
     404: "ScreenScraper found no matching game.",
     423: "ScreenScraper's API is fully closed right now. Try later.",
     426: "ScreenScraper has blocked this software name or version.",
     429: "ScreenScraper's thread limit was reached. Wait a moment and retry.",
-    430: "ScreenScraper's daily quota is used up. Set SCREENSCRAPER_USER for a larger quota, or try tomorrow.",
+    430: "ScreenScraper's daily quota is used up. Add your ScreenScraper user account in Tools > Settings for a larger quota, or try tomorrow.",
     431: "ScreenScraper has blocked this account for too many failed requests today.",
 }
 
@@ -43,6 +45,7 @@ MEDIA_TYPE_MAP = [
     ("box-2D", "box2d"),
     ("box-3D", "box3d"),
     ("box-2D-side", "boxside"),
+    ("support-2D", "support"),
     ("ss", "screenshot"),
     ("sstitle", "screenshottitle"),
     ("wheel-hd", "wheel"),
@@ -57,23 +60,27 @@ MEDIA_TYPE_MAP = [
 
 # Preferred regions for names, dates and media
 REGION_ORDER = ["us", "wor", "eu", "ss", "uk", "jp"]
+# ...and for manuals, which are read: the English-speaking regions first. A
+# "eu" manual on ScreenScraper is very often a French scan, so the UK's (and
+# Australia's) come before it.
+MANUAL_REGION_ORDER = ["us", "uk", "au", "ca", "wor", "eu", "ss", "jp"]
 
 
-def _region_rank(region: Optional[str]) -> int:
+def _region_rank(region: Optional[str], order: List[str] = REGION_ORDER) -> int:
     try:
-        return REGION_ORDER.index(region)
+        return order.index(region)
     except ValueError:
-        return len(REGION_ORDER)
+        return len(order)
 
 
-def _pick_by_region(entries: Any) -> Optional[Dict]:
+def _pick_by_region(entries: Any, order: List[str] = REGION_ORDER) -> Optional[Dict]:
     """Pick the best entry from a list of {"region": ..., "text"/"url": ...} dicts."""
     if not isinstance(entries, list):
         return None
     candidates = [e for e in entries if isinstance(e, dict)]
     if not candidates:
         return None
-    return min(candidates, key=lambda e: _region_rank(e.get("region")))
+    return min(candidates, key=lambda e: _region_rank(e.get("region"), order))
 
 
 def _pick_by_language(entries: Any, language: str = "en") -> str:
@@ -103,6 +110,28 @@ def to_es_date(date_text: str) -> str:
     return f"{digits}T000000"
 
 
+_TEXT_DATE_FORMATS = ("%B %d, %Y", "%b %d, %Y", "%d %B, %Y", "%d %b, %Y", "%d %B %Y", "%d %b %Y", "%B %Y", "%b %Y")
+
+
+def text_date_to_es(date_text: str) -> str:
+    """Like to_es_date, for sources that write dates out ("18 Apr, 2011",
+    "March 11, 1995"). Falls back to the first year in the text."""
+    text = (date_text or "").strip()
+    if not text:
+        return ""
+    if re.fullmatch(r"\d{4}(-\d{1,2}){0,2}( \d{2}:\d{2}:\d{2})?", text):
+        parts = text.split(" ")[0].split("-")
+        return to_es_date("".join(part.zfill(2) for part in parts))
+    for date_format in _TEXT_DATE_FORMATS:
+        try:
+            parsed = datetime.strptime(text, date_format)
+        except ValueError:
+            continue
+        return parsed.strftime("%Y%m%dT000000")
+    year = re.search(r"\b(19|20)\d{2}\b", text)
+    return to_es_date(year.group(0)) if year else ""
+
+
 class ScreenscraperAPI:
     """Client for Screenscraper.fr API"""
 
@@ -117,6 +146,10 @@ class ScreenscraperAPI:
         self.user = user
         self.user_password = user_password
         self.session = requests.Session()
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.dev_login and self.dev_password)
 
     def _auth_params(self) -> Dict[str, str]:
         params = {
@@ -134,9 +167,8 @@ class ScreenscraperAPI:
 
     def _make_request(self, endpoint: str, params: Dict[str, Any]) -> Dict:
         """Call the API and return the parsed JSON, or raise ScreenscraperError."""
-        if not (self.dev_login and self.dev_password):
-            raise ScreenscraperError("ScreenScraper isn't set up: add SCREENSCRAPER_LOGIN and "
-                                     "SCREENSCRAPER_PASSWORD to .env (see .env.example).")
+        if not self.configured:
+            raise ScreenscraperError("Add the ScreenScraper developer credentials in Tools > Settings.")
         url = f"{self.BASE_URL}/{endpoint}"
         full_params = {**params, **self._auth_params()}
         logger.debug(f"ScreenScraper request: {endpoint} {params}")
@@ -229,7 +261,7 @@ class ScreenscraperAPI:
             raise ScreenscraperNotFound("ScreenScraper doesn't know this ROM.")
         return jeu
 
-    def summarize_search_result(self, jeu: Dict) -> Dict[str, Any]:
+    def summarize_search_result(self, jeu: Dict, hash_match: bool = False) -> Dict[str, Any]:
         """Short form of a search hit for the results list."""
         systeme = jeu.get('systeme') or {}
         name_entry = _pick_by_region(jeu.get('noms'))
@@ -251,6 +283,8 @@ class ScreenscraperAPI:
             'regions': regions,
             # ScreenScraper files ROM hacks under systems named "... Hacks"
             'is_hack': 'hack' in system_name.lower() or 'hack' in name.lower(),
+            # Found from the ROM's checksum rather than by name
+            'hash_match': hash_match,
             'jeu': jeu,  # full object, so game-info doesn't need another API call
         }
 
@@ -265,7 +299,7 @@ class ScreenscraperAPI:
         for ss_type, folder in MEDIA_TYPE_MAP:
             if folder in media or ss_type not in by_type:
                 continue
-            best = _pick_by_region(by_type[ss_type])
+            best = _pick_by_region(by_type[ss_type], MANUAL_REGION_ORDER if folder == 'manuals' else REGION_ORDER)
             if best:
                 media[folder] = best['url']
         return media

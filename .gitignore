@@ -1,21 +1,50 @@
-# Local settings and credentials
-.env
-
 # Python
 __pycache__/
 *.py[cod]
 venv/
 .venv/
 
-# Editors and OS
-.vscode/
-.idea/
-*.code-workspace
-.DS_Store
-Thumbs.db
-
-# Archives and working files
-*.zip
-*.psd
+# Backups and local leftovers (may hold old credentials)
+WIP*.zip
 *.whl
 *.log
+.env
+settings.json
+
+# Editor and tool settings
+.claude/
+.vscode/
+*.code-workspace
+
+# Old script with credentials written in it (use test_igdb.py)
+test.sh
+
+# Built by the Dockerfile
+frontend/js/
+frontend/vendor/
+
+# This machine's host, paths and people (see .env.example, dev-ssh.example.ps1)
+dev-ssh.ps1
+
+# Dashboard widget experiments, with this network's addresses in them
+homepage-widget/
+
+# The phone app: what build.sh makes, and the key it signs with
+android/build/
+android/debug.keystore
+frontend/app/
+
+# The Switch themes' logos lettered in a Sega logo font: this installation's
+# own, not passed on (frontend/open/retromanager-logo.svg stands in for them)
+frontend/themes/switch/logo.png
+frontend/themes/switch/retromanager-logo.png
+frontend/themes/switch/retromanager-logo.svg
+# ...and their background, a photograph whose source isn't recorded
+# (frontend/open/background.svg stands in for it)
+frontend/themes/switch/background.jpg
+# The key the Android app is signed with, and its password
+android/*.keystore
+android/signing.env
+
+# The library that's made beside docker-compose.yml when no other is named
+/RetroGames/

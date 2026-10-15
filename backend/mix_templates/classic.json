@@ -1,0 +1,48 @@
+{
+  "name": "classic",
+  "label": "Classic",
+  "version": 2,
+  "canvas": {"width": 960, "height": 960},
+  "screenshot_fit": "contain",
+  "screenshot_scaling": "sharp",
+  "sources": {
+    "screenshot": ["screenshot", "screenshottitle"],
+    "box": ["box3d", "box2d"],
+    "media": ["support"],
+    "wheel": ["wheel"]
+  },
+  "layers": ["screenshot", "box", "wheel", "media"],
+  "elements": {
+    "screenshot": {
+      "panel": [0.04, 0.04, 0.92, 0.67],
+      "fill": [0, 0, 0, 255],
+      "radius": 0.012,
+      "frame": {"width": 0.035, "color": [24, 24, 27, 255], "radius": 0.04, "edge": [70, 70, 76, 255]},
+      "shadow": {"offset": [0.0, 0.006], "blur": 0.012, "opacity": 0.55}
+    },
+    "box": {
+      "anchor": "bottom-left",
+      "pos": [0.02, 0.975],
+      "max": [0.56, 0.55],
+      "trim": true,
+      "shadow": {"offset": [0.005, 0.007], "blur": 0.012, "opacity": 0.55}
+    },
+    "wheel": {
+      "anchor": "center-right",
+      "pos": [0.975, 0.795],
+      "max": [0.56, 0.2],
+      "trim": true,
+      "shadow": {"offset": [0.003, 0.005], "blur": 0.008, "opacity": 0.6}
+    },
+    "media": {
+      "anchor": "bottom-left",
+      "pos": [0.26, 0.99],
+      "max": [0.26, 0.19],
+      "trim": true,
+      "shadow": {"offset": [0.004, 0.006], "blur": 0.01, "opacity": 0.5},
+      "variants": [
+        {"when": {"missing": ["box"]}, "set": {"pos": [0.02, 0.975]}}
+      ]
+    }
+  }
+}

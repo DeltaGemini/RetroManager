@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The Console page's own dark blue behind it, so nothing flashes white while it loads -->
+    <style name="App" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@color/background</item>
+        <item name="android:statusBarColor">@color/bar</item>
+        <item name="android:navigationBarColor">@color/background</item>
+    </style>
+    <color name="background">#0a0e27</color>
+    <color name="bar">#0f1535</color>
+</resources>

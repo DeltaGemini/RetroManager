@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RetroManager Play</title>
+    <script src="/common/theme.js"></script>
+    <script src="/common/accounts.js"></script>
+    <link rel="stylesheet" href="/common/header.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        /* Same palette as the library page (index.html) */
+        :root {
+            color-scheme: dark;
+            --bg-primary: #0a0e27; --bg-secondary: #0f1535; --bg-tertiary: #14194f;
+            --text-primary: #e0e0e0; --text-secondary: #999999;
+            --accent-pink: #ff6b9d; --accent-orange: #ff9d3d; --success: #6bd09a; --border-color: #2a2d4a;
+        }
+        :root[data-theme="light"] {
+            color-scheme: light;
+            --bg-primary: #f4f5fb; --bg-secondary: #ffffff; --bg-tertiary: #eceef7;
+            --text-primary: #1c1f33; --text-secondary: #5f6480;
+            --accent-pink: #d6336c; --accent-orange: #c2560c; --success: #1e8a55; --border-color: #d3d7e8;
+        }
+        html, body { height: 100%; }
+        body {
+            background: var(--bg-primary); color: var(--text-primary); display: flex; flex-direction: column;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Ubuntu', 'Helvetica Neue', sans-serif;
+        }
+        .bar {
+            display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 16px; font-size: 13px;
+            background: var(--bg-secondary); border-bottom: 1px solid var(--border-color);
+        }
+        .bar a { color: var(--accent-pink); text-decoration: none; }
+        .bar h1 { font-size: 16px; flex: 1; min-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #pi-load, #pi-send { max-width: 230px; }
+        /* Full screen: the bar is put away, and a small button in the corner brings it back */
+        body.fs .bar { display: none; }
+        body.fs.bar-open .bar { display: flex; }
+        #bar-toggle {
+            position: fixed; left: 6px; top: 6px; z-index: 20; width: 30px; height: 30px; border-radius: 50%; padding: 0; cursor: pointer;
+            font-size: 15px; line-height: 1; color: #fff; background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.35); opacity: 0.55;
+        }
+        body.fs.bar-open #bar-toggle { top: auto; bottom: 6px; }
+        /* Touch controls drawn from a RetroArch overlay (play-overlay.js): they cover
+           the game, and only the controls themselves take touches */
+        #stage { position: relative; }
+        .rm-pad { position: absolute; inset: 0; z-index: 5; pointer-events: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+        .rm-pad-ctl { position: absolute; pointer-events: auto; touch-action: none; opacity: 0.8; }
+        .rm-pad-ctl.still { pointer-events: none; }
+        .rm-pad-ctl img { width: 100%; height: 100%; display: block; pointer-events: none; }
+        .rm-pad-ctl.down { opacity: 1; filter: brightness(1.5); }
+        /* EmulatorJS's own touch pad makes way for it */
+        body.rm-pad-on .ejs_virtualGamepad_parent { display: none !important; }
+        /* Once the game is on, the bar keeps only what's still of use, on one line where it fits */
+        body.playing #profile, body.playing #profile-label, body.playing #start { display: none; }
+        body.playing .bar { padding: 6px 12px; gap: 8px; }
+        body.playing .bar h1 { font-size: 14px; min-width: 60px; }
+        #pad-row { margin-top: 14px; font-size: 13px; }
+        #pad-row select { font: inherit; color: #eee; background: #15151c; border: 1px solid #2c2c38; border-radius: 4px; padding: 6px 10px; margin-left: 6px; max-width: 100%; }
+        .bar select, .bar button {
+            font: inherit; color: var(--text-primary); background: var(--bg-tertiary); border: 1px solid var(--border-color);
+            border-radius: 4px; padding: 6px 10px; cursor: pointer;
+        }
+        .bar button.primary { background: var(--accent-pink); border-color: var(--accent-pink); color: #fff; font-weight: 600; }
+        .bar button:disabled { opacity: 0.5; cursor: default; }
+        #status { color: var(--text-secondary); font-size: 12px; }
+        #status.error { color: var(--accent-pink); }
+        #stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; background: #000; }
+        #game { width: 100%; height: 100%; }
+        #intro { max-width: 560px; padding: 24px; text-align: center; color: #ddd; line-height: 1.6; font-size: 14px; }
+        #intro p { margin-bottom: 12px; }
+        #intro .small { font-size: 12px; color: #999; }
+        /* Save states made on the Pi (RetroArch) that this game can start from */
+        #stage.with-states { align-items: flex-start; overflow-y: auto; }
+        #pi-states { margin-top: 18px; text-align: left; }
+        #pi-states h2 { font-size: 14px; margin-bottom: 4px; color: #eee; }
+        .pi-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+        .pi-state {
+            display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 6px 8px; cursor: pointer;
+            font: inherit; font-size: 13px; color: #ddd; background: #15151c; border: 1px solid #2c2c38; border-radius: 4px;
+        }
+        .pi-state:hover { border-color: #666; }
+        .pi-state[aria-checked="true"] { border-color: var(--accent-pink); background: #24161f; }
+        .pi-state img, .pi-state .no-shot { width: 64px; height: 48px; flex-shrink: 0; border-radius: 3px; object-fit: cover; background: #000; image-rendering: pixelated; }
+        .pi-state .no-shot { display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        .pi-state b { display: block; font-weight: 600; }
+        .pi-state span.small { display: block; }
+        .pi-more { align-self: flex-start; font: inherit; font-size: 12px; color: #ddd; background: none; border: 1px solid #2c2c38; border-radius: 4px; padding: 4px 9px; cursor: pointer; margin-top: 4px; }
+    </style>
+</head>
+<body>
+    <div class="bar">
+        <a id="back" href="/">← Back</a>
+        <h1 id="title">Loading...</h1>
+        <label for="profile" id="profile-label" hidden>Play as</label>
+        <select id="profile" hidden aria-label="Whose save to use"></select>
+        <button id="start" class="primary" disabled>Start</button>
+        <select id="pi-load" hidden aria-label="Load a save state made on the Pi"></select>
+        <select id="pi-send" hidden aria-label="Send this moment to the Pi as a save state"></select>
+        <button id="fullscreen" hidden title="Fill the screen (the bar comes back with the button in the corner)">⛶ Full screen</button>
+        <span id="status" role="status"></span>
+    </div>
+    <button id="bar-toggle" hidden aria-label="Show or hide the bar" title="Show or hide the bar">☰</button>
+    <div id="stage">
+        <div id="intro"></div>
+        <div id="game" hidden></div>
+    </div>
+
+    <script src="/play-overlay.js"></script>
+    <script>
+        // Plays one game with EmulatorJS (?system=<folder>&game=<rom path>). The
+        // chosen person's battery save is loaded when the game starts and written
+        // back whenever the game saves.
+        const params = new URLSearchParams(window.location.search);
+        const system = params.get('system') || '';
+        const rom = (params.get('game') || '').replace(/^(\.\/)+/, '');
+        const session = Math.random().toString(36).slice(2);
+        const $ = (id) => document.getElementById(id);
+        const setStatus = (text, error) => { $('status').textContent = text; $('status').className = error ? 'error' : ''; };
+        const query = (extra) => new URLSearchParams({ system, rom, ...extra });
+        // Back to where the game was started from: the Console page, or the Library
+        const fromConsole = params.get('from') === 'console';
+        $('back').href = `${fromConsole ? '/console' : '/'}?${new URLSearchParams({ system, game: `./${rom}` })}`;
+
+        let info = null;
+        let pendingSave = null;   // the save to load when the game starts
+        let lastSent = null;
+        let piStates = [];       // the game's RetroArch save states (made on the Pi)
+        let padLayouts = [];     // touch-control layouts (frontend/overlays/layouts.json)
+        let pad = null;          // the one in use, once the game has started
+        let chosenState = null;  // the one to start from, if any
+
+        const profile = () => $('profile').value;
+        // ("shared" is the saves that are nobody's in particular: all there is until profiles are added)
+        const describe = (p) => `${p.name === 'shared' ? 'Everyone (the shared saves)' : p.name} ${p.has_save ? '(has a save)' : '(no save yet)'}`;
+        const who = () => (profile() === 'shared' ? 'everyone' : profile());
+        const whose = () => (profile() === 'shared' ? 'the shared' : `${profile()}'s`);
+
+        async function load() {
+            if (!system || !rom) { $('title').textContent = 'No game chosen'; return; }
+            let d;
+            try { d = await (await fetch(`/api/play/info?${query()}`)).json(); }
+            catch (e) { setStatus(`Couldn't reach RetroManager: ${e.message}`, true); return; }
+            if (!d.success || !d.playable) {
+                $('title').textContent = rom;
+                $('intro').innerHTML = "<p>This game can't be played in the browser.</p><p class='small'>Browser play covers the systems EmulatorJS plays. A system that needs a BIOS plays once its BIOS file is in the BIOS folder; multi-disc playlists (.m3u) and .7z or .rar archives can't be played.</p>";
+                return;
+            }
+            info = d;
+            document.title = `${d.name} · RetroManager`;
+            $('title').textContent = d.name;
+            if (d.profiles.length) {
+                const remembered = (() => { try { return localStorage.getItem('retromanager.play.profile'); } catch (e) { return null; } })();
+                $('profile').innerHTML = '';
+                $('profile').appendChild(new Option("Nobody: don't keep a save", ''));
+                d.profiles.forEach(p => $('profile').appendChild(new Option(describe(p), p.name)));
+                // The shared saves unless someone was chosen here before (with no profiles, they're all there is)
+                $('profile').value = 'shared';
+                if (remembered !== null && [...$('profile').options].some(o => o.value === remembered)) $('profile').value = remembered;
+                // With login on, it's the signed-in person's save (an admin may still pick another's)
+                const me = await RM.me;
+                if (me.enabled && me.profile) {
+                    if ([...$('profile').options].some(o => o.value === me.profile)) $('profile').value = me.profile;
+                    if (!me.admin) [...$('profile').options].forEach(o => { o.disabled = o.value !== me.profile; });
+                }
+                $('profile').hidden = false;
+                $('profile-label').hidden = false;
+            }
+            $('intro').innerHTML = "<p>Choose whose save to use, then press <b>Start</b>.</p>"
+                + "<p class='small'>The save is the same file the Pi uses. It's loaded when the game starts and written back each time the game saves; the first time this session changes it, the old file is copied to the save backups folder. Don't play the same game on the Pi at the same time.</p>"
+                + (d.states ? "<p class='small'>The emulator's <b>save state</b> and <b>load state</b> buttons keep one state per game for the person you pick, on the server. They're the browser emulator's own: the Pi can't load them.</p>" : '')
+                + "<p class='small'>On a phone the game fills the screen: the round button in the corner brings this bar back. With a controller, holding <b>Select</b> and <b>Start</b> together for a second leaves the game.</p>"
+                + "<p class='small'>The emulator for each system is fetched the first time it's played and kept, so after that it plays without the internet.</p>";
+            $('start').disabled = false;
+            if (d.states) loadPiStates();
+            offerPadLayouts();
+        }
+
+        // --- Touch controls from a RetroArch overlay (play-overlay.js) ---
+        // Chosen before Start. On a touch screen a system's own layout is the
+        // default; the choice is remembered for the system in this browser.
+        const padKey = () => `retromanager.play.pad.${info.core}`;
+        async function offerPadLayouts() {
+            padLayouts = await RMOverlay.layouts();
+            if (!padLayouts.length) return;
+            const row = $('intro').appendChild(Object.assign(document.createElement('p'), { id: 'pad-row' }));
+            const menu = Object.assign(document.createElement('select'), { id: 'pad' });
+            menu.setAttribute('aria-label', 'Touch controls');
+            menu.appendChild(new Option("EmulatorJS's own", ''));
+            padLayouts.forEach(layout => menu.appendChild(new Option(layout.name, layout.id)));
+            let remembered = null;
+            try { remembered = localStorage.getItem(padKey()); } catch (e) {}
+            const usual = padLayouts.find(layout => (layout.systems || []).includes(info.core));
+            const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+            menu.value = remembered !== null && [...menu.options].some(o => o.value === remembered) ? remembered : (touch && usual ? usual.id : '');
+            menu.addEventListener('change', () => { try { localStorage.setItem(padKey(), menu.value); } catch (e) {} });
+            row.append('Touch controls', menu);
+        }
+        // The layout chosen, read and ready, or null
+        async function chosenPadLayout() {
+            const chosen = padLayouts.find(layout => layout.id === ($('pad') || {}).value);
+            if (!chosen) return null;
+            try { return await RMOverlay.load(chosen); } catch (e) { return null; }
+        }
+        // A DS layout with its controls between the two screens needs the core to
+        // leave a gap there: how tall (in DS pixels), for this screen. 0 otherwise.
+        function screenGapFor(layout) {
+            const stage = $('stage');
+            const width = stage.clientWidth, height = stage.clientHeight;
+            const upright = layout.overlays.find(o => o.name === 'portrait');
+            if (info.core !== 'nds' || !upright || height <= width) return 0;
+            const bands = RMOverlay.freeBands(upright);
+            if (bands.length < 2) return 0;
+            const screen = width * 0.75;   // each DS screen is 4:3, the full width
+            return Math.max(0, Math.min(126, Math.round((bands[1][0] * height - screen) / (width / 256))));
+        }
+        // --- Sending this moment to the Pi ---
+        // The emulator's state, written where RetroArch on the Pi finds it: the
+        // game's auto state (what the Pi starts from, if it loads those) or a slot.
+        function offerSendToPi(manager) {
+            if (!profile() || !info.states) return;
+            const menu = $('pi-send');
+            menu.innerHTML = '';
+            menu.appendChild(new Option('Send to the Pi…', ''));
+            menu.appendChild(new Option('As the auto save state', 'auto'));
+            [1, 2, 3, 4, 5].forEach(n => menu.appendChild(new Option(`As slot ${n}`, String(n))));
+            menu.onchange = async () => {
+                const slot = menu.value;
+                menu.value = '';
+                menu.blur();
+                if (!slot) return;
+                try {
+                    setStatus('Sending to the Pi...');
+                    const state = await manager.getState();
+                    const res = await fetch(`/api/play/pi-state?${query({ profile: profile(), slot })}`, { method: 'PUT', headers: { 'Content-Type': 'application/octet-stream' }, body: state });
+                    const d = await res.json();
+                    if (!d.success) { setStatus(`Not sent: ${d.error}`, true); return; }
+                    const mismatch = d.pi_cores.length && d.made_by && !d.pi_cores.includes(d.made_by);
+                    setStatus(`Sent to the Pi as ${slot === 'auto' ? 'the auto save state' : `slot ${slot}`} for ${who()}${d.backup ? ' (the one there was backed up)' : ''}.`
+                        + (mismatch ? ` It was made with ${d.made_by}; the Pi's other states for this game are ${d.pi_cores.join(', ')}, so the Pi must run ${d.made_by} to load it.` : ''), mismatch);
+                } catch (e) { setStatus(`Not sent: ${e.message}`, true); }
+            };
+            menu.hidden = false;
+        }
+
+        // --- Full screen, and leaving with a controller ---
+        const wantsFullScreen = () => window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+        function enterFullScreen() {
+            document.body.classList.add('fs');
+            document.body.classList.remove('bar-open');
+            $('bar-toggle').hidden = false;
+            // Not every browser can (an iPhone's can't): the bar is put away either way
+            try { const asked = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); if (asked && asked.catch) asked.catch(() => {}); } catch (e) {}
+            window.dispatchEvent(new Event('resize'));
+        }
+        function leaveFullScreen() {
+            document.body.classList.remove('fs', 'bar-open');
+            $('bar-toggle').hidden = true;
+            try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
+            window.dispatchEvent(new Event('resize'));
+        }
+        $('fullscreen').addEventListener('click', () => (document.body.classList.contains('fs') ? leaveFullScreen() : enterFullScreen()));
+        $('bar-toggle').addEventListener('click', () => { document.body.classList.toggle('bar-open'); window.dispatchEvent(new Event('resize')); });
+        document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('fs') && !wantsFullScreen()) leaveFullScreen(); });
+        function leaveGame(manager) {
+            try { manager.saveSaveFiles(); } catch (e) {}
+            setStatus('Leaving...');
+            setTimeout(() => { window.location.href = $('back').href; }, 400);
+        }
+        // Select and Start held together for a second on a controller leaves the game
+        function watchForExit(manager) {
+            if (!navigator.getGamepads) return;
+            let since = null;
+            setInterval(() => {
+                const both = [...navigator.getGamepads()].filter(Boolean).some(p => p.buttons[8] && p.buttons[8].pressed && p.buttons[9] && p.buttons[9].pressed);
+                if (!both) { since = null; return; }
+                if (since === null) since = Date.now();
+                else if (Date.now() - since >= 1000) { since = -Infinity; leaveGame(manager); }
+            }, 150);
+        }
+
+        function startPad(layout, manager) {
+            let fast = false;
+            document.body.classList.add('rm-pad-on');
+            pad = RMOverlay.attach({
+                stage: $('stage'), game: $('game'), layout,
+                press: (input, value) => manager.simulateInput(0, input, value),
+                actions: {
+                    menu: () => { const bar = document.querySelector('.ejs_menu_bar'); if (bar) bar.classList.toggle('ejs_menu_bar_hidden'); },
+                    fastForward: () => { fast = !fast; try { manager.toggleFastForward(fast ? 1 : 0); } catch (e) {} setStatus(fast ? 'Fast forward on' : 'Fast forward off'); },
+                    saveState: async () => {
+                        if (!window.EJS_onSaveState) { setStatus('Pick a person before Start to keep save states'); return; }
+                        try { window.EJS_onSaveState({ state: await manager.getState() }); } catch (e) { setStatus(`Save state not kept: ${e.message}`, true); }
+                    },
+                    exit: () => leaveGame(manager),
+                },
+            });
+        }
+
+        // --- Starting from a save state made on the Pi ---
+        // RetroArch's states load here when the browser has the same emulator
+        // core (the server says which, per state); the game then starts on that
+        // core. The Pi's files are only read.
+        const ago = (iso) => {
+            const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+            if (s < 3600) return `${Math.max(1, Math.round(s / 60))} min ago`;
+            if (s < 86400 * 1.5) return `${Math.round(s / 3600)} h ago`;
+            if (s < 86400 * 60) return `${Math.round(s / 86400)} days ago`;
+            if (s < 86400 * 365 * 1.5) return `${Math.round(s / (86400 * 30))} months ago`;
+            return `${Math.round(s / (86400 * 365))} years ago`;
+        };
+        async function loadPiStates() {
+            try {
+                const d = await (await fetch(`/api/play/pi-states?${query()}`)).json();
+                if (d.success) piStates = d.states;
+            } catch (e) {}
+            renderPiStates(false);
+        }
+        function renderPiStates(showAll) {
+            const usable = piStates.filter(s => s.core);
+            const others = piStates.filter(s => !s.core);
+            if (!piStates.length) return;
+            $('stage').classList.add('with-states');
+            const box = $('pi-states') || $('intro').appendChild(Object.assign(document.createElement('div'), { id: 'pi-states' }));
+            box.innerHTML = '';
+            box.appendChild(Object.assign(document.createElement('h2'), { textContent: 'Or carry on from a save state made on the Pi' }));
+            box.appendChild(Object.assign(document.createElement('p'), { className: 'small',
+                textContent: "Pick one and press Start. It loads if the browser's emulator matches the one that made it, which is checked once the game is running. A save state also brings back the in-game save as it was at that moment. The Pi's save states themselves aren't changed." }));
+            const list = box.appendChild(Object.assign(document.createElement('div'), { className: 'pi-list' }));
+            list.setAttribute('role', 'radiogroup');
+            list.setAttribute('aria-label', 'Where to start');
+            const option = (state, title, detail) => {
+                const button = Object.assign(document.createElement('button'), { className: 'pi-state', type: 'button' });
+                button.setAttribute('role', 'radio');
+                button.setAttribute('aria-checked', String(chosenState === state));
+                if (state && state.screenshot) {
+                    button.appendChild(Object.assign(document.createElement('img'), { alt: '', loading: 'lazy',
+                        src: `/api/save-screenshot/savestates/${state.screenshot.split('/').map(encodeURIComponent).join('/')}` }));
+                } else {
+                    button.appendChild(Object.assign(document.createElement('span'), { className: 'no-shot', textContent: state ? '⏸' : '▶' }));
+                }
+                const text = button.appendChild(document.createElement('span'));
+                text.appendChild(Object.assign(document.createElement('b'), { textContent: title }));
+                text.appendChild(Object.assign(document.createElement('span'), { className: 'small', textContent: detail }));
+                button.addEventListener('click', () => { chosenState = state; renderPiStates(showAll); });
+                list.appendChild(button);
+            };
+            option(null, 'Start normally', 'From the beginning, or the in-game save');
+            const PREVIEW = 6;
+            (showAll ? usable : usable.slice(0, PREVIEW)).forEach(state => option(state,
+                `${state.label}${state.profile !== 'shared' ? ` · ${state.profile}` : ''}`,
+                `${ago(state.modified)} · ${new Date(state.modified).toLocaleDateString()} · made with ${state.made_by}`));
+            if (usable.length > PREVIEW) {
+                const more = list.appendChild(Object.assign(document.createElement('button'), { className: 'pi-more', type: 'button',
+                    textContent: showAll ? 'Show fewer' : `Show all ${usable.length}` }));
+                more.addEventListener('click', () => renderPiStates(!showAll));
+            }
+            if (others.length) {
+                const makers = [...new Set(others.map(s => s.made_by).filter(Boolean))];
+                box.appendChild(Object.assign(document.createElement('p'), { className: 'small', style: 'margin-top: 8px',
+                    textContent: `${others.length} more save state${others.length === 1 ? '' : 's'} can't be used here: `
+                        + (makers.length ? `made with ${makers.join(', ')}, which the browser doesn't have.` : "made by an emulator the browser doesn't have.") }));
+            }
+        }
+        // The emulator's snapshot of the game right now, without RetroArch's wrapper (null if it can't give one)
+        async function snapshotNow(manager) {
+            try {
+                const s = await manager.getState();
+                if (!s || !s.length) return null;
+                const wrapped = String.fromCharCode(...s.slice(0, 7)) === 'RASTATE';
+                return wrapped ? s.slice(16, 16 + (s[12] | s[13] << 8 | s[14] << 16 | s[15] << 24 >>> 0)) : s;
+            } catch (e) { return null; }
+        }
+        const alike = (a, b) => {
+            if (!a || !b || !a.length || !b.length) return null;
+            const n = Math.min(a.length, b.length);
+            let same = 0;
+            for (let i = 0; i < n; i++) if (a[i] === b[i]) same++;
+            return same / Math.max(a.length, b.length);
+        };
+        // midGame: picked from the bar while playing, not before Start
+        async function loadPiState(manager, state, midGame) {
+            const what = `${state.profile !== 'shared' ? `${state.profile}'s ` : 'the '}${state.label.toLowerCase()}`;
+            try {
+                setStatus(`Loading ${what}...`);
+                const res = await fetch(`/api/play/pi-state?${query({ path: state.path })}`);
+                if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'the server refused it');
+                const snapshot = new Uint8Array(await res.arrayBuffer());
+                const before = alike(await snapshotNow(manager), snapshot);
+                manager.loadState(snapshot);
+                await new Promise(r => setTimeout(r, 1500));
+                // Did it take? The emulator's snapshot should now be nearly the one it was given
+                const after = alike(await snapshotNow(manager), snapshot);
+                if (after === null) setStatus(`Sent ${what} to the emulator`);
+                else if (after >= 0.97 || (before !== null && after - before >= 0.03)) setStatus(`Carried on from ${what}`);
+                else setStatus(`That save state didn't load: it was made with a different version of ${state.made_by} from the browser's. ${midGame ? 'The game carries on as it was.' : 'Playing from the start.'}`, true);
+            } catch (e) {
+                setStatus(`Couldn't load the save state: ${e.message}`, true);
+            }
+        }
+        // While playing: a menu in the bar of the Pi's save states, to jump to
+        // one. Only those made by the core that's running can load; the others
+        // say which core they'd need (pick them before Start instead).
+        function offerPiStates(manager) {
+            const usable = piStates.filter(s => s.core);
+            if (!usable.length) return;
+            let running = null;
+            try { running = window.EJS_emulator.getCore(); } catch (e) {}
+            const menu = $('pi-load');
+            menu.innerHTML = '';
+            menu.appendChild(new Option('Load a Pi save state…', ''));
+            usable.forEach((state, index) => {
+                const fits = !running || state.core === running;
+                const option = new Option(`${state.label}${state.profile !== 'shared' ? ` · ${state.profile}` : ''} · ${ago(state.modified)}${fits ? '' : ` (made with ${state.made_by}: choose it before Start)`}`, String(index));
+                option.disabled = !fits;
+                menu.appendChild(option);
+            });
+            menu.onchange = () => {
+                const state = usable[Number(menu.value)];
+                menu.value = '';
+                menu.blur();
+                if (state) loadPiState(manager, state, true);
+            };
+            menu.hidden = false;
+        }
+
+        async function sendSave(bytes) {
+            if (!profile() || !bytes || !bytes.length) return;
+            const key = `${bytes.length}:${bytes[0]}:${bytes[bytes.length - 1]}:${bytes.reduce((n, b) => (n * 31 + b) >>> 0, 7)}`;
+            if (key === lastSent) return;
+            // The save as it was loaded hasn't changed yet: nothing to send
+            if (pendingSave && lastSent === null && bytes.length === pendingSave.length && bytes.every((b, i) => b === pendingSave[i])) { lastSent = key; return; }
+            try {
+                const res = await fetch(`/api/play/save?${query({ profile: profile(), session })}`, { method: 'PUT', headers: { 'Content-Type': 'application/octet-stream' }, body: bytes });
+                const d = await res.json();
+                if (!d.success) { setStatus(`Save not kept: ${d.error}`, true); return; }
+                lastSent = key;
+                setStatus(`Saved for ${who()} at ${new Date().toLocaleTimeString()}${d.backup ? ' (old save backed up)' : ''}`);
+            } catch (e) {
+                setStatus(`Save not kept: ${e.message}`, true);
+            }
+        }
+
+        async function start() {
+            $('start').disabled = true;
+            // On a phone the game takes the whole screen straight away (asked for now, while the tap on Start still counts)
+            if (wantsFullScreen()) enterFullScreen();
+            $('profile').disabled = true;
+            try { localStorage.setItem('retromanager.play.profile', profile()); } catch (e) {}
+            if (profile()) {
+                setStatus('Fetching the save...');
+                try {
+                    const res = await fetch(`/api/play/save?${query({ profile: profile() })}`);
+                    if (res.ok) pendingSave = new Uint8Array(await res.arrayBuffer());
+                } catch (e) { setStatus(`Couldn't fetch the save: ${e.message}`, true); }
+            }
+            setStatus(pendingSave ? `Loaded ${whose()} save` : profile() ? `There's no save for ${who()} for this game yet` : "Playing without keeping a save");
+            const padLayout = await chosenPadLayout();
+            document.body.classList.add('playing');
+            $('fullscreen').hidden = false;
+            $('intro').hidden = true;
+            $('stage').classList.remove('with-states');
+            $('game').hidden = false;
+
+            window.EJS_player = '#game';
+            // A Pi save state only loads on the emulator core that made it
+            window.EJS_core = chosenState ? chosenState.core : info.core;
+            window.EJS_gameUrl = info.rom_url.split('/').map(encodeURIComponent).join('/');
+            window.EJS_gameName = info.name;
+            if (info.bios_url) window.EJS_biosUrl = info.bios_url.split('/').map(encodeURIComponent).join('/');
+            window.EJS_pathtodata = info.emulatorjs_url;
+            // Keeps the browser's own copies of this game's saves apart from other games'
+            window.EJS_gameID = [...`${system}/${rom}`].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 7);
+            window.EJS_startOnLoaded = true;
+            if (padLayout) {
+                padLayout.screenGap = screenGapFor(padLayout);
+                // Both DS cores' names for the space between the screens
+                if (padLayout.screenGap) window.EJS_defaultOptions = { melonds_screen_gap: String(padLayout.screenGap), desmume_screens_gap: String(Math.min(100, padLayout.screenGap)) };
+            }
+            window.EJS_backgroundColor = '#000';
+            window.EJS_onGameStart = () => {
+                const manager = window.EJS_emulator.gameManager;
+                offerPiStates(manager);
+                offerSendToPi(manager);
+                watchForExit(manager);
+                if (padLayout) startPad(padLayout, manager);
+                if (pendingSave) {
+                    try {
+                        const path = manager.getSaveFilePath();
+                        const folder = path.slice(0, path.lastIndexOf('/'));
+                        if (folder) manager.FS.mkdirTree(folder);
+                        manager.FS.writeFile(path, pendingSave);
+                        manager.loadSaveFiles();
+                    } catch (e) {
+                        setStatus(`Couldn't load the save into the emulator: ${e.message}`, true);
+                        if (chosenState) setTimeout(() => loadPiState(manager, chosenState), 1500);
+                        return;   // don't write back over a save that didn't load
+                    }
+                }
+                if (chosenState) setTimeout(() => loadPiState(manager, chosenState), 1500);
+                if (!profile()) return;
+                // EmulatorJS reports the save each time it writes it to its own disk;
+                // ask it to every 20 seconds, and when the page is left
+                window.EJS_emulator.on('saveSaveFiles', (save) => sendSave(save));
+                const flush = () => { try { manager.saveSaveFiles(); } catch (e) {} };
+                setInterval(flush, 20000);
+                window.addEventListener('pagehide', flush);
+                document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
+            };
+            // The emulator's own "save file" button sends it straight away
+            window.EJS_onSaveSave = (e) => sendSave(e && e.save);
+            // Its save state and load state buttons keep one state per game on the server
+            if (profile() && info.states) {
+                window.EJS_onSaveState = async (e) => {
+                    if (!e || !e.state) return;
+                    try {
+                        const res = await fetch(`/api/play/state?${query({ profile: profile() })}`, { method: 'PUT', headers: { 'Content-Type': 'application/octet-stream' }, body: e.state });
+                        const d = await res.json();
+                        setStatus(d.success ? `Save state kept for ${who()} at ${new Date().toLocaleTimeString()}` : `Save state not kept: ${d.error}`, !d.success);
+                    } catch (err) { setStatus(`Save state not kept: ${err.message}`, true); }
+                };
+                window.EJS_onLoadState = async () => {
+                    try {
+                        const res = await fetch(`/api/play/state?${query({ profile: profile() })}`);
+                        if (!res.ok) { setStatus(`There's no save state for ${who()} for this game yet`); return; }
+                        window.EJS_emulator.gameManager.loadState(new Uint8Array(await res.arrayBuffer()));
+                        setStatus(`Loaded ${whose()} save state`);
+                    } catch (err) { setStatus(`Couldn't load the save state: ${err.message}`, true); }
+                };
+            }
+
+            const script = document.createElement('script');
+            script.src = `${info.emulatorjs_url}loader.js`;
+            script.onerror = () => setStatus("Couldn't load EmulatorJS. The first time each system is played it's fetched from the address in Tools › Settings, which needs the internet.", true);
+            document.body.appendChild(script);
+        }
+
+        $('start').addEventListener('click', start);
+        load();
+    </script>
+</body>
+</html>

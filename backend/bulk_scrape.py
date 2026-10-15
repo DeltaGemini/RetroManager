@@ -2,9 +2,11 @@
 Match many ROMs to ScreenScraper games at once, for the Bulk scrape panel.
 
 Each ROM is first identified by its file name (ScreenScraper keeps a database of
-ROM file names), then, if that fails or looks wrong, by a title search. Every
-match gets a confidence the UI uses to decide what's pre-ticked:
-    exact   ScreenScraper recognised this exact ROM file
+ROM file names), then by its checksum (Hasheous and RetroAchievements know files
+ScreenScraper doesn't, ROM hacks included), then, if that fails or looks wrong,
+by a title search. Every match gets a confidence the UI uses to decide what's
+pre-ticked:
+    exact   this exact ROM file was recognised, by name or checksum
     likely  the game's name closely matches the ROM's title
     unsure  a match was found but the names differ; check it
     none    nothing found
@@ -14,7 +16,7 @@ import re
 from collections import OrderedDict
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from backend.media_index import title_key
 from backend.models import Game
@@ -23,6 +25,9 @@ from backend.systems import screenscraper_system_id
 
 LIKELY_SCORE = 0.85
 MAX_ALTERNATIVES = 6
+# A ScreenScraper game found through a checksum must still look like the same
+# game by name, in case the two databases were linked wrongly
+HASH_NAME_SCORE = 0.6
 
 _DIGITS_RE = re.compile(r'\d+')
 
@@ -69,9 +74,13 @@ def _search_title(rom_stem: str) -> str:
 
 
 class BulkMatcher:
-    def __init__(self, scraper: ScreenscraperAPI, cache: JeuCache):
+    def __init__(self, scraper: ScreenscraperAPI, cache: JeuCache, identify_by_hash: Optional[Callable] = None):
+        """identify_by_hash(system, rom_file) -> {'name': the game's title or '',
+        'screenscraper_id': id or None, 'other': a match from another source (a
+        summary dict with 'id', 'nom', 'is_hack'...) or None}. It must not raise."""
         self.scraper = scraper
         self.cache = cache
+        self.identify_by_hash = identify_by_hash
 
     def _summary(self, jeu: Dict, score: float) -> Dict:
         summary = self.scraper.summarize_search_result(jeu)
@@ -115,9 +124,30 @@ class BulkMatcher:
         except ScreenscraperNotFound:
             pass
 
-        # 2. Title search when the file name wasn't recognised, or the result looks off
-        if confidence not in ('exact', 'likely'):
-            query = query or _search_title(rom_stem)
+        # 2. Identify by checksum when the file name wasn't recognised
+        other = None  # an exact match from a source other than ScreenScraper
+        named_by_hash = False
+        if confidence != 'exact' and not query and self.identify_by_hash and rom_file:
+            known = self.identify_by_hash(system, rom_file) or {}
+            other = known.get('other')
+            if known.get('screenscraper_id'):
+                try:
+                    jeu = self.cache.get(known['screenscraper_id']) or self.scraper.get_game_info(known['screenscraper_id'])
+                except ScreenscraperNotFound:
+                    jeu = None
+                if jeu and max(name_score(known.get('name') or rom_stem, jeu), name_score(rom_stem, jeu)) >= HASH_NAME_SCORE:
+                    self.cache.put(jeu)
+                    candidates[str(jeu['id'])] = (jeu, 1.0)
+                    best_id = str(jeu['id'])
+                    confidence = 'exact'
+            if confidence != 'exact' and known.get('name'):
+                # The file's real title is a better thing to search for than its name
+                basis = known['name']
+                named_by_hash = True
+
+        # 3. Title search when the file wasn't recognised, or the result looks off
+        if confidence not in ('exact', 'likely') or (other and other.get('is_hack')):
+            query = query or _search_title(basis)
             try:
                 # ScreenScraper refuses searches under 3 characters
                 results = self.scraper.search_game(query, system_id) if query and len(query.strip()) >= 3 else []
@@ -138,6 +168,18 @@ class BulkMatcher:
 
         ranked = sorted(candidates.items(), key=lambda kv: kv[1][1], reverse=True)
         alternatives = [self._summary(jeu, score) for _, (jeu, score) in ranked[:MAX_ALTERNATIVES]]
+        if other:
+            # ScreenScraper has more to offer (descriptions, more media), so a confident
+            # match there is kept, unless the checksum says this is a ROM hack and
+            # ScreenScraper's game is a different one (a hack's file name is often
+            # close to the original's); otherwise the checksum match is the pick
+            alternatives.insert(0, {**other, 'score': 1.0})
+            same_game = best_id is not None and (
+                name_score(other.get('nom') or '', candidates[best_id][0]) >= LIKELY_SCORE
+                or (named_by_hash and name_score(basis, candidates[best_id][0]) >= LIKELY_SCORE))
+            if confidence not in ('exact', 'likely') or (other.get('is_hack') and not same_game):
+                best_id = str(other['id'])
+                confidence = 'exact'
         return {
             'rom_path': rom_path,
             'confidence': confidence,

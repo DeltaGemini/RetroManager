@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RetroManager Console</title>
+    <script src="/common/theme.js"></script>
+    <script src="/common/accounts.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
+    <link rel="stylesheet" href="/common/header.css">
+    <link rel="stylesheet" href="/common/app.css">
+    <link rel="stylesheet" href="/common/game-details.css">
+    <script src="/common/header.js"></script>
+    <script src="/common/systems.js"></script>
+    <script src="/common/series.js"></script>
+    <style>
+        /* The page is one screen tall: the tiles and the lists scroll inside it */
+        #root { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+        kbd { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 3px; padding: 0 4px; font-family: inherit; font-size: 11px; color: var(--text-primary); }
+
+        /* Big square system tiles in a row, then one system's games: a list of
+           names beside the Game Details panel (common/game-details.css) */
+        .console-screen { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; padding: 16px 0 14px; overflow: hidden; }
+        .console-top { display: flex; align-items: center; gap: 14px; padding: 0 3vw 12px; }
+        .console-top select { padding: 6px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); font-size: 13px; }
+        .console-search { display: flex; gap: 6px; flex: 0 1 300px; min-width: 0; }
+        .console-search input { flex: 1; min-width: 0; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); font-size: 14px; }
+        /* (the magnifying glass and the cog: pictures, so larger than a button's words) */
+        .console-search .gd-btn.small { flex: 0 0 auto; font-size: 19px; line-height: 1; padding: 4px 10px; min-width: 42px; }
+        .console-search .gd-btn.small.console-settings-button { font-size: 23px; }
+        .console-name { flex: 1; min-width: 0; font-size: clamp(20px, 2.6vw, 34px); color: var(--accent-pink); min-height: 1.4em; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .console-row { display: flex; gap: clamp(12px, 1.6vw, 26px); align-items: center; overflow-x: auto; overflow-y: hidden; padding: 26px 6vw; scrollbar-width: none; }
+        .console-row::-webkit-scrollbar { display: none; }
+        .console-tile {
+            flex: 0 0 auto; width: clamp(150px, 23vw, 320px); aspect-ratio: 1; padding: 0; border: none; border-radius: 6px; overflow: hidden; cursor: pointer;
+            background: var(--bg-tertiary); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); outline: 4px solid transparent; outline-offset: 4px;
+            transition: transform 0.15s ease, outline-color 0.15s ease, filter 0.15s ease; text-transform: none; letter-spacing: 0;
+        }
+        .console-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .console-tile-name { width: 100%; height: 100%; align-items: center; justify-content: center; padding: 12px; color: var(--text-primary); font-size: 18px; text-align: center; }
+        .console-tile:hover { filter: brightness(1.12); }
+        .console-tile.active { transform: scale(1.06); outline-color: var(--accent-orange); }
+        /* A row per generation or maker: smaller tiles, and the rows scroll up and down */
+        .console-screen.grouped { justify-content: flex-start; }
+        .console-groups { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 0 4px; }
+        .console-group-name { padding: 10px 3vw 0; font-size: 14px; font-weight: 600; color: var(--text-secondary); text-transform: none; letter-spacing: 0; }
+        .console-groups .console-row { padding: 14px 3vw 16px; gap: clamp(10px, 1.2vw, 18px); }
+        .console-groups .console-tile { width: clamp(104px, 13vw, 190px); outline-width: 3px; outline-offset: 3px; }
+        /* The systems row keeps bigger tiles when it's one row among the others */
+        .console-groups .console-row.big .console-tile { width: clamp(130px, 17vw, 250px); }
+        /* A list (Favourites, a collection): its name over one of its games' screenshots */
+        .console-tile-list, .console-tile-game { position: relative; }
+        .console-tile-list img { filter: brightness(0.45) saturate(0.9); }
+        .console-tile-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 10px; color: #fff; font-size: 15px; font-weight: 600; text-align: center; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8); }
+        .console-tile-icon { font-size: 26px; line-height: 1; color: var(--accent-orange); }
+        .console-tile-count { font-size: 11px; font-weight: 400; opacity: 0.85; }
+        /* A game (Continue playing): its picture whole, on black */
+        .console-tile-game { background: #000; }
+        .console-tile-game img { object-fit: contain; padding: 6px; }
+        .console-tile-play { position: absolute; right: 7px; bottom: 7px; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; padding-left: 2px; background: var(--accent-pink); color: #fff; font-size: 11px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5); }
+        /* In the phone app: how many of a system's games are on the phone; a tile
+           that can't be played with no connection is greyed; and a game the phone
+           has to fetch first has an outlined button */
+        .console-tile-system { position: relative; }
+        .console-tile-phone { position: absolute; left: 7px; bottom: 7px; padding: 3px 8px 3px 5px; border-radius: 12px; background: rgba(0, 0, 0, 0.72); color: #fff; font-size: 12px; font-weight: 600; }
+        .console-tile-needs { position: absolute; right: 7px; top: 7px; padding: 3px 8px; border-radius: 12px; background: rgba(0, 0, 0, 0.78); color: var(--accent-orange); font-size: 12px; font-weight: 600; }
+        .console-tile.away { opacity: 0.38; filter: saturate(0.35); }
+        .console-tile-play.fetch { background: rgba(0, 0, 0, 0.72); color: var(--accent-pink); border: 2px solid var(--accent-pink); padding-left: 0; }
+        /* The chosen tile's name, in a bubble under it */
+        .console-bubble {
+            position: fixed; z-index: 15; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; max-width: min(360px, 92vw);
+            padding: 7px 14px 7px 8px; border-radius: 22px; pointer-events: none; white-space: nowrap;
+            background: var(--bg-modal, var(--bg-secondary)); color: var(--text-primary); border: 1px solid var(--accent-orange); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+        }
+        .console-bubble.above { transform: translate(-50%, -100%); }
+        .console-bubble::before {
+            content: ''; position: absolute; left: calc(50% + var(--point, 0px)); top: -6px; width: 10px; height: 10px; margin-left: -5px; transform: rotate(45deg);
+            background: inherit; border-left: 1px solid var(--accent-orange); border-top: 1px solid var(--accent-orange);
+        }
+        .console-bubble.above::before { top: auto; bottom: -6px; border: none; border-right: 1px solid var(--accent-orange); border-bottom: 1px solid var(--accent-orange); }
+        .console-bubble-logo { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+        .console-bubble-text { display: flex; flex-direction: column; min-width: 0; padding-left: 6px; }
+        .console-bubble-logo + .console-bubble-text { padding-left: 0; }
+        .console-bubble-text b { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+        .console-bubble-text span { font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; }
+        .console-info { padding: 0 6vw; text-align: center; color: var(--text-secondary); font-size: 15px; min-height: 1.5em; }
+        .console-rule { margin: 14px 3vw 8px; border-top: 1px solid var(--border-color); flex-shrink: 0; }
+        .console-rule.top { margin: 10px 3vw 0; }
+        .console-games .console-top { padding-bottom: 0; }
+        .console-hint { padding: 0 3vw; text-align: right; color: var(--text-secondary); font-size: 12px; }
+        .console-empty { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--text-secondary); }
+
+        .console-games { justify-content: flex-start; }
+        .console-columns { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(340px, 36%) minmax(0, 1fr); gap: 2vw; padding: 14px 3vw 0; }
+        /* The game list is the Library's (common/app.css), in its own scrolling column */
+        .console-list { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: 6px; }
+        .console-list .game-list { flex: 1; min-width: 0; min-height: 0; border-right: none; }
+        .console-details { overflow-y: auto; min-height: 0; padding: 4px 12px 16px 0; }
+        /* Narrow screens: the list and the details take turns (see ConsoleGames) */
+        @media (max-width: 900px) {
+            .console-columns { grid-template-columns: minmax(0, 1fr); padding: 10px 12px 0; }
+            .console-columns.list-only .console-details, .console-columns.details-only .console-list { display: none; }
+            .console-details { padding-right: 4px; }
+            /* (so "Games", or the bar over the list, sits just under the header) */
+            .console-screen.console-games { padding-top: 8px; }
+            .console-columns.details-only { padding-top: 0; }
+            .console-columns.details-only .console-details > .gd-btn.small:first-child { margin-bottom: 10px !important; }
+            /* (the Library makes its list the full width of the screen; here it's the column's) */
+            .console-list .game-list { padding: 0 10px 10px; width: auto; max-width: 100%; }
+            .console-top { padding: 0 12px 12px; gap: 8px; flex-wrap: wrap; }
+            .console-screen:not(.console-games) .console-top select { flex: 1; min-width: 0; }
+            .console-search { flex: 1 1 100%; }
+            .console-top > span:empty { display: none; }
+            .console-hint { display: none; }
+            .console-rule { margin-left: 12px; margin-right: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel" src="/src/common/game-details.jsx"></script>
+    <script type="text/babel" src="/src/common/game-details-edit.jsx"></script>
+    <script type="text/babel" src="/src/common/game-list.jsx"></script>
+    <script type="text/babel" src="/src/console/app.jsx"></script>
+</body>
+</html>

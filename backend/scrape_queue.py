@@ -32,6 +32,8 @@ class ScrapeQueue:
         match(system, rom_path) -> BulkMatcher result; apply(system, rom_path, game_id, media) -> dict
         backup(system) before a system's first write; on_change() after each write."""
         self.state_file = Path(state_dir) / 'scrape-queue.json'
+        # Holds a running scrape's choices, so one cut short by a restart starts again
+        self.running_file = Path(state_dir) / 'scrape-queue.running'
         self._list_targets = list_targets
         self._match = match
         self._apply = apply
@@ -82,6 +84,11 @@ class ScrapeQueue:
             self.status.update(running=True, total=len(fresh), skipped_recent=len(targets) - len(fresh),
                                started=datetime.now().isoformat(timespec='seconds'))
             self._stop.clear()
+            try:
+                self.running_file.parent.mkdir(parents=True, exist_ok=True)
+                self.running_file.write_text(json.dumps({'systems': systems, 'include_media': include_media, 'media': media}))
+            except OSError:
+                pass
             self._thread = threading.Thread(target=self._run, args=(fresh, media), daemon=True)
             self._thread.start()
             return {'success': True, 'total': len(fresh), 'skipped_recent': len(targets) - len(fresh)}
@@ -146,5 +153,18 @@ class ScrapeQueue:
                     self._save_checked()
         finally:
             self._save_checked()
+            try:
+                self.running_file.unlink()
+            except OSError:
+                pass
             self._set(running=False, stopping=False, current=None, stopped_reason=reason,
                       finished=datetime.now().isoformat(timespec='seconds'))
+
+    def resume_if_interrupted(self) -> bool:
+        """Start again, with the same choices, if the last scrape was cut short by
+        a restart (games already checked are skipped). Returns whether it started."""
+        try:
+            choices = json.loads(self.running_file.read_text())
+        except (OSError, ValueError):
+            return False
+        return bool(self.start(choices.get('systems'), bool(choices.get('include_media')), choices.get('media') or [], False).get('success'))

@@ -25,6 +25,7 @@ MEDIA_FOLDER_FIELDS = {
     'fanart': 'fanart',
     'posters': 'posters',
     'boxside': 'boxside',
+    'support': 'support',
 }
 
 # Which media folders fill the gamelist's <image>, <thumbnail> and <video>,

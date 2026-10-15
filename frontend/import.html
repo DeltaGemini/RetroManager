@@ -7,8 +7,9 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <meta name="theme-color" content="#0f1535">
     <link rel="icon" href="/icons/icon-192.png">
+    <script src="/common/theme.js"></script>
+    <script src="/common/accounts.js"></script>
     <script>
-        try { if (localStorage.getItem('retromanager.theme') === 'light') document.documentElement.dataset.theme = 'light'; } catch (e) {}
         if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('/sw.js').catch(() => {});
     </script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -141,7 +142,7 @@
             { key: 'box2d', label: 'Box 2D' }, { key: 'screenshot', label: 'Screenshot' },
             { key: 'screenshottitle', label: 'Title screen' }, { key: 'wheel', label: 'Wheel' },
             { key: 'mix', label: 'Mix' }, { key: 'box3d', label: 'Box 3D' },
-            { key: 'boxside', label: 'Spine' }, { key: 'fanart', label: 'Fanart' }, { key: 'manuals', label: 'Manual' },
+            { key: 'boxside', label: 'Spine' }, { key: 'support', label: 'Cart / disc' }, { key: 'fanart', label: 'Fanart' }, { key: 'manuals', label: 'Manual' },
         ];
         const CONFIDENCE = {
             exact: { label: 'Exact', color: 'var(--success)' },

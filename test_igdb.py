@@ -3,13 +3,8 @@
     docker compose exec retromanager python test_igdb.py
 """
 import json
-import os
 
-from backend.igdb_scraper import IGDBAPI
-
-if not (os.getenv('IGDB_CLIENT_ID') and os.getenv('IGDB_CLIENT_SECRET')):
-    raise SystemExit("Set IGDB_CLIENT_ID and IGDB_CLIENT_SECRET first.")
-igdb = IGDBAPI(os.environ['IGDB_CLIENT_ID'], os.environ['IGDB_CLIENT_SECRET'])
+from backend.core import igdb_scraper as igdb  # uses the credentials from Tools > Settings
 
 print("Searching IGDB for 'Sonic the Hedgehog' on megadrive...")
 results = igdb.search_game('Sonic the Hedgehog', 'megadrive')

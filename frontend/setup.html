@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RetroManager: setting up</title>
+    <link rel="icon" href="/favicon.ico">
+    <script src="/common/theme.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            color-scheme: dark;
+            --bg-primary: #0a0e27; --bg-secondary: #0f1535; --bg-tertiary: #14194f;
+            --text-primary: #e0e0e0; --text-secondary: #a0a3b8;
+            --accent-pink: #ff6b9d; --accent-orange: #ff9d3d; --border-color: #2a2d4a; --good: #4ade80; --bad: #ff7a7a;
+        }
+        :root[data-theme="light"] {
+            color-scheme: light;
+            --bg-primary: #f4f5fb; --bg-secondary: #ffffff; --bg-tertiary: #eceef7;
+            --text-primary: #1c1f33; --text-secondary: #5f6480;
+            --accent-pink: #d6336c; --accent-orange: #c2560c; --border-color: #d3d7e8; --good: #15803d; --bad: #c0392b;
+        }
+        body {
+            background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; min-height: 100dvh; padding: 28px 16px 48px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Ubuntu', 'Helvetica Neue', sans-serif; font-size: 15px; line-height: 1.5;
+        }
+        main { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+        header { display: flex; align-items: center; gap: 14px; }
+        header img { width: 52px; height: 52px; border-radius: 12px; }
+        h1 { font-size: 26px; font-weight: 650; }
+        h2 { font-size: 19px; font-weight: 600; margin-bottom: 6px; }
+        p, li { color: var(--text-primary); }
+        .quiet { color: var(--text-secondary); font-size: 13.5px; }
+        ol.steps { list-style: none; display: flex; gap: 8px; flex-wrap: wrap; }
+        ol.steps li { font-size: 13px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--border-color); color: var(--text-secondary); }
+        ol.steps li.on { border-color: var(--accent-orange); color: var(--text-primary); font-weight: 600; }
+        ol.steps li.past { color: var(--good); }
+        section { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+        section[hidden] { display: none; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        td { padding: 8px 6px; border-top: 1px solid var(--border-color); vertical-align: top; }
+        tr:first-child td { border-top: none; }
+        td.state { white-space: nowrap; text-align: right; font-weight: 600; }
+        .ok { color: var(--good); } .not { color: var(--bad); }
+        code { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; background: var(--bg-tertiary); padding: 1px 6px; border-radius: 4px; overflow-wrap: anywhere; }
+        .note { border-left: 3px solid var(--accent-orange); padding: 2px 0 2px 12px; }
+        .note.problem { border-left-color: var(--bad); }
+        ol.how { padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+        a { color: var(--accent-orange); }
+        form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text-secondary); }
+        input { font: inherit; padding: 9px 11px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); min-width: 0; }
+        .buttons { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        button {
+            font: inherit; font-size: 15px; padding: 10px 20px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border-color);
+            background: var(--bg-tertiary); color: var(--text-primary);
+        }
+        button.main { border-color: var(--accent-pink); background: var(--accent-pink); color: #fff; font-weight: 600; }
+        button:disabled { opacity: 0.55; cursor: default; }
+        #message, #folders-message { min-height: 1.4em; font-size: 14px; color: var(--bad); }
+        .choices { display: flex; flex-direction: column; gap: 10px; }
+        .choice { flex-direction: row; align-items: flex-start; gap: 10px; font-size: 14px; color: var(--text-primary); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; }
+        .choice input { margin-top: 4px; }
+        .choice:has(input:checked) { border-color: var(--accent-orange); }
+        @media (max-width: 560px) { form { grid-template-columns: 1fr; } td.state { text-align: left; } }
+    </style>
+</head>
+<body>
+<main>
+    <header><img src="/icons/icon-192.png" alt=""><h1>Welcome to RetroManager</h1></header>
+    <ol class="steps" aria-label="Steps">
+        <li data-step="folders">1 · Your library</li>
+        <li data-step="scraper">2 · ScreenScraper</li>
+        <li data-step="done">3 · Done</li>
+    </ol>
+
+    <section id="folders">
+        <div>
+            <h2>Your library</h2>
+            <p id="library-summary">Looking at the folders…</p>
+        </div>
+        <table id="folder-list" aria-label="Folders"></table>
+        <p class="note" id="where"></p>
+        <p class="note problem" id="folder-problem" hidden></p>
+        <div>
+            <h2>Where RetroArch keeps saves</h2>
+            <p class="quiet" id="saves-found"></p>
+        </div>
+        <div class="choices">
+            <label class="choice"><input type="radio" name="save-location" value="folders">
+                <span><b>In folders of their own</b> (the <code>saves</code> and <code>savestates</code> folders): what RetroArch does unless told otherwise, Batocera and EmuDeck too. Lets each person have their own saves later.</span></label>
+            <label class="choice"><input type="radio" name="save-location" value="roms">
+                <span><b>Beside the games</b>, in the ROM folders: RetroPie's way, and RetroArch's "write saves to the content directory". Saves are then shared by everyone.</span></label>
+        </div>
+        <div id="folders-message" role="alert"></div>
+        <div class="buttons"><button class="main" id="folders-next">Next</button><button id="look-again">Look again</button></div>
+    </section>
+
+    <section id="scraper" hidden>
+        <div>
+            <h2>ScreenScraper (optional)</h2>
+            <p>RetroManager fetches each game's description, box art, screenshots and videos from sites that keep them. <a href="https://www.screenscraper.fr" target="_blank" rel="noopener noreferrer">ScreenScraper</a> has the most for old consoles, and asks every program that uses it to identify itself, so it needs two things from you.</p>
+        </div>
+        <ol class="how">
+            <li><b>An account of your own.</b> Register at <a href="https://www.screenscraper.fr" target="_blank" rel="noopener noreferrer">screenscraper.fr</a> (free; the site is in French with an English option at the top). That gives you a <b>user name and password</b>.</li>
+            <li><b>Developer credentials.</b> Signed in there, open the site's <b>forum</b> and ask for API access for a program: say it's for your own copy of RetroManager, a game library manager. ScreenScraper's team reply with a <b>developer ID and password</b>. It's done by hand, so it can take a few days.</li>
+            <li>Enter them below. The developer pair is what turns ScreenScraper on; your user name and password raise how much you may fetch each day.</li>
+        </ol>
+        <p class="quiet">They're kept in RetroManager's own folder on this machine and sent only to ScreenScraper. You can add or change them later in <b>Tools › Settings</b>, where the other sources (IGDB, RetroAchievements, SteamGridDB, TheGamesDB, LaunchBox) are too.</p>
+        <form id="keys" autocomplete="off">
+            <label>Developer ID<input name="screenscraper_login" autocomplete="off"></label>
+            <label>Developer password<input name="screenscraper_password" type="password" autocomplete="new-password"></label>
+            <label>Your user name<input name="screenscraper_user" autocomplete="off"></label>
+            <label>Your password<input name="screenscraper_user_password" type="password" autocomplete="new-password"></label>
+        </form>
+        <p class="note">Without ScreenScraper, RetroManager still works: games are listed and played, and pictures can come from libretro's thumbnails, GameTDB and Steam, which ask for nothing.</p>
+        <div id="message" role="alert"></div>
+        <div class="buttons">
+            <button class="main" id="save-keys">Save and go on</button>
+            <button id="skip-keys">Skip for now</button>
+            <button data-go="folders">Back</button>
+        </div>
+    </section>
+
+    <section id="done" hidden>
+        <div>
+            <h2>That's it</h2>
+            <p id="done-summary"></p>
+        </div>
+        <ol class="how">
+            <li><b>Add games:</b> <b>➕ Add games</b> at the top of every page takes files from this device, or put them in the games folder, one folder per system.</li>
+            <li><b>Fetch their details:</b> open a system and press <b>Scan</b>, then <b>Bulk</b> to scrape what's missing.</li>
+            <li><b>More than one person?</b> <b>Tools › Profiles and login</b> gives each their own favourites and a sign-in, and their own saves where saves are kept in folders of their own.</li>
+            <li><b>On a phone:</b> the Android app plays the library in RetroArch; the README's "On a phone" section has it.</li>
+        </ol>
+        <div class="buttons"><button class="main" id="finish">Open RetroManager</button></div>
+    </section>
+</main>
+<script>
+    // The first-run steps (backend/routes/setup.py): where the library is, a
+    // ScreenScraper account or none, and on to the library. Finishing or
+    // skipping notes that it's been done, so it isn't shown again.
+    const $ = (id) => document.getElementById(id);
+    const el = (tag, props, ...children) => { const node = Object.assign(document.createElement(tag), props || {}); children.forEach(c => node.append(c)); return node; };
+    let state = null, saved = false;
+
+    const show = (step) => {
+        const order = ['folders', 'scraper', 'done'];
+        order.forEach(name => { $(name).hidden = name !== step; });
+        document.querySelectorAll('ol.steps li').forEach(li => {
+            li.classList.toggle('on', li.dataset.step === step);
+            li.classList.toggle('past', order.indexOf(li.dataset.step) < order.indexOf(step));
+        });
+        window.scrollTo(0, 0);
+    };
+    document.querySelectorAll('[data-go]').forEach(button => button.addEventListener('click', () => show(button.dataset.go)));
+
+    const look = async () => {
+        $('library-summary').textContent = 'Looking at the folders…';
+        try {
+            state = await (await fetch('/api/setup')).json();
+        } catch (e) {
+            $('library-summary').textContent = `Couldn't reach RetroManager: ${e.message}`;
+            return;
+        }
+        const { library, folders } = state;
+        $('library-summary').textContent = library.games
+            ? `RetroManager can see ${library.games} file${library.games === 1 ? '' : 's'} in ${library.systems} system folder${library.systems === 1 ? '' : 's'}.`
+            : 'There are no games here yet, which is as it should be for a new library: you can add them in a moment.';
+        const list = $('folder-list');
+        list.replaceChildren();
+        folders.forEach(folder => {
+            const good = folder.exists && (folder.writable || !folder.written);
+            list.append(el('tr', null,
+                el('td', null, el('b', { textContent: folder.label }), el('div', { className: 'quiet', textContent: folder.holds })),
+                el('td', { className: `state ${good ? 'ok' : 'not'}`, textContent: !folder.exists ? 'Not there' : good ? 'Ready' : "Can't be written to" })));
+        });
+        const where = state.on_host || 'RetroGames';
+        $('where').replaceChildren('On this machine the library is in ', el('code', { textContent: where }),
+            where.startsWith('.') ? ' beside docker-compose.yml' : '', '. Games go in its ', el('code', { textContent: 'roms' }),
+            ' folder, one folder per system (', el('code', { textContent: 'roms/snes' }), ', ', el('code', { textContent: 'roms/gba' }),
+            '…). To use folders you already have somewhere else, see "Paths" in the README: it is one line in a file, and the only thing that can’t be set from here.');
+        // Where saves are kept: as set, else as the files found suggest
+        const { location, beside_roms: beside, in_folders: separate } = state.saves;
+        const many = (n) => (n >= 500 ? 'over 500' : String(n));
+        const suggested = beside > separate ? 'roms' : 'folders';
+        $('saves-found').textContent = beside || separate
+            ? `Found ${many(separate)} save file${separate === 1 ? '' : 's'} in the saves folders and ${many(beside)} beside the games, so ${suggested === 'roms' ? 'beside the games' : 'folders of their own'} looks right.`
+            : 'No saves yet. Choose the way your RetroArch is set up (if you’re not sure, the first: it’s what RetroArch does unless told otherwise).';
+        const chosen = beside || separate ? (location === 'roms' || suggested === 'roms' ? 'roms' : 'folders') : location;
+        document.querySelectorAll('input[name="save-location"]').forEach(input => { input.checked = input.value === chosen; });
+        const bad = folders.filter(f => !f.exists || (f.written && !f.writable));
+        $('folder-problem').hidden = !bad.length;
+        if (bad.length) {
+            $('folder-problem').textContent = `${bad.map(f => f.label).join(', ')}: ${bad.length === 1 ? "this folder isn't" : "these folders aren't"} usable yet. `
+                + 'On the machine running RetroManager, make sure the folder exists and that the user Docker runs as may write to it, then press Look again. You can go on without, but what needs that folder will fail.';
+        }
+    };
+    $('look-again').addEventListener('click', look);
+    // On to ScreenScraper, with where saves are kept said first if it isn't as it was
+    $('folders-next').addEventListener('click', async () => {
+        const picked = (document.querySelector('input[name="save-location"]:checked') || {}).value;
+        $('folders-message').textContent = '';
+        if (picked && state && picked !== state.saves.location) {
+            try {
+                const d = await (await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ values: { save_location: picked } }) })).json();
+                if (!d.success) throw new Error(d.error || 'it wasn’t saved');
+                state.saves.location = picked;
+            } catch (e) {
+                $('folders-message').textContent = `Couldn't save where saves are kept: ${e.message}`;
+                return;
+            }
+        }
+        show('scraper');
+    });
+
+    const finish = async () => {
+        try { await fetch('/api/setup/done', { method: 'POST' }); } catch (e) {}
+    };
+    const toDone = () => {
+        $('done-summary').textContent = saved
+            ? 'ScreenScraper is set up. The first scrape will tell you if it doesn’t accept the details.'
+            : 'You skipped ScreenScraper. Add it whenever you like in Tools › Settings.';
+        finish();
+        show('done');
+    };
+    $('skip-keys').addEventListener('click', toDone);
+    $('save-keys').addEventListener('click', async () => {
+        const values = Object.fromEntries([...new FormData($('keys'))].map(([key, value]) => [key, String(value).trim()]).filter(([, value]) => value));
+        $('message').textContent = '';
+        if (!values.screenscraper_login || !values.screenscraper_password) {
+            $('message').textContent = 'ScreenScraper needs the developer ID and password. Without them, press Skip for now.';
+            return;
+        }
+        $('save-keys').disabled = true;
+        try {
+            const d = await (await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ values }) })).json();
+            if (!d.success) throw new Error(d.error || 'they weren’t saved');
+            saved = true;
+            toDone();
+        } catch (e) {
+            $('message').textContent = `Couldn't save them: ${e.message}`;
+        }
+        $('save-keys').disabled = false;
+    });
+    $('finish').addEventListener('click', () => { window.location.replace('/'); });
+
+    show('folders');
+    look();
+</script>
+</body>
+</html>

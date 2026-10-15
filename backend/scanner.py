@@ -15,7 +15,10 @@ from backend.media_index import (
     MediaIndex, relink_score, strip_dot_slash, title_key, xml_media_to_relative,
 )
 from backend.name_style import style_name
-from backend.folder_games import choose_launch_files, folder_game_name, is_folder_game_system
+from backend.folder_games import (
+    choose_launch_files, folder_game_name, is_folder_game_system, is_game_folder,
+    unnamed_ps3_folders, walk_roms,
+)
 from backend.saves import is_save_file
 
 logger = logging.getLogger(__name__)
@@ -38,6 +41,7 @@ ROM_EXTENSIONS = {
     '.cci', '.dsi', '.fig', '.swc', '.sgb', '.sg',
     '.vb', '.v64', '.t64', '.d64',
     '.m3u',
+    '.ps3',   # a PS3 game folder named "<Game>.ps3" (see folder_games.py)
 }
 
 
@@ -75,6 +79,8 @@ class SystemScanner:
     def __init__(self, roms_base: str, media_base: str):
         self.roms_base = Path(roms_base)
         self.media_base = Path(media_base)
+        # (system, rom path) -> whether RetroManager generated that game's Mix; set by core.py
+        self.generated_mix = None
         
     def discover_systems(self) -> List[System]:
         """Discover all systems by scanning ROM directories"""
@@ -137,7 +143,7 @@ class SystemScanner:
         whose files are all covered by a bigger .cue (a leftover per-track
         sheet) is a part of that bigger one too."""
         refs = {}
-        for cue in system_path.rglob('*'):
+        for cue in walk_roms(system_path):
             if not cue.is_file() or cue.suffix.lower() != '.cue':
                 continue
             try:
@@ -156,7 +162,9 @@ class SystemScanner:
 
         # An .m3u playlist's discs are parts of the playlist
         playlist_parts = {}
-        for m3u in system_path.rglob('*.m3u'):
+        for m3u in walk_roms(system_path):
+            if not m3u.is_file() or m3u.suffix.lower() != '.m3u':
+                continue
             try:
                 lines = m3u.read_text(encoding='utf-8', errors='replace').splitlines()
             except OSError:
@@ -183,10 +191,14 @@ class SystemScanner:
 
     def saves_in_roms(self, system_path: Path) -> List[str]:
         """Save files and save states inside a ROM folder. They belong in the top-level
-        saves/ and savestates/ folders. PC game folders keep their own saves."""
+        saves/ and savestates/ folders, unless saves are kept beside the games
+        here. PC game folders keep their own saves."""
         if is_folder_game_system(system_path.name) or not system_path.is_dir():
             return []
-        return sorted(p.relative_to(system_path).as_posix() for p in system_path.rglob('*')
+        # (unless that's where they're kept here: Settings > Saves)
+        if getattr(self, 'saves_beside_roms', None) and self.saves_beside_roms():
+            return []
+        return sorted(p.relative_to(system_path).as_posix() for p in walk_roms(system_path)
                       if p.is_file() and not any(part.startswith('.') for part in p.relative_to(system_path).parts)
                       and is_save_file(p.name))
 
@@ -194,7 +206,7 @@ class SystemScanner:
         """Discs of one game ("… (Disc 1).cue", "… (Disc 2).cue") not yet in an .m3u:
         [{m3u: path to create, discs: [paths in disc order]}]."""
         groups: Dict[str, Dict[int, str]] = {}
-        for item in system_path.rglob('*'):
+        for item in walk_roms(system_path):
             if not item.is_file() or item.suffix.lower() not in DISC_EXTENSIONS:
                 continue
             rel = item.relative_to(system_path).as_posix()
@@ -227,8 +239,8 @@ class SystemScanner:
         all_files = []
         cue_files = []
         parts = self.disc_parts(system_path)
-        for item in system_path.rglob('*'):
-            if item.is_file() and item.suffix.lower() in ROM_EXTENSIONS:
+        for item in walk_roms(system_path):
+            if (item.is_file() or is_game_folder(item)) and item.suffix.lower() in ROM_EXTENSIONS:
                 rel_path = item.relative_to(system_path)
                 if rel_path.as_posix().lower() in parts:
                     continue  # a track or sub-sheet of a disc listed by its .cue
@@ -276,8 +288,8 @@ class SystemScanner:
 
     def all_rom_files(self, system_path: Path) -> List[str]:
         """Every ROM-type file, including the extra programs in PC game folders."""
-        return [item.relative_to(system_path).as_posix() for item in system_path.rglob('*')
-                if item.is_file() and item.suffix.lower() in ROM_EXTENSIONS]
+        return [item.relative_to(system_path).as_posix() for item in walk_roms(system_path)
+                if (item.is_file() or is_game_folder(item)) and item.suffix.lower() in ROM_EXTENSIONS]
 
     def _entry_paths(self, system_path: Path) -> List[str]:
         gamelist_path = system_path / 'gamelist.xml'
@@ -336,6 +348,9 @@ class SystemScanner:
         for game in games:
             if game.has_metadata:
                 game.rom_exists = (system_path / self._normalize_path(game.path)).exists()
+        if self.generated_mix:
+            for game in games:
+                game.mix_generated = bool(game.mix) and self.generated_mix(system_name, game.path)
         return games
 
     def media_index(self, system_name: str) -> MediaIndex:
@@ -487,6 +502,7 @@ class SystemScanner:
         explicit_map = {
             'psx': 'Playstation',
             'ps2': 'Playstation 2',
+            'ps3': 'Playstation 3',
             'gc': 'Gamecube',
             'snes': 'Super Nintendo',
             'pokemini': 'Pokémon mini',
@@ -679,6 +695,7 @@ class SystemScanner:
             'orphaned_media': orphaned_media,
             'disc_tracks': disc_tracks,
             'saves_in_roms': self.saves_in_roms(system_path),
+            'game_folders': unnamed_ps3_folders(system_path),
         }
 
     def _find_duplicates(self, system_path: Path, rom_files: List[str], entries, index: MediaIndex) -> List[Dict]:

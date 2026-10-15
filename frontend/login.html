@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RetroManager: who's playing?</title>
+    <script src="/common/theme.js"></script>
+    <script src="/common/accounts.js"></script>
+    <link rel="stylesheet" href="/common/header.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            color-scheme: dark;
+            --bg-primary: #0a0e27; --bg-secondary: #0f1535; --bg-tertiary: #14194f;
+            --text-primary: #e0e0e0; --text-secondary: #999999;
+            --accent-pink: #ff6b9d; --accent-orange: #ff9d3d; --border-color: #2a2d4a;
+        }
+        :root[data-theme="light"] {
+            color-scheme: light;
+            --bg-primary: #f4f5fb; --bg-secondary: #ffffff; --bg-tertiary: #eceef7;
+            --text-primary: #1c1f33; --text-secondary: #5f6480;
+            --accent-pink: #d6336c; --accent-orange: #c2560c; --border-color: #d3d7e8;
+        }
+        html, body { min-height: 100%; }
+        body {
+            background: var(--bg-primary); color: var(--text-primary); display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 28px; padding: 32px 16px; min-height: 100vh; min-height: 100dvh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Ubuntu', 'Helvetica Neue', sans-serif;
+        }
+        h1 { font-size: clamp(22px, 4vw, 34px); font-weight: 600; text-align: center; }
+        #people { display: flex; flex-wrap: wrap; gap: 22px; justify-content: center; max-width: 900px; }
+        .person {
+            font: inherit; color: var(--text-primary); background: none; border: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 10px;
+            padding: 8px; border-radius: 12px; width: 150px; box-shadow: none; text-transform: none; letter-spacing: 0;
+        }
+        .person .face {
+            width: 120px; height: 120px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center;
+            font-size: 52px; font-weight: 700; color: #fff; outline: 4px solid transparent; outline-offset: 4px; transition: outline-color 0.12s ease, transform 0.12s ease;
+        }
+        .person .face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .person:hover .face, .person:focus-visible .face, .person.chosen .face { outline-color: var(--accent-orange); transform: scale(1.04); }
+        .person:focus-visible { outline: none; }
+        .person .name { font-size: 17px; overflow-wrap: anywhere; text-align: center; }
+        .person .role { font-size: 12px; color: var(--text-secondary); }
+        #pin-form { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+        #pin-form[hidden] { display: none; }
+        #pin {
+            font: inherit; font-size: 26px; letter-spacing: 10px; text-align: center; width: 230px; padding: 10px 12px; border-radius: 8px;
+            border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary);
+        }
+        #pin-form button {
+            font: inherit; font-size: 15px; padding: 9px 22px; border-radius: 6px; cursor: pointer; border: 1px solid var(--accent-pink);
+            background: var(--accent-pink); color: #fff; font-weight: 600; box-shadow: none; text-transform: none; letter-spacing: 0;
+        }
+        #pin-form .link { background: none; border: none; color: var(--text-secondary); font-weight: 400; font-size: 13px; text-decoration: underline; }
+        #message { min-height: 1.4em; font-size: 14px; color: var(--accent-pink); text-align: center; }
+    </style>
+</head>
+<body>
+    <h1 id="heading">Who's playing?</h1>
+    <div id="people" role="list"></div>
+    <form id="pin-form" hidden>
+        <label for="pin" id="pin-label">PIN</label>
+        <input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off">
+        <button type="submit">Sign in</button>
+        <button type="button" class="link" id="pin-back">Someone else</button>
+    </form>
+    <div id="message" role="alert"></div>
+
+    <script>
+        // The "Who's playing?" screen: a tile per profile. A player's signs in at
+        // a tap; an admin's asks for their PIN. ?next= is where to go afterwards,
+        // ?profile= goes straight to that profile (switching to an admin).
+        const params = new URLSearchParams(window.location.search);
+        // Only ever back to a page of this site
+        const next = (() => { const n = params.get('next') || '/'; return n.startsWith('/') && !n.startsWith('//') && !n.startsWith('/login') ? n : '/'; })();
+        const $ = (id) => document.getElementById(id);
+        let chosen = null;
+
+        const signIn = async (name, pin) => {
+            $('message').textContent = '';
+            try {
+                const res = await fetch('/api/accounts/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profile: name, pin }) });
+                const d = await res.json();
+                if (d.success) { window.location.replace(next); return; }
+                $('message').textContent = pin === undefined && d.pin_needed ? '' : (d.error || "That didn't work");
+            } catch (e) { $('message').textContent = `Couldn't reach RetroManager: ${e.message}`; }
+            $('pin').value = '';
+            $('pin').focus();
+        };
+        const askPin = (profile) => {
+            chosen = profile;
+            document.querySelectorAll('.person').forEach(el => { el.hidden = el.dataset.name !== profile.name; el.classList.toggle('chosen', el.dataset.name === profile.name); });
+            $('heading').textContent = `Hello, ${profile.name}`;
+            $('pin-label').textContent = `${profile.name}'s PIN`;
+            $('pin-form').hidden = false;
+            $('pin').focus();
+        };
+        $('pin-form').addEventListener('submit', (e) => { e.preventDefault(); if (chosen && $('pin').value) signIn(chosen.name, $('pin').value); });
+        $('pin-back').addEventListener('click', () => {
+            chosen = null;
+            $('pin-form').hidden = true;
+            $('message').textContent = '';
+            $('heading').textContent = "Who's playing?";
+            document.querySelectorAll('.person').forEach(el => { el.hidden = false; el.classList.remove('chosen'); });
+        });
+
+        RM.me.then(me => {
+            if (!me.enabled) { window.location.replace(next); return; }
+            me.profiles.forEach(profile => {
+                const look = RM.avatar(profile);
+                const tile = Object.assign(document.createElement('button'), { className: 'person', type: 'button' });
+                tile.dataset.name = profile.name;
+                tile.setAttribute('role', 'listitem');
+                const face = tile.appendChild(Object.assign(document.createElement('span'), { className: 'face' }));
+                if (look.photo) face.appendChild(Object.assign(document.createElement('img'), { src: look.photo, alt: '' }));
+                else { face.textContent = look.initial; face.style.background = look.colour; }
+                tile.appendChild(Object.assign(document.createElement('span'), { className: 'name', textContent: profile.name }));
+                if (profile.role === 'admin') tile.appendChild(Object.assign(document.createElement('span'), { className: 'role', textContent: 'Admin · PIN' }));
+                tile.addEventListener('click', () => (profile.role === 'admin' ? askPin(profile) : signIn(profile.name)));
+                $('people').appendChild(tile);
+            });
+            const wanted = me.profiles.find(p => p.name === params.get('profile'));
+            if (wanted && wanted.role === 'admin') askPin(wanted);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 720" width="720" height="720" role="img" aria-label="CPS-2">
+<defs>
+<linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8e3fc4"/><stop offset="1" stop-color="#3a1259"/></linearGradient>
+<pattern id="p" width="36" height="36" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="18" height="36" fill="#fff" fill-opacity="0.035"/></pattern>
+<radialGradient id="s" cx="0.5" cy="0.32" r="0.6"><stop offset="0" stop-color="#fff" stop-opacity="0.2"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="720" height="720" fill="url(#g)"/><rect width="720" height="720" fill="url(#p)"/><rect width="720" height="720" fill="url(#s)"/>
+<g transform="translate(360 222)" fill-opacity="0.94"><path d="M-98 -125 H98 V-98 L80 -70 V30 L112 62 V125 H-112 V62 L-80 30 V-70 L-98 -98 Z" fill="#fff"/><rect x="-60" y="-62" width="120" height="82" rx="6" fill="#000" fill-opacity="0.38"/><rect x="-88" y="42" width="176" height="20" rx="4" fill="#000" fill-opacity="0.38"/><rect x="-52" y="22" width="8" height="26" rx="3" fill="#fff"/><circle cx="-48" cy="18" r="11" fill="#fff"/><circle cx="22" cy="44" r="8" fill="#fff"/><circle cx="48" cy="44" r="8" fill="#fff"/></g>
+<text x="360" y="497" font-size="104" font-weight="800" letter-spacing="-1" text-anchor="middle" fill="#fff" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">CPS-2</text>
+<text x="360" y="644" font-size="34" font-weight="600" letter-spacing="3" text-anchor="middle" fill="#fff" fill-opacity="0.78" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">1993</text>
+</svg>

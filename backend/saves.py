@@ -7,8 +7,14 @@ Layout on the NAS (RetroArch-style names: the ROM file name plus a suffix):
     savestates/<person>/<system>/<rom>.state.auto(.png)
 Emulator-named folders (e.g. mGBA/, Nestopia/) and loose files in a person's
 folder are searched too. Anything else in these folders is ignored.
+
+Or, where RetroArch keeps them beside the games (RetroPie's way, and its
+"write saves to the content directory"): roms/<system>/<rom>.srm and
+roms/<system>/<rom>.state3, the "roms" root, which is everyone's (people's
+own saves need the folders above).
 """
 
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,6 +48,17 @@ _NAME_RE = re.compile(
 SHARED = 'shared'
 
 
+def _never_written(path: Path, size: int) -> bool:
+    """Whether a battery save is nothing but empty cells: the file an emulator
+    makes for a game that was never saved in (played with save states only, say)."""
+    if size > 8 * 1024 * 1024:
+        return False
+    try:
+        return not path.read_bytes().strip(b'\x00').strip(b'\xff')
+    except OSError:
+        return False
+
+
 def is_save_file(name: str) -> bool:
     """An in-game save, a save state, or a state's screenshot (by file name)."""
     return _NAME_RE.match(name) is not None
@@ -71,12 +88,22 @@ def _parse(name: str) -> Optional[dict]:
 
 
 class SaveFinder:
-    def __init__(self, roots: Dict[str, str], profiles: List[str], system_folders):
+    def __init__(self, roots: Dict[str, str], profiles: List[str], system_folders, roms_root=None, beside_roms=None):
         """roots: {'saves': path, 'savestates': path}; profiles: person folder names;
-        system_folders: callable returning the set of ROM system folder names."""
-        self.roots = {name: Path(path) for name, path in roots.items() if path}
+        system_folders: callable returning the set of ROM system folder names.
+        roms_root and beside_roms (a callable): the ROM folder, looked in as the
+        "roms" root while beside_roms() says saves are kept beside the games."""
+        self._roots = {name: Path(path) for name, path in roots.items() if path}
         self.profiles = profiles
         self.system_folders = system_folders
+        self.roms_root = Path(roms_root) if roms_root else None
+        self.beside_roms = beside_roms or (lambda: False)
+
+    @property
+    def roots(self) -> Dict[str, Path]:
+        if self.roms_root and self.beside_roms():
+            return {**self._roots, 'roms': self.roms_root}
+        return self._roots
 
     def available(self) -> Dict[str, bool]:
         return {name: root.is_dir() for name, root in self.roots.items()}
@@ -109,9 +136,13 @@ class SaveFinder:
             if not root.is_dir():
                 continue
             owners = [(SHARED, root, False)]
-            owners += [(p, root / p, True) for p in self.profiles if (root / p).is_dir()]
+            if root_name != 'roms':
+                owners += [(p, root / p, True) for p in self.profiles if (root / p).is_dir()]
             for owner_name, owner_dir, is_person in owners:
-                for folder in self._search_dirs(root, owner_dir, system, is_person):
+                # (beside the games: the folder the game itself is in)
+                folders = ([root / system / Path(rom_path.replace('\\', '/')).parent] if root_name == 'roms'
+                           else self._search_dirs(root, owner_dir, system, is_person))
+                for folder in folders:
                     try:
                         files = [f for f in folder.iterdir() if f.is_file()]
                     except OSError:
@@ -144,6 +175,7 @@ class SaveFinder:
                             'size': stat.st_size,
                             'modified': datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
                             'exact_name': base.lower() == stem_lower,
+                            'empty': info['kind'] == 'save' and _never_written(f, stat.st_size),
                         })
 
         # Drop screenshots whose state file wasn't found
@@ -175,7 +207,7 @@ class SaveFinder:
         for root_name, root in self.roots.items():
             if not root.is_dir():
                 continue
-            for f in root.rglob('*'):
+            for f in (self._roms_files(root, systems) if root_name == 'roms' else root.rglob('*')):
                 if not f.is_file():
                     continue
                 info = _parse(f.name)
@@ -184,7 +216,7 @@ class SaveFinder:
                 rel_parts = f.relative_to(root).parts
                 if rel_parts[0] == 'users' or '.stversions' in rel_parts:
                     continue  # Syncthing's archive of old versions isn't live saves
-                if rel_parts[0] in self.profiles:
+                if rel_parts[0] in self.profiles and root_name != 'roms':
                     profile, inner = rel_parts[0], rel_parts[1:]
                 else:
                     profile, inner = SHARED, rel_parts
@@ -208,6 +240,17 @@ class SaveFinder:
         for e in found:
             e.setdefault('screenshot', None)
         return found
+
+    @staticmethod
+    def _roms_files(root: Path, systems):
+        """The files in the system folders of the ROM folder (not its media/ or
+        any hidden folder), for the saves among them."""
+        for system in sorted(systems):
+            for dirpath, dirnames, filenames in os.walk(root / system):
+                dirnames[:] = [d for d in dirnames if not d.startswith('.') and d != 'media']
+                for name in filenames:
+                    if _NAME_RE.match(name):
+                        yield Path(dirpath) / name
 
     def conflicts(self, records: Optional[List[dict]] = None) -> List[dict]:
         """Files Syncthing kept two versions of: [{id, root, path (the original), versions:

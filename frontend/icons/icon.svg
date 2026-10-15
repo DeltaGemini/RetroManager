@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="RetroManager">
+  <!-- RetroManager's icon (tools/make_icon.py): a cartridge, with RM in the logo's block letters -->
+  <defs>
+    <linearGradient id="night" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b2150"/><stop offset="1" stop-color="#070a1c"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.47" r="0.5"><stop offset="0" stop-color="#ff6a9a" stop-opacity="0.55"/><stop offset="0.6" stop-color="#a63fd0" stop-opacity="0.16"/><stop offset="1" stop-color="#a63fd0" stop-opacity="0"/></radialGradient>
+    <linearGradient id="shell" gradientUnits="userSpaceOnUse" x1="114" y1="92" x2="398" y2="420"><stop offset="0" stop-color="#ff7a1f"/><stop offset="0.5" stop-color="#ea4f7e"/><stop offset="1" stop-color="#9a3bd6"/></linearGradient>
+    <linearGradient id="ink" gradientUnits="userSpaceOnUse" x1="160" y1="150" x2="352" y2="270"><stop offset="0" stop-color="#ffd9a8"/><stop offset="0.5" stop-color="#ffffff"/><stop offset="1" stop-color="#e9c8ff"/></linearGradient>
+    <clipPath id="in"><path d="M150 92 H362 L398 128 V352 Q398 372 378 372 H134 Q114 372 114 352 V128 Z"/></clipPath>
+  </defs>
+  <rect width="512" height="512" fill="url(#night)"/>
+  <rect width="512" height="512" fill="url(#glow)"/>
+  <!-- Stars, as squares -->
+  <g fill="#fff"><rect x="66" y="88" width="10" height="10" opacity="0.7"/><rect x="430" y="150" width="8" height="8" opacity="0.5"/><rect x="88" y="396" width="8" height="8" opacity="0.45"/><rect x="420" y="372" width="10" height="10" opacity="0.6"/><rect x="250" y="44" width="7" height="7" opacity="0.4"/></g>
+  <!-- Its shadow -->
+  <path d="M150 92 H362 L398 128 V352 Q398 372 378 372 H134 Q114 372 114 352 V128 Z" transform="translate(0 14)" fill="#000" opacity="0.35"/>
+  <!-- The edge that goes in the slot, with its contacts -->
+  <rect x="158" y="360" width="196" height="64" rx="10" fill="#5b2a8c"/>
+  <g fill="#ffd27a"><rect x="176" y="390" width="12" height="34" rx="2"/><rect x="200" y="390" width="12" height="34" rx="2"/><rect x="224" y="390" width="12" height="34" rx="2"/><rect x="248" y="390" width="12" height="34" rx="2"/><rect x="272" y="390" width="12" height="34" rx="2"/><rect x="296" y="390" width="12" height="34" rx="2"/><rect x="320" y="390" width="12" height="34" rx="2"/></g>
+  <path d="M150 92 H362 L398 128 V352 Q398 372 378 372 H134 Q114 372 114 352 V128 Z" fill="url(#shell)"/>
+  <g clip-path="url(#in)">
+    <!-- Light across it, and shade along the bottom -->
+    <path d="M114 92 H250 L150 372 H114 Z" fill="#fff" opacity="0.13"/>
+    <rect x="114" y="336" width="284" height="36" fill="#000" opacity="0.16"/>
+  </g>
+  <!-- The label, and the grip under it -->
+  <rect x="144" y="124" width="224" height="170" rx="14" fill="#0b0f2a"/>
+  <rect x="144" y="124" width="224" height="170" rx="14" fill="none" stroke="#fff" stroke-opacity="0.22" stroke-width="3"/>
+  <g fill="url(#ink)"><rect x="163.0" y="153.0" width="23.2" height="16.4"/><rect x="179.0" y="153.0" width="23.2" height="16.4"/><rect x="195.0" y="153.0" width="23.2" height="16.4"/><rect x="211.0" y="153.0" width="23.2" height="16.4"/><rect x="163.0" y="169.0" width="23.2" height="16.4"/><rect x="227.0" y="169.0" width="23.2" height="16.4"/><rect x="163.0" y="185.0" width="23.2" height="16.4"/><rect x="227.0" y="185.0" width="23.2" height="16.4"/><rect x="163.0" y="201.0" width="23.2" height="16.4"/><rect x="179.0" y="201.0" width="23.2" height="16.4"/><rect x="195.0" y="201.0" width="23.2" height="16.4"/><rect x="211.0" y="201.0" width="23.2" height="16.4"/><rect x="163.0" y="217.0" width="23.2" height="16.4"/><rect x="195.0" y="217.0" width="23.2" height="16.4"/><rect x="163.0" y="233.0" width="23.2" height="16.4"/><rect x="211.0" y="233.0" width="23.2" height="16.4"/><rect x="163.0" y="249.0" width="23.2" height="16.4"/><rect x="227.0" y="249.0" width="23.2" height="16.4"/><rect x="265.4" y="153.0" width="23.2" height="16.4"/><rect x="329.4" y="153.0" width="23.2" height="16.4"/><rect x="265.4" y="169.0" width="23.2" height="16.4"/><rect x="281.4" y="169.0" width="23.2" height="16.4"/><rect x="313.4" y="169.0" width="23.2" height="16.4"/><rect x="329.4" y="169.0" width="23.2" height="16.4"/><rect x="265.4" y="185.0" width="23.2" height="16.4"/><rect x="297.4" y="185.0" width="23.2" height="16.4"/><rect x="329.4" y="185.0" width="23.2" height="16.4"/><rect x="265.4" y="201.0" width="23.2" height="16.4"/><rect x="297.4" y="201.0" width="23.2" height="16.4"/><rect x="329.4" y="201.0" width="23.2" height="16.4"/><rect x="265.4" y="217.0" width="23.2" height="16.4"/><rect x="329.4" y="217.0" width="23.2" height="16.4"/><rect x="265.4" y="233.0" width="23.2" height="16.4"/><rect x="329.4" y="233.0" width="23.2" height="16.4"/><rect x="265.4" y="249.0" width="23.2" height="16.4"/><rect x="329.4" y="249.0" width="23.2" height="16.4"/></g>
+  <g fill="#000" opacity="0.28"><rect x="176" y="312" width="160" height="9" rx="4.5"/><rect x="176" y="330" width="160" height="9" rx="4.5"/></g>
+</svg>

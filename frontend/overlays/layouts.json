@@ -1,0 +1,77 @@
+{
+    "layouts": [
+        {
+            "id": "gba",
+            "name": "Game Boy Advance",
+            "file": "rm_gba.cfg",
+            "systems": [
+                "gba",
+                "gb"
+            ]
+        },
+        {
+            "id": "snes",
+            "name": "Super Nintendo",
+            "file": "rm_snes.cfg",
+            "systems": [
+                "snes"
+            ]
+        },
+        {
+            "id": "nds",
+            "name": "DS, controls below the screens",
+            "file": "rm_nds.cfg",
+            "systems": [
+                "nds"
+            ]
+        },
+        {
+            "id": "nds_mid",
+            "name": "DS, controls between the screens",
+            "file": "rm_nds_mid.cfg",
+            "systems": []
+        },
+        {
+            "id": "nes",
+            "name": "NES",
+            "file": "rm_nes.cfg",
+            "systems": [
+                "nes"
+            ]
+        },
+        {
+            "id": "sms",
+            "name": "Master System and Game Gear",
+            "file": "rm_sms.cfg",
+            "systems": [
+                "segaMS",
+                "segaGG"
+            ]
+        },
+        {
+            "id": "megadrive",
+            "name": "Mega Drive",
+            "file": "rm_megadrive.cfg",
+            "systems": [
+                "segaMD"
+            ]
+        },
+        {
+            "id": "psx",
+            "name": "PlayStation",
+            "file": "rm_psx.cfg",
+            "systems": [
+                "psx"
+            ]
+        },
+        {
+            "id": "n64",
+            "name": "Nintendo 64",
+            "file": "rm_n64.cfg",
+            "systems": [
+                "n64"
+            ],
+            "stick_is_dpad": false
+        }
+    ]
+}

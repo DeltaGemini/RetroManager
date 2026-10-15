@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RetroManager Stats</title>
+    <script src="/common/theme.js"></script>
+    <script src="/common/accounts.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
+    <link rel="stylesheet" href="/common/header.css">
+    <script src="/common/header.js"></script>
+    <script src="/common/systems.js"></script>
+    <script src="/common/series.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        /* Same palette as the library page (index.html) */
+        :root {
+            color-scheme: dark;
+            --bg-primary: #0a0e27;
+            --bg-secondary: #0f1535;
+            --bg-tertiary: #14194f;
+            --text-primary: #e0e0e0;
+            --text-secondary: #999999;
+            --accent-pink: #ff6b9d;
+            --accent-orange: #ff9d3d;
+            --success: #6bd09a;
+            --border-color: #2a2d4a;
+        }
+
+        :root[data-theme="light"] {
+            color-scheme: light;
+            --bg-primary: #f4f5fb;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #eceef7;
+            --text-primary: #1c1f33;
+            --text-secondary: #5f6480;
+            --accent-pink: #d6336c;
+            --accent-orange: #c2560c;
+            --success: #1e8a55;
+            --border-color: #d3d7e8;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Ubuntu', 'Helvetica Neue', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .stats { max-width: 1280px; margin: 0 auto; padding: 20px 16px 60px; }
+        .empty { color: var(--text-secondary); text-align: center; padding: 60px 16px; }
+        .controls { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; font-size: 13px; color: var(--text-secondary); }
+        .controls label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+
+        /* Headline numbers */
+        .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 22px; }
+        .tile { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px; }
+        .tile .n { font-size: 26px; font-weight: 700; }
+        .tile .label { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+        .tile .sub { font-size: 11px; color: var(--text-secondary); margin-top: 6px; }
+
+        /* A titled list of bars */
+        .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+        .card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px 16px; }
+        .card.wide { grid-column: 1 / -1; }
+        .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent-pink); margin-bottom: 4px; }
+        .card .note { font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; }
+        .bar-row { display: grid; grid-template-columns: minmax(90px, 38%) 1fr auto; gap: 10px; align-items: center; font-size: 13px; padding: 3px 0; }
+        .bar-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        a.bar-row { color: inherit; text-decoration: none; }
+        a.bar-row:hover .name { text-decoration: underline; }
+        .bar { height: 10px; border-radius: 5px; background: var(--bg-tertiary); overflow: hidden; display: flex; }
+        .bar span { display: block; height: 100%; }
+        .bar-row .value { font-variant-numeric: tabular-nums; color: var(--text-secondary); font-size: 12px; min-width: 34px; text-align: right; }
+        .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; }
+        .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; }
+
+        /* Games per year: thin columns */
+        .years { display: flex; align-items: flex-end; gap: 2px; height: 150px; }
+        .years .col { flex: 1; min-width: 3px; background: var(--accent-pink); border-radius: 2px 2px 0 0; position: relative; }
+        .years .col:hover { background: var(--accent-orange); }
+        .years-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+        const API_BASE = window.location.origin;
+        const cleanTitle = (name) => (name || '').replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/\s+/g, ' ').trim() || name;
+        const getJson = (url) => fetch(`${API_BASE}${url}`).then(r => r.json()).catch(() => null);
+        const percent = (part, whole) => (whole ? Math.round((100 * part) / whole) : 0);
+        const COLORS = ['var(--accent-pink)', 'var(--accent-orange)', 'var(--success)', '#6ab7ff', '#c792ea'];
+
+        // ScreenScraper writes "Platform / Run & Jump", IGDB "Platform, Adventure": the main genre of each
+        const genresOf = (g) => [...new Set((g.genre || '').split(',').map(s => s.split('/')[0].trim()).filter(Boolean))];
+
+        const countBy = (games, valuesOf) => {
+            const counts = {};
+            games.forEach(g => [].concat(valuesOf(g) ?? []).forEach(v => { if (v !== null && v !== '') counts[v] = (counts[v] || 0) + 1; }));
+            return Object.entries(counts).map(([label, value]) => ({ label, value }));
+        };
+        const topRows = (rows, n) => rows.slice().sort((a, b) => b.value - a.value || String(a.label).localeCompare(String(b.label))).slice(0, n);
+
+        // rows: [{label, value, parts?: [n, ...], href?, suffix?}]. With parts the bar is split, in COLORS order
+        function Bars({ rows, max, unit = '' }) {
+            const biggest = max || Math.max(1, ...rows.map(r => r.value));
+            return rows.map(r => {
+                const inner = (
+                    <>
+                        <span className="name" title={r.label}>{r.label}</span>
+                        <span className="bar">
+                            {(r.parts || [r.value]).map((n, i) => <span key={i} style={{ width: `${(100 * n) / biggest}%`, background: COLORS[i] }} />)}
+                        </span>
+                        <span className="value">{r.suffix || `${r.value}${unit}`}</span>
+                    </>
+                );
+                return r.href ? <a className="bar-row" key={r.label} href={r.href}>{inner}</a> : <div className="bar-row" key={r.label}>{inner}</div>;
+            });
+        }
+
+        function Card({ title, note, wide, legend, children }) {
+            return (
+                <section className={`card${wide ? ' wide' : ''}`}>
+                    <h2>{title}</h2>
+                    {note && <div className="note">{note}</div>}
+                    {legend && <div className="legend">{legend.map((label, i) => <span key={label}><i style={{ background: COLORS[i] }} />{label}</span>)}</div>}
+                    {children}
+                </section>
+            );
+        }
+
+        function StatsApp() {
+            const [shelves, setShelves] = useState(null);
+            const [error, setError] = useState(null);
+            const [state, setState] = useState({ status: {}, collections: [] });
+            const [roms, setRoms] = useState(null);
+            const [achievements, setAchievements] = useState(null);
+            const [unlocks, setUnlocks] = useState(null);
+            const [showAll, setShowAll] = useState(false);
+
+            useEffect(() => {
+                getJson('/api/shelf').then(d => (d && d.success ? setShelves(d.shelves) : setError((d && d.error) || 'Could not load the library')));
+                getJson('/api/library-state').then(d => { if (d && d.success) setState(d); });
+                getJson('/api/rom-index').then(d => { if (d && d.success && d.report && d.report.checked) setRoms(d.report); });
+                getJson('/api/achievements/overview').then(d => { if (d && d.success && d.configured && d.games.length) setAchievements(d); });
+                getJson('/api/achievements/unlocks').then(d => { if (d && d.success && d.configured && d.months.length > 1) setUnlocks(d); });
+            }, []);
+
+            const games = useMemo(() => {
+                const list = [];
+                (shelves || []).forEach(shelf => shelf.games.forEach(g => {
+                    if (!g.rom_exists || (!showAll && !g.has_metadata)) return;
+                    list.push({ ...g, system: shelf.system, fullName: shelf.full_name, title: cleanTitle(g.name),
+                        year: /^\d{4}$/.test(String(g.year || '')) ? Number(g.year) : null,
+                        playStatus: state.status[`${shelf.system}/${g.path.replace(/^(\.\/)+/, '')}`] || null });
+                }));
+                return list;
+            }, [shelves, state, showAll]);
+            const series = useMemo(() => RM.series.assign(games.map(g => ({ ...g }))), [games]);
+
+            if (error) return <><RM.Header active="stats" /><div className="empty">{error}</div></>;
+            if (!shelves) return <><RM.Header active="stats" /><div className="empty">Adding up the library...</div></>;
+
+            const total = games.length;
+            const withArt = games.filter(g => g.box2d).length;
+            const withSpine = games.filter(g => g.boxside).length;
+            const dated = games.filter(g => g.year);
+            const bySystem = Object.values(games.reduce((acc, g) => {
+                const s = acc[g.system] || (acc[g.system] = { label: g.fullName, system: g.system, value: 0, art: 0 });
+                s.value += 1;
+                if (g.box2d) s.art += 1;
+                return acc;
+            }, {})).sort((a, b) => b.value - a.value);
+            const years = dated.length ? (() => {
+                const first = Math.min(...dated.map(g => g.year)), last = Math.max(...dated.map(g => g.year));
+                const counts = {};
+                dated.forEach(g => { counts[g.year] = (counts[g.year] || 0) + 1; });
+                return Array.from({ length: last - first + 1 }, (_, i) => ({ year: first + i, n: counts[first + i] || 0 }));
+            })() : [];
+            const busiest = years.length ? years.reduce((a, b) => (b.n > a.n ? b : a)) : null;
+            const generations = Object.values(games.reduce((acc, g) => {
+                const group = RM.systems.generationGroup(g.system);
+                (acc[group.rank] = acc[group.rank] || { label: group.label, rank: group.rank, value: 0 }).value += 1;
+                return acc;
+            }, {})).sort((a, b) => a.rank - b.rank);
+            const statusCount = (key) => games.filter(g => g.playStatus === key).length;
+            const favourites = games.filter(g => g.favorite).length;
+            const rated = games.filter(g => typeof g.rating === 'number' && g.rating > 0);
+            const bestRated = rated.slice().sort((a, b) => b.rating - a.rating || a.title.localeCompare(b.title)).slice(0, 10);
+
+            const tile = (n, label, sub) => <div className="tile"><div className="n">{n}</div><div className="label">{label}</div>{sub && <div className="sub">{sub}</div>}</div>;
+
+            return (
+                <>
+                    <RM.Header active="stats" />
+                    <div className="stats">
+                        <div className="controls">
+                            <label><input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} /> Include games without a gamelist entry</label>
+                        </div>
+
+                        <div className="tiles">
+                            {tile(total, 'games', `${bySystem.length} systems`)}
+                            {tile(`${percent(withArt, total)}%`, 'have box art', `${total - withArt} without`)}
+                            {tile(`${percent(withSpine, total)}%`, 'have a spine', `${total - withSpine} without`)}
+                            {tile(favourites, 'favourites')}
+                            {tile(statusCount('finished'), 'finished', `${statusCount('playing')} playing · ${statusCount('backlog')} in the backlog`)}
+                            {achievements && tile(`${percent(achievements.earned, achievements.total)}%`, 'of achievements earned', `${achievements.earned} of ${achievements.total} in ${achievements.games.length} games`)}
+                            {roms && tile(`${percent(roms.counts.verified || 0, roms.checked)}%`, 'verified dumps', `${roms.checked} files checked`)}
+                            {busiest && tile(busiest.year, 'the year with most games', `${busiest.n} games`)}
+                        </div>
+
+                        <div className="cards">
+                            {years.length > 1 && (
+                                <Card wide title="Games by release year" note={`${dated.length} games with a release year, ${total - dated.length} without.`}>
+                                    <div className="years">
+                                        {years.map(y => <div key={y.year} className="col" title={`${y.year}: ${y.n} game${y.n === 1 ? '' : 's'}`} style={{ height: `${(100 * y.n) / busiest.n}%` }} />)}
+                                    </div>
+                                    <div className="years-axis"><span>{years[0].year}</span><span>{years[Math.floor(years.length / 2)].year}</span><span>{years[years.length - 1].year}</span></div>
+                                </Card>
+                            )}
+                            <Card title="Systems" note="Games on each system, and how many have box art." legend={['With box art', 'Without']}>
+                                <Bars rows={bySystem.map(s => ({ label: s.label, value: s.value, parts: [s.art, s.value - s.art], href: `/?${new URLSearchParams({ system: s.system })}` }))} />
+                            </Card>
+                            <Card title="Generations"><Bars rows={generations} /></Card>
+                            <Card title="Manufacturers"><Bars rows={topRows(countBy(games, g => RM.systems.makerOf(g.system)), 10)} /></Card>
+                            <Card title="Genres" note="The main genre of each game."><Bars rows={topRows(countBy(games, genresOf), 12)} /></Card>
+                            <Card title="Franchises" note="Series with the most games."><Bars rows={series.slice(0, 12).map(s => ({ label: s.label, value: s.count }))} /></Card>
+                            <Card title="Developers"><Bars rows={topRows(countBy(games, g => g.developer), 12)} /></Card>
+                            <Card title="Publishers"><Bars rows={topRows(countBy(games, g => g.publisher), 12)} /></Card>
+                            <Card title="Decades"><Bars rows={countBy(dated, g => `${Math.floor(g.year / 10) * 10}s`).sort((a, b) => a.label.localeCompare(b.label))} /></Card>
+                            {bestRated.length > 0 && (
+                                <Card title="Best rated" note={`${rated.length} games have a rating.`}>
+                                    <Bars max={100} unit="%" rows={bestRated.map(g => ({ label: g.title, value: Math.round(g.rating * 100),
+                                        href: `/?${new URLSearchParams({ system: g.system, game: g.path })}` }))} />
+                                </Card>
+                            )}
+                            {(favourites > 0 || Object.keys(state.status).length > 0 || state.collections.length > 0) && (
+                                <Card title="Yours" note="Play status, favourites and collections, set on a game's page.">
+                                    <Bars rows={[{ label: '★ Favourites', value: favourites }, { label: '▶ Playing', value: statusCount('playing') },
+                                        { label: '🕓 Backlog', value: statusCount('backlog') }, { label: '✔ Finished', value: statusCount('finished') },
+                                        ...state.collections.map(c => ({ label: c.name, value: c.games.length }))]} />
+                                </Card>
+                            )}
+                            {achievements && (
+                                <Card title="Achievements" note={`${achievements.user}'s most complete games on RetroAchievements.`}>
+                                    <Bars max={100} rows={achievements.games.slice(0, 10).map(g => ({ label: g.library ? g.library.name : g.title, value: g.completion,
+                                        suffix: `${Math.round(g.completion)}%`, href: g.library ? `/?${new URLSearchParams({ system: g.library.system, game: `./${g.library.rom_path}` })}` : g.url }))} />
+                                </Card>
+                            )}
+                            {unlocks && (() => {
+                                // Every month from the first unlock to the last, so quiet stretches show as flat
+                                const months = [];
+                                const byMonth = Object.fromEntries(unlocks.months.map(m => [m.month, m]));
+                                let [y, m] = unlocks.months[0].month.split('-').map(Number);
+                                const [lastY, lastM] = unlocks.months[unlocks.months.length - 1].month.split('-').map(Number);
+                                let total = 0;
+                                while (y < lastY || (y === lastY && m <= lastM)) {
+                                    const key = `${y}-${String(m).padStart(2, '0')}`;
+                                    total = byMonth[key] ? byMonth[key].total : total;
+                                    months.push({ key, total, earned: byMonth[key] ? byMonth[key].earned : 0 });
+                                    m += 1; if (m > 12) { m = 1; y += 1; }
+                                }
+                                return (
+                                    <Card wide title="Achievements over time" note={`${unlocks.user}'s running total on RetroAchievements: ${unlocks.count} earned since ${months[0].key}.`}>
+                                        <div className="years">
+                                            {months.map(mo => <div key={mo.key} className="col" title={`${mo.key}: ${mo.total} in total${mo.earned ? `, ${mo.earned} earned that month` : ''}`}
+                                                style={{ height: `${(100 * mo.total) / unlocks.count}%`, opacity: mo.earned ? 1 : 0.45 }} />)}
+                                        </div>
+                                        <div className="years-axis"><span>{months[0].key}</span><span>{months[Math.floor(months.length / 2)].key}</span><span>{months[months.length - 1].key}</span></div>
+                                    </Card>
+                                );
+                            })()}
+                            {roms && (
+                                <Card title="ROM check" note="What the checksum index found (Tools › ROM check in the Library).">
+                                    <Bars rows={[{ label: 'Verified dumps', value: roms.counts.verified || 0 }, { label: 'Recognised', value: roms.counts.known || 0 },
+                                        { label: 'Hacks', value: roms.counts.hack || 0 }, { label: 'Not recognised', value: roms.counts.unknown || 0 },
+                                        { label: 'Duplicates', value: roms.duplicates.length }, { label: "Name doesn't match", value: roms.mislabelled.length }]} />
+                                </Card>
+                            )}
+                        </div>
+                    </div>
+                </>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<StatsApp />);
+    </script>
+</body>
+</html>

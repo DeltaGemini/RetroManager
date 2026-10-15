@@ -36,10 +36,10 @@ class IGDBAuth:
 
     def get_token(self) -> str:
         """Get a valid access token, refreshing if needed. Raises IGDBError."""
+        if not (self.client_id and self.client_secret):
+            raise IGDBError("Add the IGDB client ID and secret in Tools > Settings.")
         if self.access_token and self.token_expiry and datetime.now() < self.token_expiry:
             return self.access_token
-        if not (self.client_id and self.client_secret):
-            raise IGDBError("IGDB isn't set up: add IGDB_CLIENT_ID and IGDB_CLIENT_SECRET to .env (see .env.example).")
 
         try:
             response = requests.post(self.TOKEN_URL, params={
@@ -52,7 +52,7 @@ class IGDBAuth:
 
         if response.status_code != 200:
             logger.error(f"IGDB token request failed: HTTP {response.status_code}: {response.text[:200]}")
-            raise IGDBError("Twitch rejected the IGDB credentials (IGDB_CLIENT_ID / IGDB_CLIENT_SECRET).")
+            raise IGDBError("Twitch rejected the IGDB credentials. Check them in Tools > Settings.")
 
         data = response.json()
         self.access_token = data.get('access_token')
@@ -104,6 +104,10 @@ class IGDBAPI:
     def __init__(self, client_id: str, client_secret: str):
         self.auth = IGDBAuth(client_id, client_secret)
         self.session = requests.Session()
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.auth.client_id and self.auth.client_secret)
 
     def _make_request(self, endpoint: str, query: str) -> List[Dict]:
         """POST an Apicalypse query and return the result list, or raise IGDBError."""
@@ -168,12 +172,17 @@ class IGDBAPI:
             results = self._make_request('games', f'search "{_escape(game_name)}"; fields {self.SEARCH_FIELDS}; limit 20;')
         return results
 
+    def get_search_result(self, game_id: Any) -> Optional[Dict]:
+        """One game in the form search_game returns, for a game found by its ID."""
+        results = self._make_request('games', f'fields {self.SEARCH_FIELDS}; where id = {int(game_id)};')
+        return results[0] if results else None
+
     def get_game_info(self, game_id: int) -> Optional[Dict]:
         """Fetch one game with everything needed for metadata and media. Raises IGDBError."""
         results = self._make_request('games', f'fields {self.DETAIL_FIELDS}; where id = {int(game_id)};')
         return results[0] if results else None
 
-    def summarize_search_result(self, game: Dict) -> Dict[str, Any]:
+    def summarize_search_result(self, game: Dict, hash_match: bool = False) -> Dict[str, Any]:
         """Short form of a search hit for the results list."""
         platforms = [p.get('name') for p in game.get('platforms') or [] if isinstance(p, dict) and p.get('name')]
         releasedate = _to_es_date(game.get('first_release_date'))
@@ -189,6 +198,8 @@ class IGDBAPI:
             'year': releasedate[:4] or None,
             'regions': [],
             'is_hack': game_type in HACK_GAME_TYPES,
+            # Found from the ROM's checksum rather than by name
+            'hash_match': hash_match,
         }
 
     def extract_media(self, game: Dict) -> Dict[str, str]:

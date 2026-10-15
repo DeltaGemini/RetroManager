@@ -34,7 +34,43 @@
 }
 .rm-btn:hover { border-color: var(--accent-pink); background: var(--bg-tertiary); }
 .rm-btn[aria-current="page"] { border-color: var(--accent-pink); }
-.rm-chip { font-variant-numeric: tabular-nums; border-color: var(--accent-pink); }
+
+/* Background tasks, under the header while something runs (common/header.js) */
+:root { --rm-tasks-h: 0px; }
+.rm-tasks {
+    position: sticky; top: var(--rm-header-h); z-index: 29; height: 30px; flex-shrink: 0;
+    display: flex; align-items: center; gap: 10px; padding: 0 16px;
+    background: var(--bg-secondary); border-bottom: 1px solid var(--border-color);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Ubuntu', 'Helvetica Neue', sans-serif;
+    font-size: 12px; color: var(--text-secondary);
+}
+.rm-task, .rm-task-more {
+    font: inherit; color: inherit; background: none; border: none; box-shadow: none; padding: 0; cursor: pointer;
+    text-transform: none; letter-spacing: 0; font-weight: 400; height: 100%;
+}
+.rm-task { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 8px; text-align: left; }
+.rm-task:hover, .rm-task-more:hover { background: none; color: var(--text-primary); }
+.rm-task b { color: var(--text-primary); font-weight: 600; white-space: nowrap; }
+.rm-task.done > span:first-child { color: var(--success, #3ccf91); }
+.rm-task.problem > span:first-child, .rm-task.problem .rm-task-detail { color: var(--accent-pink); }
+.rm-task-bar { flex: 0 1 160px; min-width: 40px; height: 6px; border-radius: 3px; background: var(--border-color); overflow: hidden; }
+.rm-task-bar > span { display: block; height: 100%; background: var(--accent-pink); border-radius: 3px; transition: width 0.4s; }
+.rm-task-bar.unknown > span { opacity: 0.5; animation: rm-task-wait 1.2s ease-in-out infinite alternate; }
+@keyframes rm-task-wait { from { opacity: 0.2; } to { opacity: 0.7; } }
+.rm-task-state { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rm-task-detail { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rm-task-more { flex-shrink: 0; white-space: nowrap; color: var(--accent-pink); }
+.rm-tasks-all {
+    position: absolute; left: 0; right: 0; top: 100%; padding: 0 16px;
+    background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+.rm-tasks-all .rm-task { width: 100%; height: 30px; }
+@media (max-width: 760px) {
+    .rm-tasks { padding: 0 10px; gap: 8px; }
+    .rm-tasks-all { padding: 0 10px; }
+    .rm-task-bar { flex-basis: 70px; }
+}
+@media (prefers-reduced-motion: reduce) { .rm-task-bar > span { transition: none; animation: none; } }
 
 .rm-menu-wrap { position: relative; }
 .rm-menu {
@@ -66,6 +102,250 @@
     .rm-btn { padding: 6px 8px; font-size: 15px; }
     .rm-subbar { padding: 8px 10px; }
 }
+/* Phones: icons only, a smaller logo, and the page links give way (scrolling
+   sideways in their own strip) before the header can widen the page */
+/* (Whatever the width, the header never widens the page: a phone would shrink
+   the whole page to fit, leaving an empty band under it. The page links give
+   way first.) */
+@media (max-width: 760px) {
+    .rm-nav { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+    .rm-nav::-webkit-scrollbar { display: none; }
+    .rm-nav a { flex-shrink: 0; }
+    .rm-actions { flex-shrink: 0; }
+}
+@media (max-width: 640px) {
+    .rm-header { gap: 6px; padding: 0 8px; }
+    .rm-nav a { padding: 0 7px; }
+    .rm-nav a .rm-label { display: none; }
+    .rm-actions { gap: 5px; }
+    .rm-btn { padding: 6px 7px; }
+    html:root[data-palette^="switch"] .rm-header .rm-brand::after { width: 80px; height: 20px; }
+}
 @media (max-width: 380px) {
     .rm-brand { display: none; }
 }
+
+/* Extra colour themes (common/theme.js). Each sits on a page's dark or light
+   colours and replaces the ones every page shares; "html:root" outranks the
+   pages' own :root blocks. */
+html:root[data-palette="black"] {
+    --bg-primary: #000000; --bg-secondary: #0c0c0f; --bg-tertiary: #17171c; --bg-hover: #22222a; --bg-modal: #111115;
+    --text-primary: #e6e6e6; --text-secondary: #9a9aa3;
+    --accent-pink: #ff6b9d; --accent-orange: #ff9d3d; --accent-blue: #7c6cf0; --border-color: #2a2a33; --success: #6bd09a;
+    --panel-scrim: rgba(0, 0, 0, 0.85);
+    --card-scrim: linear-gradient(90deg, rgba(23, 23, 28, 0.93) 0%, rgba(23, 23, 28, 0.8) 55%, rgba(23, 23, 28, 0.6) 100%);
+    --card-scrim-active: linear-gradient(90deg, rgba(64, 24, 42, 0.93) 0%, rgba(64, 24, 42, 0.8) 55%, rgba(64, 24, 42, 0.6) 100%);
+}
+html:root[data-palette="slate"] {
+    --bg-primary: #1b1f27; --bg-secondary: #232832; --bg-tertiary: #2c323e; --bg-hover: #363d4b; --bg-modal: #262b36;
+    --text-primary: #e3e6ec; --text-secondary: #9aa3b2;
+    --accent-pink: #4fb3d9; --accent-orange: #f0a04b; --accent-blue: #7d8cf5; --border-color: #3a4150; --success: #6bd09a;
+    --panel-scrim: rgba(27, 31, 39, 0.87);
+    --card-scrim: linear-gradient(90deg, rgba(44, 50, 62, 0.93) 0%, rgba(44, 50, 62, 0.8) 55%, rgba(44, 50, 62, 0.6) 100%);
+    --card-scrim-active: linear-gradient(90deg, rgba(28, 68, 88, 0.93) 0%, rgba(28, 68, 88, 0.8) 55%, rgba(28, 68, 88, 0.6) 100%);
+}
+html:root[data-palette="terminal"] {
+    --bg-primary: #050a05; --bg-secondary: #0a140a; --bg-tertiary: #0f1f0f; --bg-hover: #163016; --bg-modal: #0c180c;
+    --text-primary: #b6f5b6; --text-secondary: #5fa35f;
+    --accent-pink: #39ff6a; --accent-orange: #d9ff4f; --accent-blue: #2fbf8f; --border-color: #1d3a1d; --success: #39ff6a;
+    --panel-scrim: rgba(5, 10, 5, 0.87);
+    --card-scrim: linear-gradient(90deg, rgba(15, 31, 15, 0.93) 0%, rgba(15, 31, 15, 0.8) 55%, rgba(15, 31, 15, 0.6) 100%);
+    --card-scrim-active: linear-gradient(90deg, rgba(20, 62, 26, 0.93) 0%, rgba(20, 62, 26, 0.8) 55%, rgba(20, 62, 26, 0.6) 100%);
+}
+html:root[data-palette="sepia"] {
+    --bg-primary: #f3ead8; --bg-secondary: #fbf5e6; --bg-tertiary: #ebdfc6; --bg-hover: #e0d2b4; --bg-modal: #fbf5e6;
+    --text-primary: #3b2f20; --text-secondary: #7a6a52;
+    --accent-pink: #a8452c; --accent-orange: #9a5b12; --accent-blue: #5b5fa8; --border-color: #d8c9a8; --success: #4b7a2c;
+    --panel-scrim: rgba(243, 234, 216, 0.9);
+    --card-scrim: linear-gradient(90deg, rgba(235, 223, 198, 0.95) 0%, rgba(235, 223, 198, 0.85) 55%, rgba(235, 223, 198, 0.65) 100%);
+    --card-scrim-active: linear-gradient(90deg, rgba(240, 205, 185, 0.95) 0%, rgba(240, 205, 185, 0.85) 55%, rgba(240, 205, 185, 0.65) 100%);
+}
+
+/* ---------------------------------------------------------------------------
+   Switch and Switch Light: after the Switch Master EmulationStation theme
+   (frontend/themes/switch/). Beyond colours they bring the theme's font, its
+   background picture behind see-through panels (dark only), its logo in the
+   header, hairline rules, a slim bar on the selected game and its star icons.
+   --------------------------------------------------------------------------- */
+@font-face {
+    font-family: 'Oxygen';
+    src: url('/themes/switch/Oxygen-Regular.ttf') format('truetype');
+    font-display: swap;
+}
+html:root[data-palette="switch"] {
+    --bg-primary: #2d2d2d; --bg-secondary: rgba(24, 24, 28, 0.58); --bg-tertiary: rgba(255, 255, 255, 0.08);
+    --bg-hover: rgba(255, 255, 255, 0.15); --bg-modal: #2d2d2d;
+    --text-primary: #fefefe; --text-secondary: #b8b8c2;
+    --accent-pink: #fa6122; --accent-orange: #ac42bf; --accent-blue: #ac42bf; --border-color: rgba(255, 255, 255, 0.16); --success: #6bd09a;
+    --panel-scrim: rgba(28, 28, 32, 0.86);
+    --card-scrim: linear-gradient(90deg, rgba(40, 40, 44, 0.93) 0%, rgba(40, 40, 44, 0.8) 55%, rgba(40, 40, 44, 0.55) 100%);
+    --card-scrim-active: linear-gradient(90deg, rgba(74, 30, 84, 0.93) 0%, rgba(74, 30, 84, 0.8) 55%, rgba(74, 30, 84, 0.55) 100%);
+    --switch-rule: rgba(254, 254, 254, 0.55);
+    --switch-star-empty: url('/themes/switch/star-empty-dark.svg');
+    --switch-star-filled: url('/themes/switch/star-filled-dark.svg');
+}
+html:root[data-palette="switch-light"] {
+    --bg-primary: #d9d9d9; --bg-secondary: #e9e9e9; --bg-tertiary: #dedede; --bg-hover: #cfcfcf; --bg-modal: #efefef;
+    --text-primary: #222222; --text-secondary: #5c5c5c;
+    --accent-pink: #334ff0; --accent-orange: #3aa5ab; --accent-blue: #334ff0; --border-color: #bcbcbc; --success: #1e8a55;
+    --panel-scrim: rgba(217, 217, 217, 0.9);
+    --card-scrim: linear-gradient(90deg, rgba(222, 222, 222, 0.95) 0%, rgba(222, 222, 222, 0.85) 55%, rgba(222, 222, 222, 0.65) 100%);
+    --card-scrim-active: linear-gradient(90deg, rgba(200, 208, 250, 0.95) 0%, rgba(200, 208, 250, 0.85) 55%, rgba(200, 208, 250, 0.65) 100%);
+    --switch-rule: rgba(34, 34, 34, 0.7);
+    --switch-star-empty: url('/themes/switch/star-empty-light.svg');
+    --switch-star-filled: url('/themes/switch/star-filled-light.svg');
+}
+/* The font, everywhere (form controls don't take the page's font by themselves) */
+html:root[data-palette^="switch"] :is(body, button, input, select, textarea, .rm-header) {
+    font-family: 'Oxygen', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Ubuntu', sans-serif;
+}
+/* The background picture, dimmed so text over it stays readable */
+html:root[data-palette="switch"] body {
+    background: linear-gradient(rgba(18, 18, 22, 0.45), rgba(18, 18, 22, 0.45)), url('/themes/switch/background.jpg') center / cover fixed #2d2d2d;
+}
+/* The library's columns sit straight on the picture (no lines between them), and
+   headings that stay put while a list scrolls under them are solid enough to hide it */
+html:root[data-palette="switch"] .app-container { background: transparent; }
+html:root[data-palette="switch"] :is(.sidebar-header, .game-list-header, .top-bar, .filters) {
+    background: rgba(24, 24, 28, 0.9); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+/* Popups, menus and cards that sit over the page are solid: see-through, the
+   page behind them shows through their text. (Popups are added straight to
+   <body>, beside the page's own #root.) */
+html:root[data-palette="switch"] :is(body > :not(#root), [role="dialog"], [role="menu"], .opts-menu, .info-card) {
+    --bg-secondary: #29292d; --bg-tertiary: #38383e; --bg-hover: #47474f; --bg-modal: #29292d;
+    --card-scrim: linear-gradient(90deg, rgba(41, 41, 45, 0.95) 0%, rgba(41, 41, 45, 0.85) 55%, rgba(41, 41, 45, 0.6) 100%);
+}
+/* A dropdown's list is drawn by the browser on a solid surface: with these
+   see-through field colours it would come out white with white text */
+html:root[data-palette="switch"] :is(option, optgroup) { background-color: #2d2d2d; color: #fefefe; }
+/* The header: the RetroManager logo, in the theme's lettering, in place of the name, over a hairline */
+html:root[data-palette^="switch"] .rm-header { border-bottom-color: var(--switch-rule); }
+html:root[data-palette="switch"] .rm-header { background: rgba(24, 24, 28, 0.9); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+html:root[data-palette^="switch"] .rm-brand img, html:root[data-palette^="switch"] .rm-brand span { display: none; }
+html:root[data-palette^="switch"] .rm-brand::after {
+    content: ''; display: block; width: 119px; height: 30px;
+    background: url('/themes/switch/retromanager-logo.svg') left center / contain no-repeat;
+}
+html:root[data-palette^="switch"] .rm-nav a[aria-current="page"] { border-bottom-color: var(--accent-orange); }
+/* Hairlines under each column's heading, as on the theme's game screen */
+html:root[data-palette^="switch"] :is(.sidebar-header, .game-list-header, .detail-header, .rm-subbar) { border-bottom: 1px solid var(--switch-rule); }
+/* The selected system and game: no tinted box, a slim bar beside the name */
+html:root[data-palette^="switch"] :is(.system-item.active, .game-item.active) {
+    background-color: var(--bg-hover); border-left-color: transparent; box-shadow: none; position: relative;
+}
+html:root[data-palette^="switch"] :is(.system-item.active, .game-item.active)::before {
+    content: ''; position: absolute; left: 4px; top: 14%; bottom: 14%; width: 4px; border-radius: 2px;
+    background: var(--accent-orange); z-index: 3;
+}
+html:root[data-palette^="switch"] .system-item.active .system-name { color: var(--accent-pink); }
+/* The theme's star icons in place of the star characters */
+html:root[data-palette^="switch"] .rating-stars button {
+    color: transparent; width: 26px; height: 26px; padding: 0; margin-right: 3px;
+    background: var(--switch-star-empty) center / contain no-repeat;
+}
+html:root[data-palette^="switch"] .rating-stars button .star-fill {
+    color: transparent; left: 0; top: 0; height: 100%;
+    background: var(--switch-star-filled) left center / 26px 26px no-repeat;
+}
+
+/* The theme menu's colour swatches and the tick on the theme in use */
+.rm-swatch { display: inline-flex; flex-shrink: 0; width: 42px; height: 20px; border-radius: 4px; overflow: hidden; border: 1px solid var(--border-color); }
+.rm-swatch span { flex: 1; }
+.rm-menu .rm-check { margin-left: auto; color: var(--accent-pink); }
+
+/* Profiles (common/accounts.js): the signed-in person's photo and the switcher */
+.rm-face { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; overflow: hidden; flex-shrink: 0; color: #fff; font-weight: 700; line-height: 1; }
+.rm-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rm-profile { padding: 0; border: 2px solid var(--border-color); border-radius: 50%; background: none; cursor: pointer; display: flex; box-shadow: none; }
+.rm-profile:hover, .rm-profile[aria-expanded="true"] { border-color: var(--accent-pink); }
+.rm-profile-menu { width: 240px; }
+.rm-profile-me { display: flex; gap: 10px; align-items: center; padding: 8px 10px 10px; margin-bottom: 4px; border-bottom: 1px solid var(--border-color); font-size: 14px; color: var(--text-primary); }
+.rm-profile-me b { display: block; }
+/* Signed in as a player: what only an admin can use isn't shown (the server refuses it anyway) */
+html.rm-player .admin-only, html.rm-player .game-list-actions, html.rm-player .gd-series-fix { display: none !important; }
+
+/* In the phone app: whether RetroManager can be reached */
+.rm-phone-status { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 12px; border: 1px solid var(--border-color); background: none; box-shadow: none; color: var(--text-secondary); font: inherit; font-size: 12px; font-weight: 400; text-transform: none; letter-spacing: 0; white-space: nowrap; cursor: pointer; }
+.rm-phone-status .rm-label { margin-left: -4px; }
+.rm-phone-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success, #4caf50); }
+/* Amber whatever the theme: it's a warning, not one of the theme's own colours */
+.rm-phone-status.off { border-color: #ffb300; background: #ffb300; color: #2b1d00; font-weight: 600; }
+.rm-phone-status.off .rm-phone-dot { background: #2b1d00; }
+
+/* On a touch screen (and in the phone app) the header is for fingers: taller,
+   with each control at least 44px across and room between them
+   (common/header.js puts rm-touch on the page) */
+html.rm-touch { --rm-header-h: 64px; }
+html.rm-touch .rm-header { gap: 10px; padding-left: 12px; padding-right: 12px; }
+html.rm-touch .rm-brand { min-height: 44px; }
+html.rm-touch .rm-brand img { width: 34px; height: 34px; }
+html.rm-touch .rm-nav a { min-width: 46px; justify-content: center; padding: 0 10px; font-size: 14px; }
+html.rm-touch .rm-nav a > span[aria-hidden] { font-size: 21px; }
+html.rm-touch .rm-actions { gap: 10px; }
+html.rm-touch .rm-btn { min-width: 46px; min-height: 46px; justify-content: center; padding: 0 12px; font-size: 21px; border-radius: 10px; }
+html.rm-touch .rm-btn .rm-label, html.rm-touch .rm-nav a .rm-label { font-size: 14px; }
+html.rm-touch .rm-phone-status { min-height: 38px; padding: 0 14px; border-radius: 19px; font-size: 14px; }
+html.rm-touch .rm-phone-dot { width: 10px; height: 10px; }
+html.rm-touch .rm-profile .rm-face { width: 42px !important; height: 42px !important; font-size: 19px !important; }
+html.rm-touch .rm-menu { min-width: 230px; }
+html.rm-touch .rm-menu button { min-height: 48px; font-size: 15px; }
+@media (max-width: 640px) {
+    html.rm-touch .rm-header { gap: 6px; padding-left: 8px; padding-right: 8px; }
+    html.rm-touch .rm-actions { gap: 6px; }
+}
+
+/* In the phone app: "This phone", the app's settings (common/header.js) */
+.rm-set { position: fixed; inset: 0; z-index: 1400; display: flex; justify-content: center; background: rgba(0, 0, 0, 0.6); font-size: 15px; color: var(--text-primary); }
+/* (a theme's panel colours can be see-through, for its backdrop: the modal colour never is) */
+.rm-set-panel { width: 100%; max-width: 560px; display: flex; flex-direction: column; background: var(--bg-modal, var(--bg-primary)); }
+.rm-set-head { display: flex; align-items: center; gap: 12px; padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top)); background: var(--bg-tertiary); border-bottom: 1px solid var(--border-color); }
+.rm-set-head h2 { margin: 0; font-size: 18px; font-weight: 600; color: var(--text-primary); text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rm-set-body { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 14px 28px; }
+.rm-set-group h3 { margin: 18px 4px 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: var(--accent-pink); }
+.rm-set-rows { border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; background: var(--bg-secondary); }
+.rm-set-row {
+    display: flex; align-items: center; gap: 12px; width: 100%; min-height: 54px; padding: 8px 14px; text-align: left;
+    background: none; border: none; border-top: 1px solid var(--border-color); border-radius: 0; box-shadow: none;
+    color: var(--text-primary); font: inherit; text-transform: none; letter-spacing: 0; font-weight: 400; cursor: default;
+}
+.rm-set-row:first-child { border-top: none; }
+button.rm-set-row { cursor: pointer; }
+button.rm-set-row:hover, button.rm-set-row:focus-visible { background: var(--bg-tertiary); }
+.rm-set-label { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.rm-set-note { font-size: 12px; color: var(--text-secondary); }
+.rm-set-value { flex: 0 1 auto; max-width: 58%; min-width: 0; text-align: right; color: var(--text-secondary); font-size: 13px; overflow-wrap: anywhere; }
+.rm-set-row.warn .rm-set-value, .rm-set-row.warn .rm-set-note { color: var(--accent-orange); }
+.rm-set-mark { flex: 0 0 16px; text-align: center; color: var(--text-secondary); font-size: 17px; }
+.rm-set-row.on .rm-set-mark { color: var(--accent-pink); font-weight: 700; }
+.rm-set-form input { flex: 1; min-width: 0; min-height: 40px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); font: inherit; }
+.rm-set-empty { margin: 14px 4px; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+.rm-set-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.rm-set-themes button {
+    display: flex; align-items: center; gap: 10px; min-height: 50px; padding: 8px 12px; border-radius: 10px; text-align: left;
+    border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);
+    font: inherit; font-size: 14px; text-transform: none; letter-spacing: 0; font-weight: 400; box-shadow: none; cursor: pointer;
+}
+.rm-set-themes button.on { border-color: var(--accent-pink); box-shadow: inset 0 0 0 1px var(--accent-pink); }
+
+/* In the phone app: the app's questions, messages and "fetching" box (RMDialog, common/header.js) */
+.rm-ask { position: fixed; inset: 0; z-index: 1500; display: flex; align-items: center; justify-content: center; padding: 18px; background: rgba(0, 0, 0, 0.62); font-size: 15px; color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Ubuntu', 'Helvetica Neue', sans-serif; }
+.rm-ask-box { width: 100%; max-width: 460px; max-height: calc(100dvh - 36px); overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 20px;
+    border-radius: 14px; background: var(--bg-modal, var(--bg-primary)); border: 1px solid var(--border-color); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55); }
+.rm-ask-box h2 { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.3; color: var(--text-primary); text-transform: none; letter-spacing: 0; }
+.rm-ask-box p { margin: 0; color: var(--text-secondary); line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
+.rm-ask-box p.rm-ask-doing { color: var(--text-primary); font-weight: 600; }
+.rm-ask-box p.rm-ask-amount { font-size: 13px; font-variant-numeric: tabular-nums; }
+.rm-ask-box input { min-height: 46px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); font: inherit; }
+.rm-ask-box .rm-task-bar { flex: none; width: 100%; height: 8px; border-radius: 4px; }
+.rm-ask-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.rm-ask-buttons .rm-btn { min-height: 46px; padding: 0 18px; font-size: 15px; border-radius: 10px; }
+.rm-btn.primary { background: var(--accent-pink); border-color: var(--accent-pink); color: #fff; font-weight: 600; }
+.rm-set-panel, .rm-ask-box { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Ubuntu', 'Helvetica Neue', sans-serif; }
+.rm-set-row select { flex: 0 0 auto; max-width: 55%; min-height: 40px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); font: inherit; font-size: 14px; }
+/* The profile button with nobody signed in */
+.rm-face-none { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--bg-tertiary); color: var(--text-secondary); }
+
+/* Chosen with a controller (in a popup or a menu): a ring round it */
+.rm-pad [role="dialog"] :focus, .rm-pad [role="menu"] :focus { outline: 2px solid var(--accent-pink, #ff5fa2); outline-offset: 2px; }

@@ -13,4 +13,22 @@ build
 README.md
 .DS_Store
 *.log
+# Not part of the app: backups, the Windows dev environment, old copies
+WIP*.zip
+venv
+*.whl
+frontend/index 2.html
+frontend/scraperComponents.jsx
+homepage-widget
 .env
+.env.example
+tools/
+!tools/build_frontend.js
+tests
+android
+# The library made beside docker-compose.yml, which the image has no business with
+RetroGames
+android
+tests
+docs
+*.zip
