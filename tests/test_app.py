@@ -23,8 +23,10 @@ def test_a_system_without_a_picture_is_given_its_drawn_tile(client):
         tile = client.get(f"/imgs/{folder}.jpg")
         assert tile.status_code == 200 and tile.headers["Content-Type"] == "image/svg+xml" and word in tile.get_data(as_text=True)
     from backend.routes import pages
-    # The header's logo and the tab's icon are their own, unless stand-ins are asked for
-    assert b"SEGA" in client.get("/themes/switch/retromanager-logo.svg").data
+    # The header's logo and the tab's icon are their own where they're there (the Switch
+    # themes' logo isn't in the repository: a copy without it has the stand-in), unless stand-ins are asked for
+    own = (pages.FRONTEND_DIR / "themes/switch/retromanager-logo.svg").is_file()
+    assert (b"SEGA" in client.get("/themes/switch/retromanager-logo.svg").data) == own
     pages.SYSTEM_TILES = True
     try:
         assert client.get("/imgs/snes.jpg").headers["Content-Type"] == "image/svg+xml"
