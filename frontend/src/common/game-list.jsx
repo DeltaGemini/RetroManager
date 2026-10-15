@@ -470,11 +470,13 @@ function SharedGameList({ games, selectedGame, onGameSelect, loading, system, ac
                             <div className="game-info">
                                 <div className="game-name" title={game.name}>
                                     {name.title}
-                                    {game.releasedate && game.releasedate.length >= 4 ?
-                                        <span style={{fontWeight:400,color:'var(--text-secondary)'}}> · {game.releasedate.slice(0, 4)}</span> : null}
-                                    {game._system_label && <span style={{fontWeight:400,color:'var(--text-secondary)'}}> · {game._system_label}</span>}
                                     {name.tags && <div className="game-tags">{name.tags}</div>}
                                 </div>
+                                {/* The year, and the system where the list mixes them, on a line of their own */}
+                                {/* (a search across systems has the year as `year`) */}
+                                {((game.releasedate && game.releasedate.length >= 4) || game.year || game._system_label) && (
+                                    <div className="game-sub">{[game.releasedate && game.releasedate.length >= 4 ? game.releasedate.slice(0, 4) : game.year, game._system_label].filter(Boolean).join(' · ')}</div>
+                                )}
                                 <div className="game-status">
                                     {game.favorite && <span className="achievement-badge" title="Favourite" style={{color: 'var(--accent-orange)'}}>★</span>}
                                     {gdPhone && hereOf(game) && <span className="achievement-badge" title="On this phone">📱</span>}

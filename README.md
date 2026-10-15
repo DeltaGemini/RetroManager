@@ -17,7 +17,7 @@ cd RetroManager
 docker compose up -d
 ```
 
-Then open `http://<this machine>:5000`. The first time, RetroManager shows where the library is and whether it can write there, and asks for a ScreenScraper account (with how to get one) or lets you skip that. Nothing has to be edited first: the library is a folder called `RetroGames` beside `docker-compose.yml` until you [point it at folders you already have](docs/setup.md#1-paths).
+Then open `http://<this machine>:5000` from your own network (don't open the port to the internet: see [Keeping it safe](docs/setup.md#keeping-it-safe)). The first time, RetroManager shows where the library is and whether it can write there, and asks for a ScreenScraper account (with how to get one) or lets you skip that. Nothing has to be edited first: the library is a folder called `RetroGames` beside `docker-compose.yml` until you [point it at folders you already have](docs/setup.md#1-paths).
 
 To run the published image instead of building it, put `image: ghcr.io/deltagemini/retromanager:latest` in place of `build: .` in `docker-compose.yml`. The Android app is in each [release](https://github.com/DeltaGemini/RetroManager/releases), and RetroManager offers it to phones itself (see [The Android app](docs/phone.md)).
 

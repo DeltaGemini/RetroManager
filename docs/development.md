@@ -94,3 +94,16 @@ The Switch colour themes' background works that way too: the photograph this ins
 - **Local network only**: there's no authentication, CORS is open, and debug routes are exposed, so anyone on the network can use the app, including changing (but not reading) the keys in Settings. Don't publish the port to the internet.
 - **`/api/stats` is cached**: it's recounted after any change made through RetroManager, and at least every 10 minutes (`STATS_MAX_AGE` in `backend/app.py`) to catch changes made directly on the NAS.
 - **Logging**: set to `DEBUG`, so `docker compose logs` is verbose.
+
+## Tests
+
+```bash
+pip install -r backend/requirements.txt pytest playwright
+python -m pytest tests
+```
+
+- `tests/` exercise the API against a small library made in a temporary folder.
+- `tests/e2e/` drive the pages in a real browser (Playwright) against a demo library of made-up games (`tools/make_demo_library.py`): the Console's rows and Back, collections, its settings, the game lists, the Library and the first-run page. They need a Chromium-family browser: `RM_BROWSER=/path/to/it`, or Playwright's own (`python -m playwright install chromium`). Without one they're skipped.
+
+GitHub runs both on every push and pull request (`.github/workflows/tests.yml`).
+

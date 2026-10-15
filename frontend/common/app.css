@@ -274,6 +274,7 @@ body {
 }
 
 .game-item.has-bg .game-name,
+.game-item.has-bg .game-sub,
 .game-item.has-bg .game-tags {
     text-shadow: var(--card-text-shadow);
 }
@@ -480,6 +481,16 @@ body {
 .game-name {
     font-weight: 600;
     margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* A game's year (and system, in a list of several) under its name */
+.game-sub {
+    margin: -2px 0 4px;
+    font-size: 0.88em;
+    color: var(--text-secondary);
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }

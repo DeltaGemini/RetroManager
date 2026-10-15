@@ -57,7 +57,7 @@
         }
         button.main { border-color: var(--accent-pink); background: var(--accent-pink); color: #fff; font-weight: 600; }
         button:disabled { opacity: 0.55; cursor: default; }
-        #message, #folders-message { min-height: 1.4em; font-size: 14px; color: var(--bad); }
+        #message, #folders-message, #login-message { min-height: 1.4em; font-size: 14px; color: var(--bad); }
         .choices { display: flex; flex-direction: column; gap: 10px; }
         .choice { flex-direction: row; align-items: flex-start; gap: 10px; font-size: 14px; color: var(--text-primary); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; }
         .choice input { margin-top: 4px; }
@@ -71,7 +71,8 @@
     <ol class="steps" aria-label="Steps">
         <li data-step="folders">1 · Your library</li>
         <li data-step="scraper">2 · ScreenScraper</li>
-        <li data-step="done">3 · Done</li>
+        <li data-step="login">3 · Sign-in</li>
+        <li data-step="done">4 · Done</li>
     </ol>
 
     <section id="folders">
@@ -122,6 +123,27 @@
         </div>
     </section>
 
+    <section id="login" hidden>
+        <div>
+            <h2>Who can change things (recommended)</h2>
+            <p>As it is, anyone who can reach RetroManager on your network can edit the library, delete games and change settings. Turn on login, and each person picks themselves when they open it: you're the admin, with a PIN, and people you add later can play and keep their own lists but not change the library.</p>
+        </div>
+        <form id="admin" autocomplete="off">
+            <label>Your name<input name="name" maxlength="24" autocomplete="off" placeholder="e.g. Sam"></label>
+            <label>A PIN (4 to 8 digits)<input name="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="new-password"></label>
+            <label>The PIN again<input name="again" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="new-password"></label>
+            <label class="choice" id="take-label" hidden><input type="checkbox" name="take" checked>
+                <span>The saves already in the library are mine (they move to your own folder; leave this off to keep them shared)</span></label>
+        </form>
+        <p class="quiet">Names, PINs and who's an admin can be changed later in <b>Tools › Profiles and login</b>, where login can be switched off again too.</p>
+        <div id="login-message" role="alert"></div>
+        <div class="buttons">
+            <button class="main" id="turn-on">Turn on login</button>
+            <button id="skip-login">Not now</button>
+            <button data-go="scraper">Back</button>
+        </div>
+    </section>
+
     <section id="done" hidden>
         <div>
             <h2>That's it</h2>
@@ -142,10 +164,10 @@
     // skipping notes that it's been done, so it isn't shown again.
     const $ = (id) => document.getElementById(id);
     const el = (tag, props, ...children) => { const node = Object.assign(document.createElement(tag), props || {}); children.forEach(c => node.append(c)); return node; };
-    let state = null, saved = false;
+    let state = null, saved = false, signedIn = null;
 
     const show = (step) => {
-        const order = ['folders', 'scraper', 'done'];
+        const order = ['folders', 'scraper', 'login', 'done'];
         order.forEach(name => { $(name).hidden = name !== step; });
         document.querySelectorAll('ol.steps li').forEach(li => {
             li.classList.toggle('on', li.dataset.step === step);
@@ -218,13 +240,50 @@
         try { await fetch('/api/setup/done', { method: 'POST' }); } catch (e) {}
     };
     const toDone = () => {
-        $('done-summary').textContent = saved
+        $('done-summary').textContent = (saved
             ? 'ScreenScraper is set up. The first scrape will tell you if it doesn’t accept the details.'
-            : 'You skipped ScreenScraper. Add it whenever you like in Tools › Settings.';
+            : 'You skipped ScreenScraper. Add it whenever you like in Tools › Settings.')
+            + (signedIn ? ` Login is on, and this device is signed in as ${signedIn}.`
+                : ' Login is off: anyone on your network can change the library until you turn it on in Tools › Profiles and login.');
         finish();
         show('done');
     };
-    $('skip-keys').addEventListener('click', toDone);
+    // ScreenScraper done with (or skipped): on to who can change things
+    let shared = 0;
+    const toLogin = async () => {
+        try {
+            const d = await (await fetch('/api/accounts/shared-saves')).json();
+            shared = d.success && !d.beside_roms ? d.saves + d.states : 0;
+        } catch (e) { shared = 0; }
+        $('take-label').hidden = !shared;
+        show('login');
+    };
+    $('skip-keys').addEventListener('click', toLogin);
+    $('skip-login').addEventListener('click', toDone);
+    $('turn-on').addEventListener('click', async () => {
+        const form = Object.fromEntries(new FormData($('admin')));
+        const name = String(form.name || '').trim(), pin = String(form.pin || '');
+        $('login-message').textContent = '';
+        if (!name) { $('login-message').textContent = 'Say your name: it’s what you pick when you open RetroManager.'; return; }
+        if (!/^\d{4,8}$/.test(pin)) { $('login-message').textContent = 'A PIN is 4 to 8 digits.'; return; }
+        if (pin !== String(form.again || '')) { $('login-message').textContent = 'The two PINs aren’t the same.'; return; }
+        const call = async (url, method, body) => {
+            const d = await (await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json();
+            if (!d.success) throw new Error(d.error || 'that didn’t work');
+            return d;
+        };
+        $('turn-on').disabled = true;
+        try {
+            await call('/api/accounts/people', 'POST', { name, take_shared: !!shared && !!form.take });
+            await call('/api/accounts/profile', 'PUT', { name, role: 'admin', pin });
+            await call('/api/accounts/enabled', 'PUT', { enabled: true, profile: name, pin });
+            signedIn = name;
+            toDone();
+        } catch (e) {
+            $('login-message').textContent = `Login isn't on: ${e.message}`;
+        }
+        $('turn-on').disabled = false;
+    });
     $('save-keys').addEventListener('click', async () => {
         const values = Object.fromEntries([...new FormData($('keys'))].map(([key, value]) => [key, String(value).trim()]).filter(([, value]) => value));
         $('message').textContent = '';
@@ -237,7 +296,7 @@
             const d = await (await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ values }) })).json();
             if (!d.success) throw new Error(d.error || 'they weren’t saved');
             saved = true;
-            toDone();
+            toLogin();
         } catch (e) {
             $('message').textContent = `Couldn't save them: ${e.message}`;
         }

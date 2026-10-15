@@ -201,6 +201,25 @@ def _game_folder(system_name, rom_path):
     return Path(ROMS_BASE) / system_name / Path(strip_dot_slash(rom_path)).parent
 
 
+# Where a person's battery saves and RetroArch save states for a game go when
+# there are none to go beside yet. The one place that knows the two layouts
+# (Settings > Saves): folders of their own, a person's inside them, or beside
+# the game, everyone's. (The browser's own states are apart: _state_file.)
+
+def _saves_folder(system_name, rom_path, profile):
+    if saves_beside_roms():
+        return _game_folder(system_name, rom_path)
+    profile = _whose(profile)
+    return Path(SAVES_BASE) / system_name if profile == SHARED else Path(SAVES_BASE) / profile / system_name
+
+
+def _states_folder(system_name, rom_path, profile):
+    if saves_beside_roms():
+        return _game_folder(system_name, rom_path)
+    profile = _whose(profile)
+    return Path(SAVESTATES_BASE) / system_name if profile == SHARED else Path(SAVESTATES_BASE) / profile / system_name
+
+
 def _kept_as(path, states=False):
     """Where a copy of a save or state goes inside a backup: its place in its own
     folder (saves under their path in saves/, states under savestates/...),
@@ -232,11 +251,10 @@ def _save_file(system_name, rom_path, profile):
                 found = save_finder.resolve_path(record['root'], record['path'])
                 if found:
                     return found
-        # (beside the game, where that's where they're kept)
-        return _game_folder(system_name, rom_path) / name if saves_beside_roms() else Path(SAVES_BASE) / system_name / name
+        return _saves_folder(system_name, rom_path, SHARED) / name
     if profile not in SAVE_PROFILES:
         return None
-    return Path(SAVES_BASE) / profile / system_name / name
+    return _saves_folder(system_name, rom_path, profile) / name
 
 
 def _state_file(system_name, rom_path, profile):
@@ -475,8 +493,7 @@ def put_pi_state():
     profile = _whose(profile)
     existing = [s for s in _retroarch_states(system_name, rom_path) if s['profile'] == profile]
     folder = (save_finder.resolve_path(existing[0]['root'], existing[0]['path']).parent if existing
-              else _game_folder(system_name, rom_path) if saves_beside_roms()
-              else (Path(SAVESTATES_BASE) if profile == SHARED else Path(SAVESTATES_BASE) / profile) / system_name)
+              else _states_folder(system_name, rom_path, profile))
     target = folder / name
     backup = None
     try:
@@ -599,9 +616,7 @@ def put_phone_state():
     # for the system (or beside the game, where saves are kept there)
     profile = _whose(profile)
     target = (states[name][1] if name in states
-              else (next(iter(states.values()))[1].parent if states
-                    else _game_folder(system_name, rom_path) if saves_beside_roms()
-                    else (Path(SAVESTATES_BASE) if profile == SHARED else Path(SAVESTATES_BASE) / profile) / system_name) / name)
+              else (next(iter(states.values()))[1].parent if states else _states_folder(system_name, rom_path, profile)) / name)
     backup = None
     try:
         if target.is_file():

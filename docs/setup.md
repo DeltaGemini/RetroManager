@@ -188,6 +188,14 @@ When they're empty, RetroManager fills them from the game's media in this order 
 | `thumbnail` | `screenshottitle`, `screenshot`, `box2d`, `wheel` |
 | `video` | `videos` |
 
+## Keeping it safe
+
+RetroManager is made for your own network. With login off (as it starts), anyone who can reach it can edit the library, delete games and change settings, so:
+
+- **Turn on login** (the first-run page offers it, or **Tools › Profiles and login**): you're the admin with a PIN, and people you add can play and keep their own lists but not change the library.
+- **Don't open its port to the internet.** To use it away from home, reach your network over a VPN such as Tailscale or WireGuard instead, which is what the phone app expects.
+- **Keep the API keys to yourself.** They're stored in `settings.json` in RetroManager's own folder; don't share that folder or its backups.
+
 ## Troubleshooting
 
 | Problem | Check |
