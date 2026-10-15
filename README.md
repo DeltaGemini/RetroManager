@@ -65,6 +65,47 @@ Click a box to take it off the shelf:
 
 ![Library health table](docs/screenshots/library-health.webp)
 
+## How the parts fit together
+
+RetroManager is the hub: one server, with the library's folders, that a browser, the Android app and RetroArch on your other devices all work from. Nothing talks to anything else directly; everything goes through the server or the folders it shares.
+
+```mermaid
+flowchart LR
+    ra_phone["RetroArch on the phone<br/>(or Azahar, Dolphin)"]
+    rmapp["RetroManager app<br/>(Android)"]
+    server[("RetroManager server<br/>with the library folders:<br/>roms · media · saves · savestates · BIOS")]
+    browser["Web browser"]
+    ra_pi["RetroArch / EmulationStation<br/>on a Pi or another device"]
+    internet["Scraping sources, EmulatorJS<br/>(the internet)"]
+
+    ra_phone <-- "starts games ·<br/>its saves and states" --> rmapp
+    rmapp <-- "games · saves · states · setup" --> server
+    server <-- "pages · edits · playing" --> browser
+    server <-- "the same files:<br/>shared or Syncthing" --> ra_pi
+    server -- "game details, pictures" --> internet
+```
+
+What moves, and when:
+
+| Between | What | Which way | When |
+|---|---|---|---|
+| Browser and server | The pages, the library, your edits, pictures | Both | As you use it |
+| | A game's file and BIOS, to play it in the browser | Server → browser | When you press Play |
+| | Battery saves; the browser's own save states | Both | As you play |
+| | RetroArch's save states, to carry on a Pi game in the browser, or the other way | Both | When you load one, or send one to the Pi |
+| Phone app and server | The pages and game lists, kept on the phone | Server → phone | As they're opened; used when the server can't be reached |
+| | Game files, BIOS, pictures and manuals (not videos) | Server → phone | When a game is fetched or played |
+| | Battery saves and RetroArch save states, per person | Both | Before a game starts and when you come back from it, and every half hour or so in the background |
+| | That a game was played (for Continue playing) | Phone → server | When it starts |
+| | RetroArch's setup: core overrides, options, overlays | One phone → server → another | When you save or apply it |
+| | The app itself, when there's a newer one | Server → phone | When the app opens |
+| Phone app and RetroArch | Which game to start and with which core | App → RetroArch | When you press Play |
+| | Which core ran a game, whether it started; save folders in a core's override (if you turn that on) | Both | Around each game |
+| RetroArch elsewhere and the folders | Games, gamelists and pictures read; saves and states written | Both | Directly, as those devices play: the same files, shared or synced |
+| Server and the internet | Game details, pictures, manuals and videos; a ROM's checksum to recognise it (Hasheous, can be turned off); EmulatorJS the first time a system is played in the browser | Mostly in | When you scrape, or play in the browser |
+
+The phone never talks to RetroArch on another device, and games played in an emulator of their own (Azahar, Dolphin) keep their saves to themselves. Nothing leaves your network except what the scraping sources are asked, and the files fetched from them.
+
 ## Stack
 
 | Part | Details |
