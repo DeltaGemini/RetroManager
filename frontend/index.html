@@ -11,6 +11,8 @@
         if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('/sw.js').catch(() => {});
     </script>
     <script src="/common/theme.js"></script>
+    <script src="/common/language-packs.js"></script>
+    <script src="/common/language.js"></script>
     <script src="/common/accounts.js"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -38,8 +40,10 @@
     <script type="text/babel" src="/src/library/game-sections.jsx"></script>
     <script type="text/babel" src="/src/library/tools-scrape.jsx"></script>
     <script type="text/babel" src="/src/library/tools-mix.jsx"></script>
+    <script type="text/babel" src="/src/library/tools-media.jsx"></script>
     <script type="text/babel" src="/src/library/tools-saves.jsx"></script>
     <script type="text/babel" src="/src/library/tools-romcheck.jsx"></script>
+    <script type="text/babel" src="/src/library/tools-duplicates.jsx"></script>
     <script type="text/babel" src="/src/library/tools-collections.jsx"></script>
     <script type="text/babel" src="/src/library/tools-settings.jsx"></script>
     <script type="text/babel" src="/src/library/tools-achievements.jsx"></script>
@@ -47,6 +51,7 @@
     <script type="text/babel" src="/src/library/tools-profiles.jsx"></script>
     <script type="text/babel" src="/src/library/tools-history-backups.jsx"></script>
     <script type="text/babel" src="/src/library/tools-health.jsx"></script>
+    <script type="text/babel" src="/src/library/tools-storage.jsx"></script>
     <script type="text/babel" src="/src/library/main.jsx"></script>
 </body>
 </html>

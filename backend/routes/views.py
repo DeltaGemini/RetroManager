@@ -21,6 +21,7 @@ def _invalidate_stats_on_change(response):
             ("/api/scraper/search", "/api/scraper/game-info", "/api/igdb/search", "/api/igdb/game-info")):
         _stats_cache["value"] = None
         _shelf_cache["value"] = None
+        _viewer_cache["value"] = None
     return response
 
 
@@ -153,6 +154,46 @@ def missing_media_report():
     except Exception as e:
         logger.exception("Error building missing media report")
         return jsonify(success=False, error=str(e)), 500
+# The kinds of media the Media viewer shows (manuals and videos as a tile saying there's one)
+VIEWER_MEDIA_FOLDERS = ('box2d', 'box3d', 'boxside', 'support', 'screenshot', 'screenshottitle', 'wheel',
+                        'fanart', 'mix', 'manuals', 'videos')
+# Every game with all those pictures, kept like the Shelf's (walking every
+# system's folders takes a while on a NAS), so changing kind is quick
+_viewer_cache = {"value": None, "time": 0}
+
+
+def _compute_viewer():
+    games = []
+    for system in scanner.discover_systems():
+        for g in scanner.get_games_for_system(system.name):
+            if g.rom_exists:
+                games.append({'system': system.name, 'system_name': system.get_full_name(), 'path': g.path,
+                              'name': g.name, 'has_metadata': g.has_metadata,
+                              'pictures': {f: getattr(g, f, None) or None for f in VIEWER_MEDIA_FOLDERS}})
+    games.sort(key=lambda g: ((g['name'] or '').lower(), g['system_name'].lower()))
+    return games
+
+
+@app.route("/api/media-viewer", methods=["GET"])
+def media_viewer():
+    """Every game of every system with its picture of one kind (?folder=box2d),
+    or none. The files aren't checked (on a NAS that takes a while for a big
+    library): the page shows the game's name where one won't load."""
+    folder = request.args.get("folder", "box2d")
+    if folder not in VIEWER_MEDIA_FOLDERS:
+        return jsonify(success=False, error="Unknown kind of picture"), 400
+    try:
+        if _viewer_cache["value"] is None or time.time() - _viewer_cache["time"] > STATS_MAX_AGE:
+            _viewer_cache["value"] = _compute_viewer()
+            _viewer_cache["time"] = time.time()
+        games = [{**{k: v for k, v in g.items() if k != 'pictures'}, 'picture': g['pictures'][folder]}
+                 for g in _viewer_cache["value"]]
+        return jsonify(success=True, folder=folder, folders=VIEWER_MEDIA_FOLDERS, games=games)
+    except Exception as e:
+        logger.exception("Error listing media for the viewer")
+        return jsonify(success=False, error=str(e)), 500
+
+
 # Small versions of media for the shelf, made once and kept in THUMB_DIR
 THUMB_DIR = Path(os.environ.get("THUMB_DIR", "/tmp/retromanager-thumbs"))
 THUMB_HEIGHTS = {160, 320, 480}

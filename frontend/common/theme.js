@@ -16,6 +16,10 @@
         // After the Switch Master EmulationStation theme (assets in frontend/themes/switch/)
         { key: 'switch', label: 'Switch', base: 'dark', swatch: ['#2d2d2d', '#ac42bf', '#fa6122'] },
         { key: 'switch-light', label: 'Switch Light', base: 'light', swatch: ['#d9d9d9', '#3aa5ab', '#334ff0'] },
+        // After TV science fiction's starship computers (fonts and licence in frontend/themes/starship/)
+        { key: 'panels', label: 'Starship Panels', base: 'dark', swatch: ['#ff9900', '#cc99cc', '#9999ff'] },
+        { key: 'panels-blue', label: 'Starship Panels · Blue', base: 'dark', swatch: ['#5b7fc0', '#9fb3d9', '#e8a33d'] },
+        { key: 'bridge-1960s', label: 'Starship Bridge · 1960s', base: 'dark', swatch: ['#d6372a', '#f0b323', '#2f6fdc'] },
     ];
 
     const find = (key) => THEMES.find(t => t.key === key) || THEMES[0];
@@ -31,6 +35,7 @@
         const theme = find(key);
         apply(theme);
         try { localStorage.setItem('retromanager.theme', theme.key); } catch (e) {}
+        window.dispatchEvent(new Event('retromanager:theme'));
         return theme;
     };
 

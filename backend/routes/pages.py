@@ -7,6 +7,7 @@ import re
 
 from flask import jsonify, redirect, request, send_from_directory
 import mimetypes
+from backend import logo_tiles
 from backend.systems import _PRIMARY, normalize_system_name
 from backend.core import app, FRONTEND_DIR, settings
 from backend.routes.importing import importer
@@ -20,6 +21,9 @@ from backend.routes.importing import importer
 # Which is the "System pictures" setting; a browser can ask for either with
 # ?drawn=1 or ?theme=1 (the Console's settings), and a system with no picture
 # in imgs/ gets its tile whatever is asked. SYSTEM_TILES=1 allows only tiles.
+# A third kind, ?logos=1, draws a tile from the system's monochrome logo in the
+# theme's colours (backend/logo_tiles.py), where the logos have been fetched
+# (tools/fetch_system_logos.py; they're brands' marks, so not in git).
 SYSTEM_TILES = any(os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on") for name in ("SYSTEM_TILES", "OPEN_ARTWORK"))
 # The other pictures that aren't ours to pass on, and what stands in for each
 # in the same way (frontend/open/, and the app's own icon): the header's logo in
@@ -57,10 +61,26 @@ def _system_tile(name):
     return None
 
 
+LOGOS_DIR = FRONTEND_DIR / 'logos'
+
+
+def _system_logo(name):
+    """A system folder's logo (frontend/logos/), or the one for the system its name is another name for."""
+    name = name.lower()
+    if not _TILE_NAME.match(name):
+        return None
+    for candidate in (name, _PRIMARY.get(normalize_system_name(name))):
+        if candidate and (LOGOS_DIR / f'{candidate}.svg').is_file():
+            return LOGOS_DIR / f'{candidate}.svg'
+    return None
+
+
 def _wanted_pictures():
-    """'drawn' or 'theme' for this request: what it asks for, else the setting."""
+    """'drawn', 'theme' or 'logos' for this request: what it asks for, else the setting."""
     if SYSTEM_TILES or request.args.get('drawn'):
         return 'drawn'
+    if request.args.get('logos'):
+        return 'logos'
     return 'theme' if request.args.get('theme') or settings.get('system_pictures') == 'theme' else 'drawn'
 
 
@@ -70,7 +90,9 @@ def system_pictures():
     installed (and allowed), credit}: for the Console's settings."""
     installed = not SYSTEM_TILES and any(_SYSTEM_PICTURE.match(f'imgs/{f.name}') and not f.name.startswith('auto-')
                                          for f in (FRONTEND_DIR / 'imgs').glob('*.jpg'))
-    return jsonify(success=True, default='theme' if installed and settings.get('system_pictures') == 'theme' else 'drawn', theme=installed,
+    logos = not SYSTEM_TILES and LOGOS_DIR.is_dir() and any(LOGOS_DIR.glob('*.svg'))
+    return jsonify(success=True, default='theme' if installed and settings.get('system_pictures') == 'theme' else 'drawn', theme=installed, logos=logos,
+                   logos_credit="From HVR88's Monochrome Gaming Logos (github.com/HVR88/Monochrome-Gaming-Logos), drawn in your theme's colours.",
                    credit="From Lilbud's Switch theme for EmulationStation, based on Grila's for LaunchBox. CC BY-NC-SA.")
 
 
@@ -163,9 +185,16 @@ def serve_frontend(path):
     if path.startswith("api/"):
         return jsonify({"error": "Not Found"}), 404
     
-    # A system's picture: its drawn tile, unless the theme's is wanted and there is one
+    # A system's picture: its drawn tile, unless the theme's is wanted and there is one,
+    # or its logo in the theme's colours
     picture = _SYSTEM_PICTURE.match(path)
-    if picture and (_wanted_pictures() == 'drawn' or not (FRONTEND_DIR / path).is_file()):
+    wanted = _wanted_pictures() if picture else None
+    if wanted == 'logos':
+        logo = _system_logo(picture.group(1))
+        drawn = logo and logo_tiles.tile(logo, picture.group(1), request.args, request.args.get('style', 'plain'))
+        if drawn:
+            return drawn, 200, {'Content-Type': 'image/svg+xml', 'Cache-Control': 'no-cache'}
+    if picture and (wanted in ('drawn', 'logos') or not (FRONTEND_DIR / path).is_file()):
         tile = _system_tile(picture.group(1))
         if tile:
             return tile.read_bytes(), 200, {'Content-Type': 'image/svg+xml', 'Cache-Control': 'no-cache'}

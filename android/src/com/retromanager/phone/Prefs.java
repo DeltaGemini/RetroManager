@@ -139,8 +139,22 @@ final class Prefs {
     void unclaimed(String person) { prefs.edit().putString("unclaimed", person).apply(); }
 
     /** Whether the saves on the phone have been gone through for that person (Player.claim) since it could. */
+    /** Whose recent games the widget and the app icon's shortcuts show (who was signed in when they were fetched). */
+    String recentFor() { return prefs.getString("recentFor", ""); }
+    void recentFor(String person) { prefs.edit().putString("recentFor", person == null ? "" : person).apply(); }
+
     boolean claimed() { return prefs.getBoolean("claimed", false); }
     void claimed(boolean yes) { prefs.edit().putBoolean("claimed", yes).apply(); }
+
+    /** What the last Player.claim changed, to put back (null: nothing to undo):
+     *  {person, at, games, markers: {key: value it had}, owners: {key: value it had, or null}}. */
+    JSONObject claimUndo() {
+        String saved = prefs.getString("claimUndo", null);
+        try { return saved == null ? null : new JSONObject(saved); } catch (JSONException e) { return null; }
+    }
+    void claimUndo(JSONObject undo) {
+        if (undo == null) prefs.edit().remove("claimUndo").apply(); else prefs.edit().putString("claimUndo", undo.toString()).apply();
+    }
 
     java.util.Set<String> syncedKeys() { return new java.util.TreeSet<>(synced.getAll().keySet()); }
     void forget(java.util.Collection<String> keys) {

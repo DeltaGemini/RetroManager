@@ -60,18 +60,53 @@
     // setting for which; a browser can choose the other for itself in the
     // Console settings (kept here; null until it has), and a system with no
     // picture in imgs/ gets its drawn tile either way.
+    // "logos": each system's monochrome logo, drawn by the server in the colours of
+    // the theme in use (backend/logo_tiles.py), where the logos have been fetched.
     const systemPictures = {
         KEY: 'retromanager.systemPictures',
-        OPTIONS: [['drawn', 'Drawn tiles'], ['theme', 'Switch theme pictures']],
+        OPTIONS: [['drawn', 'Drawn tiles'], ['theme', 'Switch theme pictures'], ['logos', 'Logos in the theme’s colours']],
         get() {
-            try { const saved = localStorage.getItem(this.KEY); return saved === 'drawn' || saved === 'theme' ? saved : null; } catch (e) { return null; }
+            try { const saved = localStorage.getItem(this.KEY); return ['drawn', 'theme', 'logos'].includes(saved) ? saved : null; } catch (e) { return null; }
+        },
+        // The choices this server has: {default, theme, logos} from about()
+        available(about) {
+            return this.OPTIONS.filter(([key]) => key === 'drawn' || (about && about[key]));
+        },
+        // What a picture's address asks for: the choice, and for logos the theme's colours
+        query(choice = this.get()) {
+            if (!choice) return '';
+            if (choice !== 'logos') return `?${choice}=1`;
+            const css = getComputedStyle(document.documentElement);
+            const v = (name) => css.getPropertyValue(name).trim();
+            const palette = document.documentElement.dataset.palette || '';
+            const style = palette.startsWith('panels') ? 'panels' : palette === 'bridge-1960s' ? 'bridge' : 'plain';
+            const colours = { bg: v('--bg-modal') || v('--bg-secondary'), bg2: v('--bg-primary'), fg: v('--text-primary'),
+                a1: v('--accent-pink'), a2: v('--accent-orange'), a3: v('--accent-blue'), a4: v('--success') };
+            return `?${new URLSearchParams({ logos: '1', style, ...colours })}`;
+        },
+        // The systems' pictures already on the page change at once (each page draws new ones itself)
+        refresh() {
+            const query = this.query();
+            document.querySelectorAll('img[src*="/imgs/"]').forEach(img => {
+                const url = new URL(img.getAttribute('src'), window.location.href);
+                if (!url.pathname.startsWith('/imgs/') || !url.pathname.endsWith('.jpg')) return;
+                img.setAttribute('src', url.pathname + query);
+            });
         },
         set(key) {
-            try { localStorage.setItem(this.KEY, key === 'theme' ? 'theme' : 'drawn'); } catch (e) {}
+            try { localStorage.setItem(this.KEY, ['theme', 'logos'].includes(key) ? key : 'drawn'); } catch (e) {}
+            this.refresh();
             window.dispatchEvent(new Event('retromanager:system-pictures'));
         },
+        // {default, theme (installed), credit} from the server, asked once
+        about() {
+            if (!this._about) this._about = fetch('/api/system-pictures').then(r => r.json()).then(d => (d.success ? d : null)).catch(() => null);
+            return this._about;
+        },
     };
-    const imageOf = (name) => `/imgs/${SYSTEM_IMG_ALIASES[name.toLowerCase()] || name.toLowerCase()}.jpg${systemPictures.get() ? `?${systemPictures.get()}=1` : ''}`;
+    const imageOf = (name) => `/imgs/${SYSTEM_IMG_ALIASES[name.toLowerCase()] || name.toLowerCase()}.jpg${systemPictures.query()}`;
+    // Logos are drawn in the theme's colours: a new theme, new tiles
+    window.addEventListener('retromanager:theme', () => { if (systemPictures.get() === 'logos') systemPictures.refresh(); });
 
     window.RM.systems = { SYSTEM_MAKERS, HANDHELDS, ARCADE, makerOf, typeOf, SYSTEM_GENERATIONS, GENERATION_YEARS, generationOf, generationGroup, imageOf, systemPictures };
 })();

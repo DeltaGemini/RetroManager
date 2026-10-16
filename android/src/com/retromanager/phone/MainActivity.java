@@ -58,13 +58,16 @@ public class MainActivity extends Activity {
     private static final int PICK_FOLDER = 1;
     private static final int PICK_FILES = 3;
     private android.webkit.ValueCallback<Uri[]> picking;
-    private static final String PLAY = "com.retromanager.phone.PLAY";
+    private static final String PLAY = Recent.PLAY, PLAY_RECENT = "com.retromanager.phone.PLAY_RECENT";
+    // When the recent games (widget, app icon shortcuts) were last asked for
+    private long recentAt;
     private static final String VERSION = "1.0";
 
     private Prefs prefs;
     private OfflineCache cache;
     private Player player;
     private Setup setup;
+    private Updater updater;
     private WebView web;
     private volatile Folder folder;
     private AlertDialog progress;
@@ -82,6 +85,7 @@ public class MainActivity extends Activity {
         prefs = new Prefs(this);
         cache = new OfflineCache(this);
         player = new Player(this, prefs, cache);
+        updater = new Updater(this);
         setup = new Setup(this, prefs, player);
         SaveJob.schedule(this);
 
@@ -285,8 +289,22 @@ public class MainActivity extends Activity {
 
     /** A game's icon on the home screen was pressed (see Bridge.pin): the game starts. */
     private void playFrom(Intent intent) {
-        if (intent == null || !PLAY.equals(intent.getAction()) || prefs.server() == null || folder == null) return;
+        if (intent == null || prefs.server() == null || folder == null) return;
         String system = intent.getStringExtra("system"), rom = intent.getStringExtra("rom");
+        if (PLAY_RECENT.equals(intent.getAction())) {
+            // The nth game played most recently (1: the last), as the widget has them
+            int n = Math.max(1, intent.getIntExtra("n", 1));
+            JSONObject game = Recent.kept(this).optJSONObject(n - 1);
+            if (game == null) {
+                say("There's no game " + n + " in the ones played recently.");
+                intent.setAction(Intent.ACTION_MAIN);
+                return;
+            }
+            system = game.optString("system");
+            rom = game.optString("rom");
+        } else if (!PLAY.equals(intent.getAction())) {
+            return;
+        }
         // (once: turning the phone, or coming back to the app, isn't pressing it again)
         intent.setAction(Intent.ACTION_MAIN);
         if (system != null && rom != null) player.play(system, rom);
@@ -349,6 +367,14 @@ public class MainActivity extends Activity {
         player.sendSaves();
         // (and the roms folder may have changed meanwhile: something else may keep it in step)
         romsChanged();
+        // Back from allowing RetroManager to install apps: the update goes on
+        updater.resumed();
+        // The widget's and app icon's recent games: back from a game, they may have changed
+        // (not more than once a minute: this happens each time the app comes back)
+        if (prefs.server() != null && System.currentTimeMillis() - recentAt > 60_000) {
+            recentAt = System.currentTimeMillis();
+            new Thread(() -> Recent.refresh(this)).start();
+        }
     }
 
     @Override protected void onPause() {
@@ -454,7 +480,7 @@ public class MainActivity extends Activity {
         // (once, where whose the phone's saves are was said before the app went through them all)
         if (prefs.unclaimed() != null && !prefs.claimed() && folder != null) {
             Folder here = folder;
-            new Thread(() -> player.claim(here, prefs.unclaimed())).start();
+            new Thread(() -> player.claim(here, prefs.unclaimed(), true)).start();
         }
         player.refreshCores();
         checkUpdate(false);
@@ -476,6 +502,16 @@ public class MainActivity extends Activity {
 
     private final class Bridge {
         /** Starts a game in RetroArch, fetching it first if the phone hasn't got it. */
+        /** The page says who's signed in, each time it loads: someone else, and the
+         *  widget and app icon's games played last are theirs at once. */
+        @JavascriptInterface public void signedIn(String person) {
+            String now = person == null ? "" : person;
+            if (now.equals(prefs.recentFor())) return;
+            prefs.recentFor(now);
+            recentAt = System.currentTimeMillis();
+            new Thread(() -> Recent.refresh(MainActivity.this)).start();
+        }
+
         @JavascriptInterface public void play(String system, String rom) {
             if (system == null || rom == null || system.contains("/") || system.startsWith(".")) return;
             player.play(system, rom);
@@ -510,7 +546,10 @@ public class MainActivity extends Activity {
                         .put("retroArch", player.retroArch() == null ? JSONObject.NULL : player.retroArch()).put("retroArchs", new JSONArray(player.installed()))
                         .put("profile", prefs.profile() == null ? JSONObject.NULL : prefs.profile()).put("profiles", prefs.profiles())
                         .put("kept", Player.size(cache.size())).put("version", mine).put("pinSaves", prefs.pinSaves())
-                        .put("unclaimed", prefs.unclaimed() == null ? JSONObject.NULL : prefs.unclaimed()).toString();
+                        .put("unclaimed", prefs.unclaimed() == null ? JSONObject.NULL : prefs.unclaimed())
+                        .put("claimUndo", prefs.claimUndo() == null ? JSONObject.NULL : new JSONObject()
+                                .put("person", prefs.claimUndo().optString("person")).put("games", prefs.claimUndo().optInt("games"))
+                                .put("at", prefs.claimUndo().optLong("at"))).toString();
             } catch (org.json.JSONException e) {
                 return "{}";
             }
@@ -527,10 +566,37 @@ public class MainActivity extends Activity {
                     case "retroarch": if (player.installed().contains(value)) prefs.retroArch(value); break;
                     case "profile": prefs.profile(value == null ? "" : value); break;
                     case "unclaimed":
-                        if (value == null || value.isEmpty()) break;
-                        prefs.unclaimed(value);
-                        tellPage();
-                        new Thread(() -> say(player.claim(folder(), value) + " games' saves on this phone are taken to be " + value + "'s")).start();
+                        // (choosing the one already chosen does nothing; another asks first)
+                        if (value == null || value.isEmpty() || value.equals(prefs.unclaimed())) break;
+                        new Thread(() -> {
+                            int others = player.claim(folder(), value, false);
+                            String[] options = others > 0
+                                    ? new String[]{"Just the unsorted ones", "Also take over the " + others + " game" + (others == 1 ? "" : "s") + " noted as someone else's"}
+                                    : new String[]{"Make it " + value};
+                            int picked = choose("Unsorted saves are " + value + "'s?",
+                                    "Saves on this phone that RetroManager hasn't sorted out yet (the ones that were here before the app) will count as " + value + "'s."
+                                            + (others > 0 ? " " + others + " game" + (others == 1 ? "'s save is" : "s' saves are") + " noted as someone else's: they stay theirs, unless you take them over too." : ""),
+                                    options);
+                            if (picked < 0) { tellPage(); return; }
+                            prefs.unclaimed(value);
+                            if (picked == 1) {
+                                int taken = player.claim(folder(), value, true);
+                                say(taken + " game" + (taken == 1 ? "'s save" : "s' saves") + " on this phone are now " + value + "'s. Undo it in these settings if that was a slip.");
+                            } else {
+                                say("Unsorted saves are " + value + "'s. Nobody else's were touched.");
+                            }
+                            tellPage();
+                        }).start();
+                        break;
+                    case "undo-claim":
+                        new Thread(() -> {
+                            JSONObject undo = prefs.claimUndo();
+                            if (undo == null || !confirm("Undo taking over saves?", "The " + undo.optInt("games") + " games' saves taken to be "
+                                    + undo.optString("person") + "'s go back to whose they were before.", "Undo it")) return;
+                            int back = player.undoClaim();
+                            say(back + " game" + (back == 1 ? "'s save" : "s' saves") + " back to whose they were.");
+                            tellPage();
+                        }).start();
                         break;
                     case "forget":
                         try {
@@ -550,6 +616,7 @@ public class MainActivity extends Activity {
                     case "setup-apply": setup.apply(); break;
                     case "setup-check": setup.check(); break;
                     case "setup-pin": prefs.pinSaves("on".equals(value)); break;
+                    case "sync-states": player.syncAllStates(); break;
                     case "reload":
                         cache.reached(true);
                         web.reload();
@@ -1040,11 +1107,16 @@ public class MainActivity extends Activity {
 
     /** Asks the person to pick one (from Player's own thread, which waits): its place in the list, or -1. */
     int choose(String title, String[] options) {
+        return choose(title, null, options);
+    }
+
+    /** The same, with a line saying what the choice does. */
+    int choose(String title, String message, String[] options) {
         int[] picked = {-1};
         CountDownLatch answered = new CountDownLatch(1);
         runOnUiThread(() -> {
             try {
-                ask(spec("choose", title, null).put("options", new JSONArray(java.util.Arrays.asList(options))), (index, text) -> {
+                ask(spec("choose", title, message).put("options", new JSONArray(java.util.Arrays.asList(options))), (index, text) -> {
                     picked[0] = index;
                     answered.countDown();
                 });
@@ -1203,8 +1275,8 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed()) return;
                 try {
-                    ask(spec("confirm", "A newer version of this app is ready", "Version " + called + ". It downloads in the phone's browser: open it from there to install it over this one.").put("yes", "Get it"), (index, text) -> {
-                        if (index == 0) start(new Intent(Intent.ACTION_VIEW, Uri.parse(server + "/app/RetroManager.apk")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                    ask(spec("confirm", "A newer version of this app is ready", "Version " + called + ". It's fetched and installed over this one: Android asks you to confirm it. Your games, saves and settings stay.").put("yes", "Update"), (index, text) -> {
+                        if (index == 0) updater.install(server);
                         else prefs.toldOf(found);
                     });
                 } catch (org.json.JSONException e) {

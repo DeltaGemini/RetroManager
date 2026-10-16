@@ -16,6 +16,14 @@ function App() {
     const [scanResult, setScanResult] = useState(null);
     // Which Tools panel is open: health | scrape | media | history | saves | backups
     const [tool, setTool] = useState(null);
+    // A system a tool opens on, when another panel sent us there (Scan's duplicates, say)
+    const [toolSystem, setToolSystem] = useState(null);
+    useEffect(() => {
+        // window.dispatchEvent(new CustomEvent('retromanager:open-tool', {detail: {tool, system}})) from any panel
+        const open = (e) => { setScanResult(null); setToolSystem(e.detail?.system || null); setTool(e.detail?.tool || null); };
+        window.addEventListener('retromanager:open-tool', open);
+        return () => window.removeEventListener('retromanager:open-tool', open);
+    }, []);
     const [scrapeStatus, refreshScrapeStatus] = useScrapeQueue();
     const [scanning, setScanning] = useState(false);
     // A navigation waiting on the unsaved-changes prompt
@@ -41,7 +49,8 @@ function App() {
     // /?tool=health (from the Tools menu on another page) opens that panel
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-        const wanted = params.get('tool');
+        // (tools since folded into others open where they went)
+        const wanted = ({ media: 'viewer', backups: 'storage' })[params.get('tool')] || params.get('tool');
         if (wanted && RM.TOOLS.some(t => t.key === wanted)) {
             setTool(wanted);
             params.delete('tool');
@@ -50,7 +59,8 @@ function App() {
         }
     }, []);
 
-    // Links like /?system=snes&game=./Chrono Trigger (USA).sfc (from the Bookcase or Timeline) open that game
+    // Links like /?system=snes&game=./Chrono Trigger (USA).sfc (from the Bookcase or Timeline) open that game.
+    // The address then follows what's open (below), so a reload comes back to it.
     const deepLinkDone = useRef(false);
     useEffect(() => {
         if (deepLinkDone.current || !systems.length) return;
@@ -62,9 +72,24 @@ function App() {
         if (params.get('game') && params.get('scrape')) window.gdScrapeOnOpen = { system: target.name, path: params.get('game') };
         setSelectedSystem(target);
         loadGames(target.name, params.get('game') || null);
-        window.history.replaceState(null, '', window.location.pathname);
         if (isMobile) goStep(params.get('game') ? 2 : 1);
     }, [systems]);
+    // The address names the system and game open (on a phone, the ones on screen:
+    // the systems list, a system's games, or a game), kept in place rather than added
+    // to the history, which the phone's steps use
+    useEffect(() => {
+        if (!deepLinkDone.current) return;
+        const params = new URLSearchParams();
+        if (selectedSystem && (!isMobile || mobileStep >= 1)) {
+            params.set('system', selectedSystem.name);
+            if (selectedGame && (!isMobile || mobileStep >= 2)) params.set('game', selectedGame.path);
+        }
+        const query = params.toString();
+        const address = window.location.pathname + (query ? `?${query}` : '');
+        if (address !== window.location.pathname + window.location.search) {
+            try { window.history.replaceState(window.history.state, '', address); } catch (e) {}
+        }
+    }, [selectedSystem?.name, selectedGame?.path, mobileStep, isMobile, systems.length]);
 
     useEffect(() => {
         if (!resizing) return;
@@ -377,16 +402,18 @@ function App() {
             {tool === 'scrape' && (
                 <LibraryScrapePanel status={scrapeStatus} refresh={refreshScrapeStatus} onClose={() => setTool(null)} onChanged={refreshLibrary} />
             )}
-            {tool === 'media' && <MissingMediaPanel onClose={() => setTool(null)} onScrape={() => { refreshScrapeStatus(); setTool('scrape'); }} />}
+            {tool === 'viewer' && <MediaViewerPanel onClose={() => { setTool(null); refreshLibrary(); }} />}
+            {tool === 'storage' && <StoragePanel initialSystem={toolSystem} onClose={() => { setTool(null); setToolSystem(null); refreshLibrary(); }} showNotification={showNotification} />}
             {tool === 'history' && <PlayHistoryPanel onClose={() => setTool(null)} />}
             {tool === 'achievements' && <AchievementOverviewPanel onClose={() => setTool(null)} />}
             {tool === 'profiles' && <ProfilesPanel onClose={() => setTool(null)} showNotification={showNotification} />}
             {tool === 'series' && <SeriesPanel onClose={() => setTool(null)} showNotification={showNotification} />}
             {tool === 'collections' && <CollectionsPanel onClose={() => setTool(null)} />}
             {tool === 'roms' && <RomCheckPanel onClose={() => setTool(null)} />}
+            {tool === 'duplicates' && <DuplicatesPanel initialSystem={toolSystem} onClose={() => { setTool(null); setToolSystem(null); }} showNotification={showNotification}
+                onChanged={() => { loadSystems(); if (selectedSystem) loadGames(selectedSystem.name); }} />}
             {tool === 'settings' && <SettingsPanel onClose={() => setTool(null)} showNotification={showNotification} />}
             {tool === 'saves' && <SavesToolPanel systems={systems} onClose={() => setTool(null)} showNotification={showNotification} />}
-            {tool === 'backups' && <BackupsPanel systems={systems} initialSystem={selectedSystem?.name} onClose={() => setTool(null)} onChanged={refreshLibrary} showNotification={showNotification} />}
             {pendingAction && (
                 <UnsavedChangesModal
                     gameName={selectedGame?.name}

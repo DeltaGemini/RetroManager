@@ -35,9 +35,8 @@ function RomCheckPanel({ onClose }) {
         return () => { stopped = true; clearTimeout(timer); };
     }, [refresh]);
     const start = async (recheck) => { await postJson('/api/rom-index/start', { recheck }); refresh(); RM.tasksChanged(); };
-    // Fixes: which mislabelled files are ticked, which copy of each duplicate to keep, and what the last fix did
+    // Fixes: which mislabelled files are ticked, and what the last fix did
     const [ticked, setTicked] = React.useState({});
-    const [keep, setKeep] = React.useState({});
     const [working, setWorking] = React.useState(false);
     const [outcome, setOutcome] = React.useState(null);
     const romKey = (g) => `${g.system}/${g.rom_path}`;
@@ -52,18 +51,6 @@ function RomCheckPanel({ onClose }) {
             setTicked({});
             announceGameChange();
         } catch (e) { setOutcome({ text: 'Renaming failed.', problems: [e.message] }); }
-        setWorking(false);
-        refresh();
-    };
-    const moveCopies = async (group) => {
-        const kept = keep[romKey(group[0])] || romKey(group[0]);
-        setWorking(true);
-        try {
-            const d = await postJson('/api/rom-index/duplicates/resolve', {
-                keep: group.find(g => romKey(g) === kept), remove: group.filter(g => romKey(g) !== kept) });
-            setOutcome({ text: d.success ? `Moved ${d.moved.length} cop${d.moved.length === 1 ? 'y' : 'ies'} to ${d.moved_to}.` : (d.error || 'Nothing was moved.'), problems: d.errors || [] });
-            announceGameChange();
-        } catch (e) { setOutcome({ text: 'Moving failed.', problems: [e.message] }); }
         setWorking(false);
         refresh();
     };
@@ -170,29 +157,10 @@ function RomCheckPanel({ onClose }) {
                                     </>
                                 )}
                                 {tab === 'duplicates' && (
-                                    <>
-                                        {!report.duplicates.length && <div style={{color: 'var(--text-secondary)', fontSize: 13}}>No two files have the same contents.</div>}
-                                        {report.duplicates.length > 0 && <div style={{fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10}}>Choose the copy to keep in each set. The others are moved out of the library (to the duplicates folder in RetroManager's data folder, nothing is deleted), their gamelist entries are removed, and the kept copy takes over their play status and collections.</div>}
-                                        {report.duplicates.map((group, i) => {
-                                            const kept = keep[romKey(group[0])] || romKey(group[0]);
-                                            return (
-                                                <div key={i} style={{marginBottom: 12, padding: 8, background: 'var(--bg-tertiary)', borderRadius: 4}}>
-                                                    {group.map(g => (
-                                                        <label key={romKey(g)} style={{display: 'flex', gap: 10, alignItems: 'baseline', padding: '4px 0', fontSize: 13, cursor: 'pointer'}}>
-                                                            <input type="radio" name={`keep-${i}`} checked={kept === romKey(g)} onChange={() => setKeep(prev => ({ ...prev, [romKey(group[0])]: romKey(g) }))} />
-                                                            <span style={{flex: 1, minWidth: 0}}>
-                                                                <b>{g.name}</b> <span style={{color: 'var(--text-secondary)', fontSize: 12, wordBreak: 'break-word'}}>· {g.full_name} · {g.rom_path}</span>
-                                                            </span>
-                                                            <span style={{fontSize: 11, color: kept === romKey(g) ? 'var(--success)' : 'var(--text-secondary)'}}>{kept === romKey(g) ? 'keep' : 'move aside'}</span>
-                                                        </label>
-                                                    ))}
-                                                    <button className="btn btn-secondary btn-small" style={{marginTop: 6}} disabled={working} onClick={() => moveCopies(group)}>
-                                                        Move the other {group.length === 2 ? 'copy' : `${group.length - 1} copies`} aside
-                                                    </button>
-                                                </div>
-                                            );
-                                        })}
-                                    </>
+                                    <div style={{display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 13}}>
+                                        <span>{report.duplicates.length ? `${report.duplicates.length} set${report.duplicates.length === 1 ? '' : 's'} of identical files.` : 'No two files have the same contents.'} Duplicates are tidied in one place, with the ones found by name.</span>
+                                        <button className="btn btn-secondary btn-small" onClick={() => window.dispatchEvent(new CustomEvent('retromanager:open-tool', { detail: { tool: 'duplicates' } }))}>Open Duplicates</button>
+                                    </div>
                                 )}
                                 {tab === 'mislabelled' && (
                                     <>

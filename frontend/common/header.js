@@ -19,14 +19,15 @@
     const TOOLS = [
         { key: 'health', icon: '🩺', label: 'Library health', help: 'Every system’s Scan in one place' },
         { key: 'scrape', icon: '🔎', label: 'Library scrape', help: 'Scrape every system in the background' },
-        { key: 'media', icon: '🖼️', label: 'Missing media', help: 'Which games lack a box, screenshot, spine...' },
+        { key: 'viewer', icon: '🖼️', label: 'Media viewer', help: 'Every game’s box, Mix, logo, manual... and what’s missing' },
         { key: 'history', icon: '🕹️', label: 'Play history', help: 'What’s been played, and by whom' },
         { key: 'achievements', icon: '🏆', label: 'Achievement overview', help: 'Games ranked by how much you’ve completed' },
         { key: 'series', icon: '🧩', label: 'Missing in series', help: 'What you have of each series, and your want list' },
         { key: 'collections', icon: '📁', label: 'Collections', help: 'Your own lists of games: rename, delete, tidy' },
+        { key: 'duplicates', icon: '👯', label: 'Duplicates', help: 'Games in the library more than once' },
         { key: 'roms', icon: '🔬', label: 'ROM check', help: 'Verified dumps, duplicates and mislabelled files' },
         { key: 'saves', icon: '💾', label: 'Saves', help: 'Sync conflicts and save backups' },
-        { key: 'backups', icon: '🗂️', label: 'Gamelist backups', help: 'See what changed and restore' },
+        { key: 'storage', icon: '🧹', label: 'Storage', help: 'What’s been set aside (gamelist backups too): compare, restore, clear out' },
         { key: 'settings', icon: '⚙️', label: 'Settings', help: 'Accounts and keys for the scraping sources' },
         { key: 'profiles', icon: '👤', label: 'Profiles and login', help: 'Who uses RetroManager, and who can change it' },
     ];
@@ -284,9 +285,15 @@
     }
 
     // Picks the site's colour theme (common/theme.js, loaded in each page's <head>)
+    // and its language (common/language.js)
     function ThemeMenu() {
         const [open, setOpen] = useState(false);
         const [theme, setTheme] = useState(() => window.RMTheme.current().key);
+        // The systems' pictures: only a choice where the Switch theme's are installed
+        const pictures = window.RM && window.RM.systems && window.RM.systems.systemPictures;
+        const [aboutPictures, setAboutPictures] = useState(null);
+        const [pictureChoice, setPictureChoice] = useState(() => pictures && pictures.get());
+        useEffect(() => { if (open && pictures) { setPictureChoice(pictures.get()); pictures.about().then(setAboutPictures); } }, [open]);
         const ref = useRef(null);
         useEffect(() => {
             if (!open) return;
@@ -306,7 +313,23 @@
                 },
                     h('span', { className: 'rm-swatch', 'aria-hidden': true }, t.swatch.map(color => h('span', { key: color, style: { background: color } }))),
                     h('span', null, t.label),
-                    t.key === theme && h('span', { className: 'rm-check', 'aria-hidden': true }, '✓')))));
+                    t.key === theme && h('span', { className: 'rm-check', 'aria-hidden': true }, '✓'))),
+                aboutPictures && (aboutPictures.theme || aboutPictures.logos) && h('div', { className: 'rm-menu-heading', role: 'presentation' }, 'System pictures'),
+                aboutPictures && (aboutPictures.theme || aboutPictures.logos) && pictures.available(aboutPictures).map(([key, label]) => {
+                    const on = key === (pictureChoice || aboutPictures.default);
+                    return h('button', { key: `pic-${key}`, role: 'menuitemradio', 'aria-checked': on,
+                        title: key === 'theme' ? aboutPictures.credit : key === 'logos' ? aboutPictures.logos_credit : undefined,
+                        onClick: () => { pictures.set(key); setPictureChoice(key); } },
+                        h('span', null, label),
+                        on && h('span', { className: 'rm-check', 'aria-hidden': true }, '✓'));
+                }),
+                window.RMLanguage && h('div', { className: 'rm-menu-heading', role: 'presentation' }, 'Language'),
+                window.RMLanguage && window.RMLanguage.LANGUAGES.map(l => h('button', {
+                    key: `lang-${l.key}`, role: 'menuitemradio', 'aria-checked': l.key === window.RMLanguage.current().key,
+                    onClick: () => window.RMLanguage.set(l.key),
+                },
+                    h('span', null, l.label),
+                    l.key === window.RMLanguage.current().key && h('span', { className: 'rm-check', 'aria-hidden': true }, '✓')))));
     }
 
     function ToolsMenu({ onTool, me }) {
@@ -422,6 +445,10 @@
         const [storage, setStorage] = useState(null);
         const [screen, setScreen] = useState({ name: 'main' });
         const [theme, setTheme] = useState(() => window.RMTheme.current().key);
+        // Which pictures the systems show, where the Switch theme's are installed
+        const [phonePictures, setPhonePictures] = useState(null);
+        const [pictureChoice, setPictureChoice] = useState(() => window.RM.systems && window.RM.systems.systemPictures.get());
+        useEffect(() => { if (window.RM.systems) window.RM.systems.systemPictures.about().then(setPhonePictures); }, []);
         const [core, setCore] = useState('');
         // The RetroArch setup kept in RetroManager, if there is one ({device, at, files})
         const [kept, setKept] = useState(null);
@@ -512,12 +539,15 @@
                             row('shared', 'Everyone’s', null, () => app.setting('profile', 'shared'), { radio: true, on: info.profile === 'shared' || (info.profile == null && !(info.profiles || []).length), note: 'the shared saves, as RetroArch keeps them' }),
                             ...(info.profiles || []).map(name => row(name, name, null, () => app.setting('profile', name), { radio: true, on: info.profile === name })),
                             row('nobody', 'Nobody', null, () => app.setting('profile', ''), { radio: true, on: info.profile === '', note: 'they stay on this phone' }),
-                        ])),
+                        ]),
+                    row('sync-states', 'Bring save states in step now', null, () => app.setting('sync-states', ''), { note: 'every game’s, with RetroManager: new ones fetched, changed ones sent, ones put by there put by here too' })),
                 // RetroArch keeps one save for a game whoever plays, so the app has to know whose the phone's are
-                (info.profiles || []).length > 1 && group('The saves on this phone are',
+                (info.profiles || []).length > 1 && group('Unsorted saves on this phone are',
                     ...(info.profiles || []).map(name => row(`own-${name}`, `${name}’s`, null, () => app.setting('unclaimed', name),
-                        { radio: true, on: info.unclaimed === name, note: info.unclaimed === name ? 'the ones that were here before the app, and every game’s that is on it now' : null })),
-                    h('p', { key: 'own-note', className: 'rm-set-empty' }, 'When someone else starts a game, these are put by for this person and their own brought back. Choosing a name again takes every save now on the phone to be theirs.')),
+                        { radio: true, on: info.unclaimed === name, note: info.unclaimed === name ? 'the ones that were here before the app' : null })),
+                    info.claimUndo && row('undo-claim', 'Undo taking over saves', null, () => app.setting('undo-claim', ''),
+                        { note: `${info.claimUndo.games} game${info.claimUndo.games === 1 ? '’s' : 's’'} taken to be ${info.claimUndo.person}’s${info.claimUndo.at ? `, ${new Date(info.claimUndo.at).toLocaleString()}` : ''}` }),
+                    h('p', { key: 'own-note', className: 'rm-set-empty' }, 'Saves already known to be someone’s stay theirs. Choosing another name asks first, and says how many it would affect.')),
                 group('Storage',
                     row('games', 'Games on this phone', 'by system and size', () => setScreen({ name: 'storage' })),
                     row('kept', 'Pages kept for offline', info.kept, () => app.setting('forget', ''), { note: 'press to forget them' })),
@@ -528,6 +558,17 @@
                     h('div', { className: 'rm-set-themes' }, window.RMTheme.THEMES.map(t => h('button', { key: t.key, className: t.key === theme ? 'on' : '', 'aria-pressed': t.key === theme, onClick: () => setTheme(window.RMTheme.set(t.key).key) },
                         h('span', { className: 'rm-swatch', 'aria-hidden': true }, t.swatch.map(color => h('span', { key: color, style: { background: color } }))),
                         h('span', null, t.label))))),
+                phonePictures && (phonePictures.theme || phonePictures.logos) && h('section', { className: 'rm-set-group' }, h('h3', null, 'System pictures'),
+                    h('div', { className: 'rm-set-themes' }, window.RM.systems.systemPictures.available(phonePictures).map(([key, label]) => {
+                        const on = key === (pictureChoice || phonePictures.default);
+                        return h('button', { key, className: on ? 'on' : '', 'aria-pressed': on,
+                            onClick: () => { window.RM.systems.systemPictures.set(key); setPictureChoice(key); } }, h('span', null, label));
+                    }))),
+                window.RMLanguage && h('section', { className: 'rm-set-group' }, h('h3', null, 'Language'),
+                    h('div', { className: 'rm-set-themes' }, window.RMLanguage.LANGUAGES.map(l => h('button', {
+                        key: l.key, className: l.key === window.RMLanguage.current().key ? 'on' : '',
+                        'aria-pressed': l.key === window.RMLanguage.current().key, onClick: () => window.RMLanguage.set(l.key) },
+                        h('span', null, l.label))))),
                 group('About',
                     row('version', 'App version', info.version, () => app.setting('update', ''), { note: 'press to look for a newer one' })));
         }

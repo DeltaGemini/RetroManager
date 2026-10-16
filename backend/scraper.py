@@ -6,6 +6,7 @@ https://www.screenscraper.fr/webapi2.php
 import re
 import time
 import requests
+from urllib.parse import quote
 import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Any
@@ -278,6 +279,8 @@ class ScreenscraperAPI:
             'systemeid': systeme.get('id'),
             'systemenom': system_name,
             'image': media.get('box2d') or media.get('wheel') or media.get('screenshot'),
+            # Every kind it has ({folder: address}), for comparing with what a game has
+            'media': media,
             'releasedate': releasedate,
             'year': releasedate[:4] if releasedate and releasedate[:4].isdigit() else None,
             'regions': regions,
@@ -287,6 +290,20 @@ class ScreenscraperAPI:
             'hash_match': hash_match,
             'jeu': jeu,  # full object, so game-info doesn't need another API call
         }
+
+    def _usable_url(self, url: str) -> str:
+        """ScreenScraper's media addresses carry the logins as they were typed, not
+        encoded, so a password with &, # or + in it breaks the address (it then
+        answers "Problème de paramètres"). Those values are encoded here."""
+        for key, value in (('devid', self.dev_login), ('devpassword', self.dev_password),
+                           ('devdebugpassword', self.dev_debug_password),
+                           ('ssid', self.user), ('sspassword', self.user_password)):
+            if value and quote(value, safe='') != value:
+                raw, encoded = f"{key}={value}", f"{key}={quote(value, safe='')}"
+                url = url.replace(raw + '&', encoded + '&')
+                if url.endswith(raw):
+                    url = url[:-len(raw)] + encoded
+        return url
 
     def extract_media(self, jeu: Dict) -> Dict[str, str]:
         """Map a jeu's media list to {retromanager_folder: url}, best region first."""
@@ -301,7 +318,7 @@ class ScreenscraperAPI:
                 continue
             best = _pick_by_region(by_type[ss_type], MANUAL_REGION_ORDER if folder == 'manuals' else REGION_ORDER)
             if best:
-                media[folder] = best['url']
+                media[folder] = self._usable_url(best['url'])
         return media
 
     def extract_game_data(self, jeu: Dict) -> Dict[str, Any]:

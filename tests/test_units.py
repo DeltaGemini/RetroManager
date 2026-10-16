@@ -351,3 +351,33 @@ def test_launchbox_indexes_its_list_and_finds_a_game_by_title(tmp_path):
     assert index.game(1) == {"name": "Super Metroid", "media": {"support": at + "us.png", "support_2": at + "jp.png", "support_3": at + "fan.png", "box2d": at + "box.jpg"}}
     assert index.search("gc", "metroid") == []
     assert index.pictures("gba", ["Super Metroid"]) == {} and index.pictures("snes", ["Super Metroid 2"]) == {} and index.pictures("nope", ["Super Metroid"]) == {}
+
+
+def test_screenscraper_media_addresses_carry_logins_encoded():
+    from backend.scraper import ScreenscraperAPI
+    # ScreenScraper puts the logins in its media addresses as typed: a # or & in a password cut the address short
+    api = ScreenscraperAPI('dev', 'devpw', user='me', user_password='p#ss&w+rd')
+    url = ("https://www.screenscraper.fr/api2/mediaJeu.php?devid=dev&devpassword=devpw&softname=RetroManager"
+           "&ssid=me&sspassword=p#ss&w+rd&systemeid=57&jeuid=1&media=box-2D(us)")
+    fixed = api.extract_media({"medias": [{"type": "box-2D", "region": "us", "url": url}]})["box2d"]
+    assert fixed.endswith("&ssid=me&sspassword=p%23ss%26w%2Brd&systemeid=57&jeuid=1&media=box-2D(us)")
+    assert "devpassword=devpw&" in fixed
+
+
+def test_an_ampersand_keeps_titles_apart():
+    from backend.media_index import title_key
+    assert title_key("Dragon Warrior I & II (USA) (SGB Enhanced)") != title_key("Dragon Warrior III (USA)")
+    assert title_key("Ratchet & Clank") == title_key("Ratchet and Clank")
+    assert title_key("3D Classics Excitebike (CTR-N-SAEP) (E) (v1.1.0)") == "3dclassicsexcitebike"
+
+
+def test_a_logo_tile_is_drawn_in_the_colours_asked_for(tmp_path):
+    from backend import logo_tiles
+    logo = tmp_path / "nes.svg"
+    logo.write_text('<svg viewBox="0 0 600 226" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="M0 0h10v10z"/></g></svg>')
+    svg = logo_tiles.tile(logo, "nes", {"fg": "#ffcc99", "a1": "#ff9900", "bg": "rgba(1, 2, 3, 0.5)"}, "panels").decode()
+    assert 'flood-color="#ffcc99"' in svg and 'fill="#ff9900"' in svg and 'viewBox="0 0 600 226"' in svg and '<path d="M0 0h10v10z"/>' in svg
+    # What isn't a colour is left out (nothing of it gets into the picture)
+    sneaky = logo_tiles.tile(logo, "nes", {"fg": '#fff"/><script>alert(1)</script>'}, "plain").decode()
+    assert "<script" not in sneaky and 'flood-color="#f2f2f7"' in sneaky
+    assert logo_tiles.tile(tmp_path / "missing.svg", "x", {}, "plain") is None

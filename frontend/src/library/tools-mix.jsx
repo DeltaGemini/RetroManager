@@ -1,4 +1,4 @@
-// Tools: generate Mix pictures for games that have none (opened from Missing media).
+// Tools: generate Mix pictures for games that have none (opened from the Media viewer).
 // Part of the library page (index.html), which loads these files in order;
 // they share one global scope, so each can use what the ones before it define.
 
@@ -100,7 +100,7 @@ function MixPreviewDetail({ job, item, templates, onBack, onRegenerate }) {
 }
 
 // Inventory -> previews -> review -> commit. selection is what's sent to the
-// backend: {games: [{system, rom_path}]} for the games ticked in Missing media,
+// backend: {games: [{system, rom_path}]} for the games picked in the Media viewer,
 // or {generated: true, systems?} to make the generated ones again.
 function MixGeneratePanel({ selection, onBack, onClose, onDone }) {
     const [templates, setTemplates] = React.useState([]);
@@ -334,7 +334,7 @@ function MixGeneratePanel({ selection, onBack, onClose, onDone }) {
                     : `A Mix made from each game’s own screenshot, box, cart or disc, and logo. ${selection.games.length} game${selection.games.length === 1 ? '' : 's'} picked.`}
             </div>
             <div style={{marginBottom: 12}}>
-                <button className="btn btn-secondary btn-small" onClick={() => leave(onBack)}>‹ Missing media</button>
+                <button className="btn btn-secondary btn-small" onClick={() => leave(onBack)}>‹ Media viewer</button>
                 {job && <span style={{fontSize: 12, color: 'var(--text-secondary)', marginLeft: 10}}>Leaving throws away previews you haven’t committed.</span>}
             </div>
             {error && <div style={{color: 'var(--accent-pink)', marginBottom: 12}}>{error}</div>}

@@ -420,3 +420,12 @@ def test_uploading_a_mix_over_a_generated_one_drops_the_mark(client, library):
     assert sent.get_json()["success"]
     listed = {g["path"]: g for g in client.get(f"/api/systems/{SYSTEM}/games").get_json()["games"]}
     assert listed["./Full Game (USA).nes"]["mix"] and not listed["./Full Game (USA).nes"]["mix_generated"]
+
+
+def test_the_media_viewer_lists_every_game_with_its_picture_or_none(client, library):
+    viewer = client.get("/api/media-viewer?folder=box2d").get_json()
+    mine = {g["path"].removeprefix("./"): g for g in viewer["games"] if g["system"] == SYSTEM}
+    assert mine["Partial Game.nes"]["picture"] == f"{SYSTEM}/box2d/Partial Game.png"
+    assert mine["Shot Only.nes"]["picture"] is None
+    assert mine["Full Game (USA).nes"]["name"] == "Full Game" and mine["Full Game (USA).nes"]["system_name"]
+    assert client.get("/api/media-viewer?folder=gamelist").status_code == 400

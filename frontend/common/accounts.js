@@ -75,6 +75,8 @@
         }
         // Players don't see what only an admin can use (common/header.css)
         document.documentElement.classList.toggle('rm-player', !!d.enabled && !d.admin);
+        // In the phone app: who's signed in, for its widget and shortcuts of the games they played last
+        try { if (window.RMApp && window.RMApp.signedIn) window.RMApp.signedIn(d.profile || ''); } catch (e) {}
         if (d.profile && !onLogin && adopt(d)) {
             window.location.reload();
             return new Promise(() => {});

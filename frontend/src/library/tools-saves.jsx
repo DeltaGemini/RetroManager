@@ -1,4 +1,4 @@
-// Tools: saves (sync conflicts and backups).
+// Tools: saves (sync conflicts, too many save states, and backups).
 // Part of the library page (index.html), which loads these files in order;
 // they share one global scope, so each can use what the ones before it define.
 
@@ -15,6 +15,22 @@ function SavesToolPanel({ systems, onClose, showNotification }) {
     const [includeStates, setIncludeStates] = React.useState(true);
     const [busy, setBusy] = React.useState(null);
     const [error, setError] = React.useState(null);
+    // Too many save states: what keeping each person's newest few of each game would move
+    const [keepStates, setKeepStates] = React.useState(10);
+    const [thinPlan, setThinPlan] = React.useState(null);
+    const [thinning, setThinning] = React.useState(false);
+    const [renumber, setRenumber] = React.useState(true);
+    const lookThin = () => fetch(`${API_BASE}/api/save-states/thin?keep=${keepStates}`).then(r => r.json())
+        .then(d => { if (d.success) setThinPlan(d); else setError(d.error); }).catch(e => setError(e.message));
+    const thin = async () => {
+        if (!thinPlan || !window.confirm(`Move ${thinPlan.files} older save state${thinPlan.files === 1 ? '' : 's'} (${formatBytes(thinPlan.bytes)}) to save-backups/thinned-states/? Each person keeps the ${thinPlan.keep} newest of each game, and every auto state.`)) return;
+        setThinning(true);
+        const d = await postJson('/api/save-states/thin', { keep: thinPlan.keep, renumber });
+        setThinning(false);
+        if (d.success) showNotification(`${d.moved} save state${d.moved === 1 ? '' : 's'} moved to save-backups/${d.backup}${d.renumbered ? `, ${d.renumbered} renumbered` : ''}${d.problems && d.problems.length ? ` (${d.problems.length} couldn't be)` : ''}.`, d.problems && d.problems.length ? 'error' : 'success');
+        else showNotification(d.error || 'Could not move them', 'error');
+        lookThin();
+    };
 
     const loadConflicts = () => fetch(`${API_BASE}/api/save-conflicts`).then(r => r.json())
         .then(d => { if (d.success) { setConflicts(d.conflicts); setWritable(d.writable); } else setError(d.error); })
@@ -97,6 +113,38 @@ function SavesToolPanel({ systems, onClose, showNotification }) {
                                     </div>
                                 ))}
                             </div>
+                        </div>
+                    ))}
+                </>
+            ))}
+
+            {section('Too many save states', (
+                <>
+                    <div style={{color: 'var(--text-secondary)', fontSize: 12, marginBottom: 10}}>
+                        Keeps each person's newest save states of each game, and every auto state (RetroArch loads that one by itself). The rest move to <code>save-backups/thinned-states/</code> on the NAS, with their screenshots, under the paths they had: nothing is deleted. Devices that sync the save states folder (Syncthing) lose them too.
+                    </div>
+                    <div style={{display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10}}>
+                        <label style={{display: 'flex', gap: 6, alignItems: 'center', fontSize: 13}}>
+                            Keep the newest <input type="number" min="1" max="999" value={keepStates} style={{width: 64}}
+                                onChange={e => { setKeepStates(Math.max(1, parseInt(e.target.value, 10) || 1)); setThinPlan(null); }} /> of each game
+                        </label>
+                        <label style={{display: 'flex', gap: 6, alignItems: 'center', fontSize: 13}} title="Each game's remaining states become slots 1, 2, 3..., oldest first, so the newest has the highest number and RetroArch's next slot follows it. Auto states keep their name.">
+                            <input type="checkbox" checked={renumber} onChange={e => setRenumber(e.target.checked)} /> then number what's left 1, 2, 3…
+                        </label>
+                        <button className="btn btn-secondary btn-small" onClick={lookThin}>Show what would move</button>
+                        {thinPlan && thinPlan.files > 0 && (
+                            <button className="btn btn-primary btn-small" disabled={thinning || !writable} onClick={thin}>
+                                {thinning ? 'Moving…' : `Move ${thinPlan.files} older state${thinPlan.files === 1 ? '' : 's'} (${formatBytes(thinPlan.bytes)})`}
+                            </button>
+                        )}
+                    </div>
+                    {thinPlan && !thinPlan.files && <div style={{fontSize: 13}}>Nobody has more than {thinPlan.keep} save states of any game.</div>}
+                    {thinPlan && thinPlan.groups.map(g => (
+                        <div key={`${g.root}/${g.profile}/${g.folder}/${g.game}`} style={{display: 'flex', gap: 10, alignItems: 'center', padding: '5px 8px', background: 'var(--bg-tertiary)', borderRadius: 4, fontSize: 13, marginBottom: 3}}>
+                            <div style={{flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}} title={g.game}>
+                                {g.game}<span style={{color: 'var(--text-secondary)'}}> · {g.folder || 'loose'} · {g.profile === 'shared' ? 'everyone' : g.profile}</span>
+                            </div>
+                            <div style={{color: 'var(--text-secondary)', whiteSpace: 'nowrap'}}>{g.total} → {g.total - g.move.length} · {formatBytes(g.move.reduce((n, r) => n + r.size, 0))}</div>
                         </div>
                     ))}
                 </>

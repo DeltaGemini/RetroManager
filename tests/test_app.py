@@ -424,3 +424,59 @@ def test_the_consoles_collections_follow_a_change_at_once(client):
     assert made["id"] not in client.put(f"/api/collections/{made['id']}/games", json={**game, "member": False}).get_json()["collections"]
     assert made["id"] not in lists()
     client.delete(f"/api/collections/{made['id']}")
+
+
+def test_save_states_beyond_the_newest_few_move_to_the_backups(client, root):
+    import os, time
+    folder = root / "savestates/guest/snes"
+    folder.mkdir(parents=True, exist_ok=True)
+    now = time.time()
+    names = [f"Thin Test.state{n}" for n in range(1, 8)] + ["Thin Test.state.auto"]
+    for age, name in enumerate(names):
+        (folder / name).write_bytes(b"state")
+        os.utime(folder / name, (now - 1000 + age * 10, now - 1000 + age * 10))   # the auto state is the newest
+    (folder / "Thin Test.state1.png").write_bytes(b"picture")
+    (folder.parent.parent / "family/snes").mkdir(parents=True, exist_ok=True)
+    (folder.parent.parent / "family/snes/Thin Test.state1").write_bytes(b"someone else's")
+    try:
+        plan = client.get("/api/save-states/thin?keep=3").get_json()
+        mine = [g for g in plan["groups"] if g["profile"] == "guest" and g["game"] == "Thin Test"]
+        # The three newest stay (auto, 7, 6); the four oldest go. Family's one state is theirs, and alone
+        assert len(mine) == 1 and mine[0]["total"] == 8
+        assert [r["path"] for r in mine[0]["move"]] == [f"guest/snes/Thin Test.state{n}" for n in (5, 4, 3, 2, 1)]
+        assert not [g for g in plan["groups"] if g["profile"] == "family"]
+        done = client.post("/api/save-states/thin", json={"keep": 3}).get_json()
+        assert done["success"] and done["moved"] >= 5
+        kept = sorted(p.name for p in folder.glob("Thin Test.*"))
+        assert kept == ["Thin Test.state.auto", "Thin Test.state6", "Thin Test.state7"]
+        backup = root / "save-backups" / done["backup"] / "savestates/guest/snes"
+        assert (backup / "Thin Test.state1").is_file() and (backup / "Thin Test.state1.png").is_file()
+    finally:
+        for p in list(folder.glob("Thin Test.state*")) + [folder.parent.parent / "family/snes/Thin Test.state1"]:
+            p.unlink(missing_ok=True)
+
+
+def test_save_states_can_be_numbered_again_oldest_first(client, root):
+    import os, time
+    folder = root / "savestates/guest/snes"
+    folder.mkdir(parents=True, exist_ok=True)
+    now = time.time()
+    # Slots 40, 7, 0 and 12, oldest to newest; 1 already is the newest one's... no: 12 is newest
+    for age, slot in enumerate([40, 7, None, 12]):
+        name = f"Renumber Test.state{slot if slot is not None else ''}"
+        (folder / name).write_bytes(f"from slot {slot}".encode())
+        os.utime(folder / name, (now - 100 + age, now - 100 + age))
+    (folder / "Renumber Test.state40.png").write_bytes(b"picture of 40")
+    (folder / "Renumber Test.state.auto").write_bytes(b"auto")
+    try:
+        assert client.get("/api/save-states/renumber").get_json()["states"] >= 4
+        done = client.post("/api/save-states/renumber").get_json()
+        assert done["success"]
+        got = {p.name: p.read_bytes() for p in folder.glob("Renumber Test.*")}
+        assert got == {"Renumber Test.state1": b"from slot 40", "Renumber Test.state1.png": b"picture of 40",
+                       "Renumber Test.state2": b"from slot 7", "Renumber Test.state3": b"from slot None",
+                       "Renumber Test.state4": b"from slot 12", "Renumber Test.state.auto": b"auto"}
+        assert not list(folder.glob(".renumbering-*"))
+    finally:
+        for p in folder.glob("Renumber Test.*"):
+            p.unlink()

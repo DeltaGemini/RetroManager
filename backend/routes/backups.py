@@ -144,11 +144,16 @@ def gamelist_backup_diff(system_name, name):
     if not path:
         return jsonify(success=False, error="Backup not found"), 404
     try:
-        backup = _read_entries(path)
-        current_path = path.parent / 'gamelist.xml'
-        current = _read_entries(current_path) if current_path.exists() else {}
+        return jsonify(success=True, **diff_gamelists(path, path.parent / 'gamelist.xml'))
     except Exception as e:
         return jsonify(success=False, error=f"Couldn't read the gamelist: {e}"), 400
+
+
+def diff_gamelists(copy_path, current_path):
+    """{added, removed, changed}: what putting this copy in place of the current
+    gamelist would change. Raises if either can't be read."""
+    backup = _read_entries(copy_path)
+    current = _read_entries(current_path) if Path(current_path).exists() else {}
     added = [{'path': e['path'], 'name': e.get('name')} for k, e in backup.items() if k not in current]
     removed = [{'path': e['path'], 'name': e.get('name')} for k, e in current.items() if k not in backup]
     changed = []
@@ -159,7 +164,7 @@ def gamelist_backup_diff(system_name, name):
         if fields:
             changed.append({'path': then['path'], 'name': now.get('name') or then.get('name'), 'fields': fields})
     changed.sort(key=lambda c: (c['name'] or '').lower())
-    return jsonify(success=True, added=added, removed=removed, changed=changed)
+    return {'added': added, 'removed': removed, 'changed': changed}
 
 
 @app.route("/api/systems/<system_name>/gamelist-backups/<name>/restore", methods=["POST"])

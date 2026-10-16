@@ -349,3 +349,155 @@ button.rm-set-row:hover, button.rm-set-row:focus-visible { background: var(--bg-
 
 /* Chosen with a controller (in a popup or a menu): a ring round it */
 .rm-pad [role="dialog"] :focus, .rm-pad [role="menu"] :focus { outline: 2px solid var(--accent-pink, #ff5fa2); outline-offset: 2px; }
+
+/* A heading between a menu's groups (the 🎨 menu's Language) */
+.rm-menu-heading { padding: 8px 12px 4px; margin-top: 4px; border-top: 1px solid var(--border-color); font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; opacity: 0.6; }
+
+/* A language whose capitals are letters of their own (common/language.js, noCaps): nothing is put in capitals */
+:root[data-no-caps] * { text-transform: none !important; }
+
+/* ---------------------------------------------------------------------------
+   Starship themes, after the look of TV science fiction's starship computers.
+   Starship Panels (and its blue version): black, flat colour blocks with round
+   ends, each column's heading an "elbow" (a bar down the side curving into one
+   along the bottom), buttons as pills with black lettering, tall condensed
+   capitals (Antonio). Starship Bridge (1960s): lit buttons in primary colours,
+   square and chunky, a striped console rule under the header, wide capitals
+   (Michroma). The fonts are in frontend/themes/starship/, under the SIL Open
+   Font License; the devices' own condensed and wide ones stand in until they load.
+   --------------------------------------------------------------------------- */
+@font-face {
+    font-family: 'Antonio';
+    src: url('/themes/starship/Antonio.ttf') format('truetype');
+    font-weight: 100 700;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Michroma';
+    src: url('/themes/starship/Michroma-Regular.ttf') format('truetype');
+    font-display: swap;
+}
+html:root[data-palette="panels"] {
+    --lc-a: #ff9900; --lc-b: #cc99cc; --lc-c: #9999ff; --lc-d: #ffcc99; --lc-e: #cc6666; --lc-bar: 10px;
+    --text-primary: #ffcc99; --text-secondary: #9999cc;
+    --accent-pink: #ff9900; --accent-orange: #cc99cc; --accent-blue: #9999ff; --success: #99cc66;
+}
+html:root[data-palette="panels-blue"] {
+    --lc-a: #5b7fc0; --lc-b: #9fb3d9; --lc-c: #8892a8; --lc-d: #e8a33d; --lc-e: #c95a2e; --lc-bar: 6px;
+    --text-primary: #d5e0f5; --text-secondary: #8892a8;
+    --accent-pink: #e8a33d; --accent-orange: #5b7fc0; --accent-blue: #9fb3d9; --success: #7fc29b;
+}
+html:root:is([data-palette="panels"], [data-palette="panels-blue"]) {
+    --bg-primary: #000; --bg-secondary: #000; --bg-tertiary: #0f0f12; --bg-hover: #1c1c22; --bg-modal: #050506;
+    --border-color: #2a2a33;
+    --panel-scrim: rgba(0, 0, 0, 0.88);
+    --card-scrim: linear-gradient(90deg, rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.78) 55%, rgba(0, 0, 0, 0.55) 100%);
+    --card-scrim-active: linear-gradient(90deg, rgba(40, 26, 6, 0.93) 0%, rgba(40, 26, 6, 0.8) 55%, rgba(40, 26, 6, 0.55) 100%);
+    --panels-font: 'Antonio', 'Oswald', 'Roboto Condensed', 'sans-serif-condensed', 'Arial Narrow', 'Liberation Sans Narrow', 'Fira Sans Condensed', 'Ubuntu Condensed', 'DejaVu Sans Condensed', 'DejaVu Sans', sans-serif;
+    scrollbar-color: var(--lc-c) #000;
+}
+html:root[data-palette="panels-blue"] { --card-scrim-active: linear-gradient(90deg, rgba(14, 26, 52, 0.93) 0%, rgba(14, 26, 52, 0.8) 55%, rgba(14, 26, 52, 0.55) 100%); }
+/* (font-stretch: where the condensed letters are a face of a family, as DejaVu's are, rather than a family of their own) */
+html:root[data-palette^="panels"] :is(body, button, input, select, textarea, .rm-header) { font-family: var(--panels-font); font-stretch: condensed; letter-spacing: 0.03em; }
+html:root[data-palette^="panels"] body { background: #000; }
+/* The header in an elbow opening onto the page: a bar along the top curving down into one
+   on the left (the borders' own rounding gives the inner curve too); the pages and buttons as pills */
+html:root[data-palette^="panels"] .rm-header {
+    background: #000; text-transform: uppercase; padding-left: 12px;
+    border: 0 solid var(--lc-a); border-top-width: var(--lc-bar); border-left-width: 26px; border-top-left-radius: 34px;
+}
+html:root[data-palette^="panels"] .rm-brand { color: var(--lc-a); }
+html:root[data-palette^="panels"] .rm-brand img { display: none; }
+html:root[data-palette^="panels"] .rm-nav { align-self: center; gap: 4px; }
+html:root[data-palette^="panels"] .rm-nav a { color: #000; background: var(--lc-c); border: none; border-radius: 999px; padding: 6px 12px; margin: 0; font-weight: 700; }
+@media (max-width: 700px) {
+    /* (on a phone the pages are icons: small round pills) */
+    html:root[data-palette^="panels"] .rm-nav { gap: 3px; }
+    html:root[data-palette^="panels"] .rm-nav a { padding: 5px 9px; }
+    html:root[data-palette^="panels"] .rm-btn { padding: 6px 10px; }
+}
+html:root[data-palette^="panels"] .rm-nav a:nth-child(2n) { background: var(--lc-b); }
+html:root[data-palette^="panels"] .rm-nav a:nth-child(3n) { background: var(--lc-d); }
+html:root[data-palette^="panels"] .rm-nav a[aria-current="page"] { background: var(--lc-a); color: #000; }
+html:root[data-palette^="panels"] .rm-nav a:hover { color: #000; filter: brightness(1.15); }
+html:root[data-palette^="panels"] .rm-btn { background: var(--lc-b); color: #000; border: none; border-radius: 999px; font-weight: 700; text-transform: uppercase; padding: 6px 12px; }
+html:root[data-palette^="panels"] .rm-btn:hover { background: var(--lc-b); filter: brightness(1.15); }
+html:root[data-palette^="panels"] .rm-btn.primary { background: var(--lc-a); color: #000; }
+html:root[data-palette^="panels"] .rm-menu { background: #000; border: 2px solid var(--lc-c); border-radius: 0 18px 18px 18px; }
+/* Buttons: pills, black lettering */
+html:root[data-palette^="panels"] :is(.btn, .gd-btn, .gd a.gd-btn) { border: none; border-radius: 999px; color: #000; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+html:root[data-palette^="panels"] :is(.btn-primary, .gd-btn.primary, .gd a.gd-btn.primary) { background: var(--lc-a); color: #000; }
+html:root[data-palette^="panels"] :is(.btn-secondary, .gd-btn:not(.primary)) { background: var(--lc-c); color: #000; }
+html:root[data-palette^="panels"] .btn-icon-blue { background: var(--lc-d); color: #000; border-radius: 999px; }
+html:root[data-palette^="panels"] :is(.btn, .gd-btn):hover { filter: brightness(1.15); box-shadow: none; }
+html:root[data-palette^="panels"] :is(.btn-secondary, .gd-btn):hover { border-color: transparent; }
+/* Each column's heading in an elbow opening onto its list, as the header is */
+html:root[data-palette^="panels"] :is(.sidebar-header-title, .game-list-header-title) {
+    border: 0 solid var(--lc-b); border-left-width: 22px; border-top-width: var(--lc-bar); border-top-left-radius: 28px;
+    padding: 8px 0 6px 12px;
+}
+html:root[data-palette^="panels"] .game-list-header-title { border-color: var(--lc-c); }
+html:root[data-palette^="panels"] :is(.sidebar-header h2, .game-list-header h2) { color: var(--lc-a); font-size: 20px; letter-spacing: 0.08em; }
+/* Systems and games: a coloured cap on the left; the chosen one's in the main colour */
+html:root[data-palette^="panels"] :is(.system-item, .game-item) { border-left: 14px solid var(--lc-c); border-radius: 18px 4px 4px 18px; }
+html:root[data-palette^="panels"] .system-item { background: #0f0f12; }
+html:root[data-palette^="panels"] :is(.system-item.active, .game-item.active) { border-left-color: var(--lc-a); box-shadow: inset 0 0 0 2px var(--lc-a); background-color: #1a1206; }
+html:root[data-palette="panels-blue"] :is(.system-item.active, .game-item.active) { background-color: #0d1830; }
+html:root[data-palette^="panels"] :is(.system-item.active .system-name, .system-name) { text-transform: uppercase; }
+/* Fields: black, ringed in colour */
+html:root[data-palette^="panels"] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) { background: #000; border: 2px solid var(--lc-c); color: var(--text-primary); border-radius: 14px; }
+html:root[data-palette^="panels"] :is(option, optgroup) { background: #000; color: var(--text-primary); }
+/* The Console: rounded tiles, and each row's name on a pill */
+html:root[data-palette^="panels"] .console-tile { border-radius: 22px 6px 22px 6px; }
+html:root[data-palette^="panels"] .console-tile.active { outline-color: var(--lc-a); }
+html:root[data-palette^="panels"] .console-group-name { display: inline-block; margin: 10px 0 0 3vw; padding: 3px 16px; background: var(--lc-b); color: #000; border-radius: 999px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.08em; }
+html:root[data-palette^="panels"] .console-name { text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* Starship Bridge (1960s) */
+html:root[data-palette="bridge-1960s"] {
+    --br-red: #d6372a; --br-gold: #f0b323; --br-blue: #2f6fdc; --br-green: #2fa35a;
+    --bg-primary: #07070a; --bg-secondary: #0e0e12; --bg-tertiary: #18181e; --bg-hover: #24242c; --bg-modal: #111116;
+    --text-primary: #f2e8cc; --text-secondary: #a59f8e;
+    --accent-pink: #d6372a; --accent-orange: #f0b323; --accent-blue: #2f6fdc; --border-color: #2e2e38; --success: #2fa35a;
+    --panel-scrim: rgba(7, 7, 10, 0.88);
+    --card-scrim: linear-gradient(90deg, rgba(14, 14, 18, 0.93) 0%, rgba(14, 14, 18, 0.8) 55%, rgba(14, 14, 18, 0.55) 100%);
+    --card-scrim-active: linear-gradient(90deg, rgba(70, 18, 14, 0.93) 0%, rgba(70, 18, 14, 0.8) 55%, rgba(70, 18, 14, 0.55) 100%);
+    --br-font: 'Michroma', 'Eurostile', 'Microgramma', 'Bank Gothic', 'Verdana', 'DejaVu Sans', sans-serif;
+    scrollbar-color: var(--br-gold) #07070a;
+}
+/* (Michroma is very wide: it letters the header, headings and buttons; lists and text stay plain) */
+html:root[data-palette="bridge-1960s"] :is(.rm-header, h1, h2, h3, .btn, .gd-btn, .rm-btn, .console-group-name, .console-name) { font-family: var(--br-font); }
+html:root[data-palette="bridge-1960s"] body { background: radial-gradient(ellipse at 50% 30%, #15152a 0%, #07070a 70%) fixed #07070a; }
+/* The header over a row of lit console buttons */
+html:root[data-palette="bridge-1960s"] .rm-header {
+    background: #0e0e12; text-transform: uppercase; letter-spacing: 0.02em; border-bottom: none; font-size: 11px;
+}
+html:root[data-palette="bridge-1960s"] .rm-nav a { padding: 0 9px; }
+html:root[data-palette="bridge-1960s"] .rm-header::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 5px;
+    background: repeating-linear-gradient(90deg, var(--br-red) 0 46px, #000 46px 50px, var(--br-gold) 50px 96px, #000 96px 100px,
+                                                 var(--br-blue) 100px 146px, #000 146px 150px, var(--br-green) 150px 196px, #000 196px 200px);
+}
+html:root[data-palette="bridge-1960s"] .rm-brand { color: var(--br-gold); }
+html:root[data-palette="bridge-1960s"] .rm-nav a[aria-current="page"] { color: var(--br-gold); border-bottom-color: var(--br-red); }
+/* Buttons: square, lit from inside */
+html:root[data-palette="bridge-1960s"] :is(.btn, .gd-btn, .gd a.gd-btn, .rm-btn) {
+    border-radius: 2px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; font-size: 11px;
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.18), inset 0 -3px 0 rgba(0, 0, 0, 0.35);
+}
+html:root[data-palette="bridge-1960s"] :is(.btn-primary, .gd-btn.primary, .gd a.gd-btn.primary, .rm-btn.primary) { background: var(--br-red); color: #fff; border-color: var(--br-red); }
+html:root[data-palette="bridge-1960s"] :is(.btn-primary, .gd-btn.primary):hover { box-shadow: 0 0 12px rgba(214, 55, 42, 0.7), inset 0 0 0 2px rgba(255, 255, 255, 0.25); background: var(--br-red); }
+html:root[data-palette="bridge-1960s"] .btn-secondary { background: #1f2a44; color: #e3ecff; border-color: var(--br-blue); }
+html:root[data-palette="bridge-1960s"] .btn-icon-blue { background: var(--br-green); border-radius: 2px; }
+html:root[data-palette="bridge-1960s"] .rm-btn { border-color: #3a3a46; }
+html:root[data-palette="bridge-1960s"] .rm-btn:hover { border-color: var(--br-gold); box-shadow: 0 0 10px rgba(240, 179, 35, 0.45); }
+/* Headings: gold, wide, over a gold rule */
+html:root[data-palette="bridge-1960s"] :is(.sidebar-header-title, .game-list-header-title) { border-bottom: 3px solid var(--br-gold); }
+html:root[data-palette="bridge-1960s"] :is(.sidebar-header h2, .game-list-header h2) { color: var(--br-gold); letter-spacing: 0.14em; }
+/* Systems and games: a lit edge, red when chosen */
+html:root[data-palette="bridge-1960s"] :is(.system-item, .game-item) { border-left: 6px solid var(--br-blue); border-radius: 2px; }
+html:root[data-palette="bridge-1960s"] :is(.system-item.active, .game-item.active) { border-left-color: var(--br-red); box-shadow: inset 0 0 0 1px var(--br-red), 0 0 12px rgba(214, 55, 42, 0.35); }
+html:root[data-palette="bridge-1960s"] .system-item.active .system-name { color: var(--br-gold); }
+html:root[data-palette="bridge-1960s"] .console-tile { border-radius: 2px; }
+html:root[data-palette="bridge-1960s"] .console-tile.active { outline-color: var(--br-gold); box-shadow: 0 0 22px rgba(240, 179, 35, 0.45); }
+html:root[data-palette="bridge-1960s"] .console-group-name { color: var(--br-gold); text-transform: uppercase; letter-spacing: 0.14em; }

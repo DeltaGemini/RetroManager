@@ -58,9 +58,10 @@ def strip_dot_slash(path: Optional[str]) -> str:
 
 
 def title_key(stem: str) -> str:
-    """Name without (tags)/[tags], lowercased letters and digits only.
-    "3D Classics Excitebike (CTR-N-SAEP) (E) (v1.1.0)" -> "3dclassicsexcitebike"."""
-    return ''.join(ch for ch in _TAG_RE.sub('', stem or '').lower() if ch.isalnum())
+    """Name without (tags)/[tags], lowercased letters and digits only, & read as "and".
+    "3D Classics Excitebike (CTR-N-SAEP) (E) (v1.1.0)" -> "3dclassicsexcitebike".
+    (Without the "and", "Dragon Warrior I & II" was "Dragon Warrior III".)"""
+    return ''.join(ch for ch in _TAG_RE.sub('', stem or '').lower().replace('&', 'and') if ch.isalnum())
 
 
 def xml_media_to_relative(xml_path: Optional[str]) -> Optional[str]:

@@ -18,34 +18,6 @@ function GameList({ games, selectedGame, onGameSelect, onScan, onReload, scannin
         document.addEventListener('keydown', esc);
         return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc); };
     }, [bulkMenu]);
-    const [backups, setBackups] = React.useState([]);
-    const [loadingBackups, setLoadingBackups] = React.useState(false);
-    const [restoring, setRestoring] = React.useState(false);
-    const [selectedBackup, setSelectedBackup] = React.useState(null);
-
-    const fetchBackups = async () => {
-        if (!system) return;
-        setLoadingBackups(true);
-        try {
-            const res = await fetch(`${API_BASE}/api/list_gamelist_backups`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ system: system.name })
-            });
-            const data = await res.json();
-            if (data.success) setBackups(data.backups);
-            else setBackups([]);
-        } catch {
-            setBackups([]);
-        } finally {
-            setLoadingBackups(false);
-        }
-    };
-
-    React.useEffect(() => {
-        if (settingsOpen) fetchBackups();
-    }, [settingsOpen, system]);
-
     const handleBackupGamelist = async () => {
         if (!system) return;
         try {
@@ -57,7 +29,6 @@ function GameList({ games, selectedGame, onGameSelect, onScan, onReload, scannin
             const data = await res.json();
             if (data.success) {
                 if (typeof showNotification === 'function') showNotification(`Backup created: ${data.backup}`, 'success');
-                fetchBackups();
             } else {
                 if (typeof showNotification === 'function') showNotification(data.error || 'Backup failed', 'error');
             }
@@ -66,27 +37,6 @@ function GameList({ games, selectedGame, onGameSelect, onScan, onReload, scannin
         }
     };
 
-    const handleRestoreBackup = async () => {
-        if (!system || !selectedBackup) return;
-        setRestoring(true);
-        try {
-            const res = await fetch(`${API_BASE}/api/restore_gamelist_backup`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ system: system.name, backup: selectedBackup })
-            });
-            const data = await res.json();
-            if (data.success) {
-                if (showNotification) showNotification('Gamelist restored from backup', 'success');
-            } else {
-                if (showNotification) showNotification(data.error || 'Restore failed', 'error');
-            }
-        } catch (err) {
-            if (showNotification) showNotification('Restore failed', 'error');
-        } finally {
-            setRestoring(false);
-        }
-    };
     // E (or Enter on a game the browser can't play) opens the details pane's form
     const editGame = React.useCallback((game) => {
         if (game.path !== selectedGame?.path) onGameSelect(game);
@@ -131,23 +81,12 @@ function GameList({ games, selectedGame, onGameSelect, onScan, onReload, scannin
                 </div>
                 <button className="btn btn-primary" style={{marginBottom:12}} onClick={handleBackupGamelist}>Back up gamelist.xml</button>
                 <div style={{color:'var(--text-secondary)',fontSize:13,marginBottom:16}}>Backup will create a dated copy of gamelist.xml in the system folder.</div>
-                <div style={{marginBottom:8,fontWeight:'bold'}}>Restore from backup:</div>
-                {loadingBackups ? (
-                    <div style={{color:'var(--text-secondary)'}}>Loading backups...</div>
-                ) : backups.length === 0 ? (
-                    <div style={{color:'var(--text-secondary)'}}>No backups found.</div>
-                ) : (
-                    <div style={{marginBottom:12}}>
-                        <select value={selectedBackup || ''} onChange={e => setSelectedBackup(e.target.value)} style={{marginRight:8, height:36, borderRadius:4, border:'1px solid var(--border-color)', background:'var(--bg-tertiary)', color:'var(--text-primary)', padding:'0 12px', fontSize:14}}>
-                            <option value='' disabled>Select a backup...</option>
-                            {backups.map(b => <option key={b} value={b}>{b}</option>)}
-                        </select>
-                        <button className="btn btn-secondary" disabled={!selectedBackup || restoring} onClick={handleRestoreBackup}>
-                            {restoring ? 'Restoring...' : 'Restore'}
-                        </button>
-                    </div>
-                )}
-                <div style={{color:'var(--text-secondary)',fontSize:12}}>Restoring will overwrite the current gamelist.xml with the selected backup.</div>
+                <div style={{marginBottom:8,fontWeight:'bold'}}>Earlier copies</div>
+                <button className="btn btn-secondary" style={{marginBottom:8}}
+                    onClick={() => { setSettingsOpen(false); window.dispatchEvent(new CustomEvent('retromanager:open-tool', { detail: { tool: 'storage', system: system.name } })); }}>
+                    Compare and put one back
+                </button>
+                <div style={{color:'var(--text-secondary)',fontSize:12}}>Opens this system's gamelist backups in Tools › Storage, each beside the gamelist now.</div>
             </Modal>
         </SharedGameList>
     );

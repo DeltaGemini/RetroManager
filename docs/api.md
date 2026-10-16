@@ -54,6 +54,13 @@ Refs are `upload:<id>` or `inbox:<path in the inbox>`.
 | GET | `/api/media/<media system>/<type>/<file>` | Serve a media file, falling back to a case-insensitive match on the file name |
 | POST | `/api/systems/<system>/media/upload` | Multipart `rom_path`, `folder`, `file`: save as `<media system>/<folder>/<ROM name>.<ext>` |
 | GET | `/api/missing-media` | Per system, games missing each media type. `?system=<name>` lists the games |
+| GET | `/api/storage` | What has been set aside (replaced pictures, duplicates, save backups...) and the caches, each with its items, sizes and dates |
+| GET | `/api/storage/compare` | `?area=&item=`: the item's files (the first 150) beside the library's own versions, each marked the same or different |
+| GET | `/api/storage/file` | `?area=&item=&rel=&side=aside\|now`: one of the two files being compared |
+| GET | `/api/storage/diff` | `?area=&item=&rel=`: a gamelist copy's entry-by-entry changes against the gamelist now, or a text file's changed lines |
+| GET | `/api/duplicates` | Every game more than once, by name (the Scan) and by identical files (the ROM check), as one list (`?system=` for one) |
+| POST | `/api/storage/delete` | `{area, items}`, `{area, older_than_days}` or `{area, all: true}`: delete for good |
+| GET | `/api/media-viewer` | `?folder=box2d` (or mix, wheel...): every game of every system with that picture's path, or none |
 
 ### Generating Mix pictures
 

@@ -22,7 +22,8 @@ const SYSTEM_SORTS = {
 const systemOf = (game, system) => game._system || (system && system.name);
 // The address follows what's open (?system=<folder>&game=<rom path>, or
 // ?list=<favourites or a collection's id>), so a reload, a bookmark or the
-// Library's "Open in Console" lands in the same place
+// Library's "Open in Console" lands in the same place. On a narrow screen a
+// game picked on the list but not open is &at= instead of &game=.
 const consoleParams = () => new URLSearchParams(window.location.search);
 const setConsoleAddress = (params) => {
     const query = new URLSearchParams(Object.entries(params || {}).filter(([, v]) => v)).toString();
@@ -228,10 +229,10 @@ function ConsoleSettings({ onClose, sortMode, setSortMode, view, setView, tilePi
                     <section className="rm-set-group"><h3>Rows</h3>
                         <div className="rm-set-rows">{rows.map(([key, label, count]) => pick(key, label, !hidden[key], () => toggleRow(key), count ? null : 'nothing to show in it yet'))}</div>
                     </section>
-                    {/* (only where the theme's pictures are installed is there a choice) */}
-                    {about && about.theme && (
+                    {/* (only where the theme's pictures or the logos are installed is there a choice) */}
+                    {about && (about.theme || about.logos) && (
                         <section className="rm-set-group"><h3>System tiles show</h3>
-                            <div className="rm-set-rows">{RM.systems.systemPictures.OPTIONS.map(([key, label]) => pick(key, label, key === (systemPictures || about.default), () => RM.systems.systemPictures.set(key), key === 'theme' ? about.credit : null))}</div>
+                            <div className="rm-set-rows">{RM.systems.systemPictures.available(about).map(([key, label]) => pick(key, label, key === (systemPictures || about.default), () => RM.systems.systemPictures.set(key), key === 'theme' ? about.credit : key === 'logos' ? about.logos_credit : null))}</div>
                             <p className="rm-set-empty">Here and on the Library and Bookcase pages. A system the theme has no picture for shows its drawn tile.</p>
                         </section>
                     )}
@@ -262,13 +263,13 @@ function ConsoleSystems({ systems, home, installed, pad }) {
     // What's open: { system } or { list }, with the game to start on
     const [open, setOpen] = React.useState(() => {
         const system = systems.find(s => s.name === consoleParams().get('system'));
-        return system ? { system, game: consoleParams().get('game') } : null;
+        return system ? { system, game: consoleParams().get('game') || consoleParams().get('at'), show: !!consoleParams().get('game') } : null;
     });
     // A list named in the address opens once the lists have arrived
     const wantedList = React.useRef(consoleParams().get('list'));
     useEffect(() => {
         const list = wantedList.current && home && home.lists.find(l => l.id === wantedList.current);
-        if (list && !open) { wantedList.current = null; setOpen({ list, game: consoleParams().get('game') }); }
+        if (list && !open) { wantedList.current = null; setOpen({ list, game: consoleParams().get('game') || consoleParams().get('at'), show: !!consoleParams().get('game') }); }
     }, [home]);
     const [sortMode, setSortModeState] = React.useState(() => rememberedChoice('retromanager.systemSort', k => SYSTEM_SORTS[k], 'roms'));
     const setSortMode = (mode) => { setSortModeState(mode); rememberChoice('retromanager.systemSort', mode); };
@@ -519,7 +520,7 @@ function ConsoleSystems({ systems, home, installed, pad }) {
     };
 
     if (open) {
-        return <ConsoleGames key={open.system ? `s:${open.system.name}` : `l:${open.list.id}`} system={open.system} list={open.list} startOn={open.game} fromHome={!!open.fromHome} pad={pad}
+        return <ConsoleGames key={open.system ? `s:${open.system.name}` : `l:${open.list.id}`} system={open.system} list={open.list} startOn={open.game} startShowing={open.show !== false} fromHome={!!open.fromHome} pad={pad}
             onBack={() => { setOpen(null); setConsoleAddress(null); }} />;
     }
     if (!rows.length) return <div className="console-screen"><div className="console-empty">No systems with games yet.</div></div>;
@@ -562,7 +563,7 @@ function ConsoleSystems({ systems, home, installed, pad }) {
 
 // A system's games, or a list's (Favourites, a collection): the shared game
 // list, and the chosen game's details
-function ConsoleGames({ system, list, startOn, fromHome, onBack, pad }) {
+function ConsoleGames({ system, list, startOn, startShowing = true, fromHome, onBack, pad }) {
     const [games, setGames] = React.useState(list ? list.games : null);
     const [error, setError] = React.useState(null);
     // A list's games come from several systems, so each is known by system and path
@@ -572,7 +573,7 @@ function ConsoleGames({ system, list, startOn, fromHome, onBack, pad }) {
     const [narrow, setNarrow] = React.useState(() => window.innerWidth < 900);
     const narrowNow = React.useRef(narrow);
     narrowNow.current = narrow;
-    const [showing, setShowing] = React.useState(() => !!startOn);
+    const [showing, setShowing] = React.useState(() => !!startOn && startShowing);
     // A game opened from the first screen (Continue playing, Recently added...) goes back
     // there, not to its system's list, until that list has been looked at
     const [sawList, setSawList] = React.useState(false);
@@ -608,8 +609,10 @@ function ConsoleGames({ system, list, startOn, fromHome, onBack, pad }) {
     // What the shared list takes for a system: a list is one without a folder
     const listSystem = React.useMemo(() => system || { name: null, key: `list:${list.id}`, full_name: list.name }, [system, list]);
     useEffect(() => {
-        setConsoleAddress(list ? { list: list.id, game: game && keyOf(game) } : { system: system.name, game: game && game.path });
-    }, [system?.name, list?.id, game && keyOf(game)]);
+        const open = !narrow || showing;
+        const where = game && (list ? keyOf(game) : game.path);
+        setConsoleAddress({ ...(list ? { list: list.id } : { system: system.name }), [open ? 'game' : 'at']: where });
+    }, [system?.name, list?.id, game && keyOf(game), narrow, showing]);
     const select = React.useCallback((g, how) => {
         // Not without asking, when the open game has edits that aren't saved
         if (gdUnsaved.dirty && !window.confirm('Leave this game without saving your changes?')) return;

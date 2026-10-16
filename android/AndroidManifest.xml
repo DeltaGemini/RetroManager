@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Installing the newer build RetroManager has over this one, from inside the app (Updater.java) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- The RetroArch builds a game can be started in (see Player.java)... -->
     <queries>
@@ -37,6 +39,14 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- For routines and automation apps (Bixby Routines, Tasker...): PLAY_RECENT starts the
+                 game played most recently, or with the number "n" (1 to 5) one of the others;
+                 PLAY starts the game named by "system" (its folder) and "rom" (its file) -->
+            <intent-filter>
+                <action android:name="com.retromanager.phone.PLAY_RECENT" />
+                <action android:name="com.retromanager.phone.PLAY" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
             <!-- In the phone's share menu: files shared here go to RetroManager's Add games page -->
             <intent-filter android:label="Add to RetroManager">
                 <action android:name="android.intent.action.SEND" />
@@ -45,6 +55,14 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
+
+        <!-- The home screen widget of the games played last (RecentWidget) -->
+        <receiver android:name=".RecentWidget" android:exported="false" android:label="RetroManager: continue playing">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/recent_widget_info" />
+        </receiver>
         <service android:name=".SaveJob" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
         <service android:name=".FetchService" android:exported="false" android:foregroundServiceType="dataSync" />
     </application>

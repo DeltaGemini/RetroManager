@@ -149,6 +149,154 @@ def _move_to_backup(source: Path, root_name: str, rel: str, stamp: str):
     shutil.move(str(source), str(target))
 
 
+# -----------------------------------------------------------------------------
+# Too many save states: keep each person's newest few of each game
+# -----------------------------------------------------------------------------
+
+def _thinning(keep):
+    """What keeping each person's `keep` newest save states of each game would
+    move: {groups: [{profile, folder, game, total, move: [records]}], files,
+    bytes}. A game's auto state is never moved (RetroArch loads it by itself),
+    nor are the browser's own states or Syncthing's conflict copies."""
+    groups = {}
+    for record in save_finder.scan_all():
+        if record['kind'] not in ('state', 'auto') or record['conflict'] or record['folder'] == 'Browser':
+            continue
+        groups.setdefault((record['root'], record['profile'], record['folder'], record['base']), []).append(record)
+    out, files, size = [], 0, 0
+    for (root, profile, folder, base), records in groups.items():
+        records.sort(key=lambda r: r['mtime'], reverse=True)
+        move = [r for r in records[keep:] if r['kind'] != 'auto']
+        if not move:
+            continue
+        files += len(move)
+        size += sum(r['size'] for r in move)
+        out.append({'root': root, 'profile': profile, 'folder': folder, 'game': base, 'total': len(records),
+                    'move': [{k: r[k] for k in ('root', 'path', 'screenshot', 'size', 'modified', 'label')} for r in move]})
+    out.sort(key=lambda g: -len(g['move']))
+    return {'groups': out, 'files': files, 'bytes': size}
+
+
+def _keep_count():
+    try:
+        keep = int(request.args.get("keep") or (request.get_json(silent=True) or {}).get("keep") or 10)
+    except (TypeError, ValueError):
+        keep = 10
+    return max(1, min(keep, 999))
+
+
+def _renumbering():
+    """The numbered save states whose slot isn't yet their place in time: for
+    each person's states of each game (in one folder), oldest first, slots 1,
+    2, 3... (the newest highest, so RetroArch's "next slot" carries on after
+    it). Auto states keep their name. [(record, new name)]."""
+    groups = {}
+    for record in save_finder.scan_all():
+        if record['kind'] != 'state' or record['conflict'] or record['folder'] == 'Browser':
+            continue
+        groups.setdefault((record['root'], record['profile'], record['folder'], record['base']), []).append(record)
+    renames = []
+    for records in groups.values():
+        records.sort(key=lambda r: (r['mtime'], r['slot'] or 0))
+        for slot, record in enumerate(records, start=1):
+            name = f"{record['base']}.state{slot}"
+            if record['file'] != name:
+                renames.append((record, name))
+    return renames
+
+
+def _renumber(renames=None):
+    """Gives the states _renumbering finds (or those of them given) their new slots (and their screenshots
+    theirs). In two steps, so a state never lands on a name another still has.
+    Returns (how many, problems)."""
+    renames, staged, problems = (_renumbering() if renames is None else renames), [], []
+    for record, name in renames:
+        source = save_finder.resolve_path(record['root'], record['path'])
+        shot = save_finder.resolve_path(record['root'], record['screenshot']) if record['screenshot'] else None
+        if not source or not source.is_file():
+            continue
+        try:
+            temporary = source.with_name(f".renumbering-{source.name}")
+            source.rename(temporary)
+            shot_temporary = None
+            if shot and shot.is_file():
+                shot_temporary = shot.with_name(f".renumbering-{shot.name}")
+                shot.rename(shot_temporary)
+            staged.append((temporary, shot_temporary, source.with_name(name)))
+        except OSError as e:
+            problems.append(f"{record['path']}: {e}")
+    done = 0
+    for temporary, shot_temporary, target in staged:
+        try:
+            temporary.rename(target)
+            if shot_temporary:
+                shot_temporary.rename(target.with_name(target.name + '.png'))
+            done += 1
+        except OSError as e:
+            problems.append(f"{target.name}: {e}")
+    return done, problems
+
+
+@app.route("/api/save-states/renumber", methods=["GET"])
+def preview_renumbering():
+    """How many numbered save states would get new slot numbers (oldest 1, 2, 3...)."""
+    return jsonify(success=True, states=len(_renumbering()))
+
+
+@app.route("/api/save-states/renumber", methods=["POST"])
+def renumber_save_states():
+    """Numbers each person's save states of each game 1, 2, 3... oldest first."""
+    if not _saves_writable():
+        return jsonify(success=False, error="The save states folder can't be written to"), 400
+    done, problems = _renumber()
+    if problems:
+        logger.warning(f"Renumbering save states: {len(problems)} problems, e.g. {problems[0]}")
+    return jsonify(success=not problems, renumbered=done, problems=problems[:20])
+
+
+@app.route("/api/save-states/thin", methods=["GET"])
+def preview_thinning():
+    """?keep=10. Which save states keeping each person's newest `keep` of each game would move."""
+    return jsonify(success=True, keep=_keep_count(), **_thinning(_keep_count()))
+
+
+@app.route("/api/save-states/thin", methods=["POST"])
+def thin_save_states():
+    """{keep, renumber}: moves each person's older save states of each game, beyond the
+    newest `keep` (and never an auto state), with their screenshots, to
+    save-backups/thinned-states/<time>/, under the paths they had. With
+    renumber, those games' remaining states are then numbered 1, 2, 3...
+    oldest first."""
+    keep = _keep_count()
+    if not _saves_writable():
+        return jsonify(success=False, error="The save states folder can't be written to"), 400
+    plan = _thinning(keep)
+    stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    moved, problems = 0, []
+    for group in plan['groups']:
+        for record in group['move']:
+            for rel in (record['path'], record['screenshot']):
+                source = save_finder.resolve_path(record['root'], rel) if rel else None
+                if not source or not source.is_file():
+                    continue
+                target = SAVE_BACKUP_BASE / 'thinned-states' / stamp / record['root'] / rel
+                try:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(source), str(target))
+                    moved += rel == record['path']
+                except OSError as e:
+                    problems.append(f"{rel}: {e}")
+    # ...and, if asked, what's left of those games numbered 1, 2, 3... again, oldest first
+    renumbered = 0
+    if (request.get_json(silent=True) or {}).get("renumber"):
+        thinned = {(g['root'], g['profile'], g['folder'], g['game']) for g in plan['groups']}
+        renumbered, trouble = _renumber([(r, n) for r, n in _renumbering() if (r['root'], r['profile'], r['folder'], r['base']) in thinned])
+        problems += trouble
+    if problems:
+        logger.warning(f"Thinning save states: {len(problems)} problems, e.g. {problems[0]}")
+    return jsonify(success=not problems or moved > 0, moved=moved, renumbered=renumbered, backup=f"thinned-states/{stamp}", problems=problems[:20])
+
+
 @app.route("/api/save-conflicts/resolve", methods=["POST"])
 def resolve_save_conflict():
     """Body: {id, keep: path of the version to keep}. The other versions move to

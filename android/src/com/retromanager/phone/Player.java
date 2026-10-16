@@ -740,10 +740,14 @@ final class Player {
     }
 
     /** The person's save on the server, or null if they have none. */
+    /** When the save serverSave last fetched was written on the server (0 if it didn't say). */
+    private long serverSaveModified;
+
     private byte[] serverSave(JSONObject game) throws IOException {
         HttpURLConnection connection = open(saveAddress(game, null), "GET");
         try {
             int status = connection.getResponseCode();
+            serverSaveModified = status == 200 ? connection.getLastModified() : 0;
             if (status == 404) return null;
             if (status != 200) throw new IOException("The server answered " + status + " for the save");
             try (InputStream in = connection.getInputStream()) {
@@ -839,8 +843,10 @@ final class Player {
      *  theirs, and the other's markers for it forgotten (it may have been this
      *  person's save sent as the other's, before the app kept them apart).
      *  Not a game this person has a save put by for: there the one on the
-     *  phone really is someone else's. Returns how many games changed hands. */
-    int claim(Folder folder, String person) {
+     *  phone really is someone else's. Returns how many games changed hands
+     *  (with apply false, how many would, and nothing changes). What it changes
+     *  is kept, so undoClaim can put it back. */
+    int claim(Folder folder, String person, boolean apply) {
         if (folder == null || person == null || person.isEmpty()) return 0;
         java.util.Map<String, List<String>> games = new java.util.TreeMap<>();   // game -> the markers that say otherwise
         for (String key : prefs.syncedKeys()) {
@@ -858,6 +864,7 @@ final class Player {
             if (!parts[0].equals("owner")) games.get(game).add(key);
         }
         int changed = 0;
+        JSONObject markers = new JSONObject(), owners = new JSONObject();
         for (java.util.Map.Entry<String, List<String>> game : games.entrySet()) {
             int slash = game.getKey().indexOf('/');
             if (slash < 0) continue;
@@ -868,13 +875,51 @@ final class Player {
                 for (Folder.Entry entry : folder.list(kind + "/" + PEOPLE + "/" + person + "/" + system)) putBy |= !entry.folder && entry.name.startsWith(stem);
             }
             if (putBy) continue;
+            changed++;
+            if (!apply) continue;
+            try {
+                for (String key : game.getValue()) markers.put(key, prefs.synced(key));
+                String owner = prefs.synced("owner|" + game.getKey());
+                owners.put("owner|" + game.getKey(), owner == null ? JSONObject.NULL : owner);
+            } catch (org.json.JSONException e) {
+                Log.w(TAG, "Couldn't note how " + game.getKey() + " was, to undo", e);
+            }
             prefs.forget(game.getValue());
             prefs.synced("owner|" + game.getKey(), person);
-            changed++;
             Log.i(TAG, game.getKey() + ": the save on the phone taken to be " + person + "'s");
+        }
+        if (!apply) return changed;
+        if (changed > 0) {
+            try {
+                prefs.claimUndo(new JSONObject().put("person", person).put("at", System.currentTimeMillis())
+                        .put("games", changed).put("markers", markers).put("owners", owners));
+            } catch (org.json.JSONException e) {
+                Log.w(TAG, "Couldn't keep the undo", e);
+            }
         }
         prefs.claimed(true);
         return changed;
+    }
+
+    /** Puts back what the last claim changed: whose each game's save was, and
+     *  the markers it forgot. Returns how many games went back. */
+    int undoClaim() {
+        JSONObject undo = prefs.claimUndo();
+        if (undo == null) return 0;
+        JSONObject markers = undo.optJSONObject("markers"), owners = undo.optJSONObject("owners");
+        java.util.List<String> drop = new ArrayList<>();
+        for (java.util.Iterator<String> keys = owners == null ? java.util.Collections.emptyIterator() : owners.keys(); keys.hasNext(); ) {
+            String key = keys.next();
+            if (owners.isNull(key)) drop.add(key); else prefs.synced(key, owners.optString(key));
+        }
+        prefs.forget(drop);
+        for (java.util.Iterator<String> keys = markers == null ? java.util.Collections.emptyIterator() : markers.keys(); keys.hasNext(); ) {
+            String key = keys.next();
+            if (!markers.isNull(key)) prefs.synced(key, markers.optString(key));
+        }
+        prefs.claimUndo(null);
+        Log.i(TAG, "Undid taking " + undo.optInt("games") + " games' saves to be " + undo.optString("person") + "'s");
+        return owners == null ? 0 : owners.length();
     }
 
     private static void move(Folder folder, String from, String to) throws IOException {
@@ -892,6 +937,55 @@ final class Player {
 
     /** Before a game starts: if the save and save states on the phone are
      *  someone else's, they're put by for them and this person's brought back. */
+    /** A state the server no longer has, moved to states/RetroManager backups/ (its picture goes: RetroArch makes it again). */
+    private void retireState(Folder folder, String place, String name) {
+        try {
+            move(folder, place, "states/RetroManager backups/" + new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date()) + " " + name);
+            folder.delete(place + ".png");
+            Log.i(TAG, "Put by, as the server has it no more: " + place);
+        } catch (IOException e) {
+            Log.w(TAG, "Couldn't put by " + place, e);
+        }
+    }
+
+    /** Every game whose save states have been kept in step here, brought in step
+     *  now (each person's, where the phone's are that person's): the server's
+     *  new and changed ones fetched, the phone's sent, and the ones the server
+     *  has put by put by here too. A state changed on both sides is left for
+     *  when the game is next started, where the person chooses. */
+    void syncAllStates() {
+        run(() -> {
+            Folder folder = app.folder();
+            if (folder == null) throw new Stop("Choose the RetroArch folder first.");
+            java.util.Map<String, JSONObject> games = new java.util.TreeMap<>();
+            for (String marker : prefs.syncedKeys()) {
+                String[] parts = marker.split("\\|");
+                if (parts.length != 4 || !parts[0].equals("state") || !parts[2].contains("/")) continue;
+                String system = parts[2].substring(0, parts[2].indexOf('/')), rom = parts[2].substring(parts[2].indexOf('/') + 1);
+                String stem = rom.contains(".") ? rom.substring(rom.lastIndexOf('/') + 1, rom.lastIndexOf('.')) : rom;
+                games.put(parts[1] + "|" + parts[2], new JSONObject().put("system", system).put("rom", rom).put("profile", parts[1])
+                        .put("save", stem + ".srm").put("name", stem));
+            }
+            int done = 0, moved = 0;
+            heading = "Save states: ";
+            for (JSONObject game : games.values()) {
+                if (cancelled) break;
+                app.progress(heading + game.optString("name"), done++, games.size());
+                // (only the person whose states these are on the phone)
+                String whose = owner(folder, game, false);
+                if (whose != null && !whose.equals(game.optString("profile"))) continue;
+                try {
+                    moved += states(folder, game, false);
+                } catch (IOException e) {
+                    if (network(e)) throw new Stop("RetroManager can't be reached, so nothing could be brought in step.");
+                    Log.w(TAG, "Save states of " + game.optString("rom"), e);
+                }
+            }
+            app.say(games.isEmpty() ? "No game's save states are kept in step on this phone yet."
+                    : "Save states of " + games.size() + (games.size() == 1 ? " game" : " games") + " are in step" + (moved > 0 ? " (" + moved + " sent)" : "") + ".");
+        });
+    }
+
     private void changeHands(Folder folder, JSONObject game) throws Stop {
         String now = game.optString("profile"), was = owner(folder, game, true), name = game.optString("save");
         if (was == null || was.equals(now)) {
@@ -948,10 +1042,12 @@ final class Player {
         boolean phoneChanged = !OfflineCache.sha1(phone).equals(last), serverChanged = !OfflineCache.sha1(server).equals(last);
         if (phoneChanged && serverChanged) {
             Folder.Entry entry = folder.stat(place);
-            String when = entry == null || entry.modified == 0 ? "" : " (" + new SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(new Date(entry.modified)) + ")";
+            SimpleDateFormat format = new SimpleDateFormat("d MMM, HH:mm", Locale.getDefault());
+            String when = entry == null || entry.modified == 0 ? "" : " (" + format.format(new Date(entry.modified)) + ")";
+            String serverWhen = serverSaveModified == 0 ? "" : " (" + format.format(new Date(serverSaveModified)) + ")";
             String theirs = profile.equals("shared") ? "the shared one" : profile + "'s";
             int picked = app.choose("This phone's save and " + theirs + " on the server are different",
-                    new String[]{"Play the phone's save" + when, "Play " + theirs + " from the server"});
+                    new String[]{"Play the phone's save" + when, "Play " + theirs + " from the server" + serverWhen});
             if (picked < 0) throw new Stop(null);
             serverChanged = picked == 1;
         }
@@ -1062,8 +1158,15 @@ final class Player {
             String place = phone.get(name);
             JSONObject theirs = server.get(name);
             if (theirs == null) {
+                if (sum(folder, place).equals(last)) {
+                    // The server had it, and it hasn't changed here since, but the server's gone
+                    // (thinned out or numbered again there): put by here too, not kept in step
+                    retireState(folder, place, name);
+                    prefs.forget(java.util.Collections.singletonList(key));
+                    continue;
+                }
                 // Only here: new, or changed since the server had it
-                if (!sum(folder, place).equals(last) && sendState(folder, game, name, place, key)) sent++;
+                if (sendState(folder, game, name, place, key)) sent++;
                 continue;
             }
             boolean fits = theirs.isNull("fits") || theirs.optBoolean("fits");

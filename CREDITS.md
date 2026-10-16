@@ -13,7 +13,10 @@ that it fetches or talks to, and the terms each is under.
 | Touch-control layouts | `frontend/overlays/rm_*.cfg` | RetroManager's own, in RetroArch's overlay format: `rm_gba`, `rm_snes`, `rm_nds` and `rm_nds_mid` were laid out by hand starting from the libretro layouts above, the others are written by `tools/make_overlays.py` | CC BY 4.0, as the layouts they started from |
 | System pictures (optional) | `frontend/imgs/*.jpg`, `frontend/imgs/template.psd` | Modified from [Switch-Light](https://github.com/lilbud/es-theme-switch-light), an EmulationStation theme by Lilbud, based on the Switch Theme for LaunchBox by Grila. The template is RetroManager's author's own, after Lilbud's design | CC BY-NC-SA (credit, no commercial use, changes shared alike). See `frontend/imgs/README.md`; delete the pictures and RetroManager shows its own tiles |
 | Star icons of the Switch colour themes | `frontend/themes/switch/star-*.svg` | The same theme | CC BY-NC-SA |
+| System logos (optional, not included) | `frontend/logos/`, fetched by `tools/fetch_system_logos.py` | [Monochrome Gaming Logos](https://github.com/HVR88/Monochrome-Gaming-Logos) by HVR88: recreations of the systems' logos, for identifying them | The collection asks for credit and a link back; the logos are their brand owners' trade marks, so RetroManager doesn't pass them on |
 | Oxygen font | `frontend/themes/switch/Oxygen-Regular.ttf` | Vernon Adams | SIL Open Font License 1.1 (`frontend/themes/switch/OFL.txt`) |
+| Antonio font (Starship Panels themes) | `frontend/themes/starship/Antonio.ttf` | The Antonio Project Authors (Vernon Adams and others) | SIL Open Font License 1.1 (`frontend/themes/starship/Antonio-OFL.txt`) |
+| Michroma font (Starship Bridge theme) | `frontend/themes/starship/Michroma-Regular.ttf` | The Michroma Project Authors (Vernon Adams and others) | SIL Open Font License 1.1 (`frontend/themes/starship/Michroma-OFL.txt`) |
 
 The screenshots in `docs/screenshots/` show a demo library of made-up games,
 drawn by `tools/make_demo_library.py`: no real game, box art or logo is in

@@ -32,6 +32,8 @@ from backend.routes import (  # noqa: F401 (imported for their routes)
     console,
     mix,
     tasks,
+    storage,
+    duplicates,
 )
 
 # Not when a test imports the app

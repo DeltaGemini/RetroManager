@@ -141,10 +141,6 @@ function UnsavedChangesModal({ gameName, onSave, onDiscard, onCancel, saving }) 
 
 // Scan results for one system, with an action for each kind of problem
 function ScanPanel({ result, system, onClose, onChanged, showNotification }) {
-    // Duplicates: which copy to keep, per group (defaults to the suggestion)
-    const [keeps, setKeeps] = React.useState({});
-    React.useEffect(() => { setKeeps({}); }, [result]);
-    const keepOf = (group) => keeps[group.id] || group.keep;
     const sections = [
         {
             key: 'multi_disc',
@@ -192,41 +188,6 @@ function ScanPanel({ result, system, onClose, onChanged, showNotification }) {
             render: item => <div>{item}</div>,
             action: 'Move out of roms',
             run: items => ({ url: 'saves-in-roms/move', body: { paths: items } }),
-        },
-        {
-            key: 'duplicates',
-            title: 'Possible duplicates',
-            help: 'The same game more than once (other regions, revisions or a copy with a different file name). Pick the copy to keep; the others move to RetroGames/retromanager/duplicates/ (not deleted), and their play counts, details and any media the kept copy lacks carry over.',
-            items: result.duplicates || [],
-            id: item => item.id,
-            defaultChecked: () => false,
-            render: item => (
-                <>
-                    <div style={{fontWeight:600,marginBottom:4}}>{item.name}</div>
-                    {item.copies.map(c => {
-                        const kept = keepOf(item) === c.path;
-                        return (
-                            <div key={c.path} role="radio" aria-checked={kept} tabIndex={0}
-                                onClick={e => { e.preventDefault(); setKeeps(prev => ({ ...prev, [item.id]: c.path })); }}
-                                onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setKeeps(prev => ({ ...prev, [item.id]: c.path })); } }}
-                                style={{display:'flex',gap:8,alignItems:'baseline',padding:'2px 0',cursor:'pointer',opacity: kept ? 1 : 0.75}}>
-                                <span style={{color: kept ? 'var(--success)' : 'var(--text-secondary)',width:44,flexShrink:0,fontSize:11}}>{kept ? '● Keep' : '○ Move'}</span>
-                                <span style={{flex:1,minWidth:0}}>
-                                    {c.path}
-                                    <span style={{color:'var(--text-secondary)',fontSize:11,marginLeft:6}}>
-                                        {[formatBytes(c.size), c.name ? 'in gamelist' : 'no entry', c.media ? `${c.media} media` : 'no media',
-                                          c.playcount ? `played ${c.playcount}×` : null].filter(Boolean).join(' · ')}
-                                    </span>
-                                </span>
-                            </div>
-                        );
-                    })}
-                </>
-            ),
-            action: 'Move extra copies aside',
-            run: items => ({ url: 'duplicates/resolve', body: { groups: items.map(g => ({
-                keep: keepOf(g), remove: g.copies.map(c => c.path).filter(p => p !== keepOf(g)),
-            })) } }),
         },
         {
             key: 'truncated_names',
@@ -416,8 +377,16 @@ function ScanPanel({ result, system, onClose, onChanged, showNotification }) {
         <Modal open={true} onClose={onClose}>
             <h2 style={{marginBottom:4}}>Scan: {system.full_name || system.name}</h2>
             <div style={{color:'var(--text-secondary)',fontSize:13,marginBottom:20}}>
-                {total === 0 ? 'Everything matches. Nothing to fix.' : 'Changes to gamelist.xml make a dated backup first (restore it from the settings button).'}
+                {total === 0 && !(result.duplicates || []).length ? 'Everything matches. Nothing to fix.' : 'Changes to gamelist.xml make a dated backup first (restore it from the settings button).'}
             </div>
+            {(result.duplicates || []).length > 0 && (
+                <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',padding:12,marginBottom:16,background:'var(--bg-tertiary)',borderRadius:6,fontSize:13}}>
+                    <span><b>{result.duplicates.length}</b> game{result.duplicates.length === 1 ? '' : 's'} here may be in the library more than once.</span>
+                    <button className="btn btn-secondary btn-small" onClick={() => window.dispatchEvent(new CustomEvent('retromanager:open-tool', { detail: { tool: 'duplicates', system: system.name } }))}>
+                        Open Duplicates
+                    </button>
+                </div>
+            )}
             {sections.filter(s => s.items.length > 0).map(section => {
                 const count = section.items.filter(item => selected[`${section.key}:${section.id(item)}`]).length;
                 return (

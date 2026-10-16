@@ -92,7 +92,8 @@ class LaunchBoxIndex:
         there by one of them) on this system's platform, or {}. Only a game whose
         title is the same but for tags and punctuation is used. Never raises."""
         platform = launchbox_platform(system_name)
-        keys = [k for k in dict.fromkeys(title_key(n) for n in names if n) if k]
+        # (an index fetched before & was read as "and" has it dropped)
+        keys = [k for k in dict.fromkeys(key for n in names if n for key in (title_key(n), title_key(n.replace('&', ' ')))) if k]
         if not self.enabled or not platform or not keys or not self.ready:
             return {}
         try:
@@ -140,7 +141,7 @@ class LaunchBoxIndex:
             raise ValueError("LaunchBox's list of games is still being fetched. Try again in a few minutes.")
         if not platform:
             raise ValueError("RetroManager doesn't know this system's name at LaunchBox.")
-        words = [title_key(w) for w in _TAGS.sub(' ', name or '').split()]
+        words = [title_key(w) for w in _TAGS.sub(' ', (name or '').replace('&', ' ')).split()]
         words = [w for w in words if w]
         if not words:
             return []

@@ -24,6 +24,14 @@ fi
 find "$DEST" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
 git archive HEAD | tar -x -C "$DEST"
 
+# Extra languages kept to this installation (fictional ones whose words belong to
+# their makers): the public copy has the file, empty, so pages still load it
+cat > "$DEST/frontend/common/language-packs.js" <<'PACKS'
+// Extra languages for common/language.js (see there), loaded just before it:
+// each pushes {key, label, lang, phrases, patterns, noCaps} onto window.RMLanguagePacks.
+// None come with RetroManager.
+PACKS
+
 # The app, if it's been built
 if [ -f frontend/app/RetroManager.apk ] && [ -f frontend/app/version.json ]; then
     mkdir -p "$DEST/frontend/app"

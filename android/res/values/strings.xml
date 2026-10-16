@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- In the home screen's list of widgets -->
+    <string name="widget_description">The games you played last: tap one to play it.</string>
+</resources>

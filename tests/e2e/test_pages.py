@@ -97,3 +97,34 @@ def test_the_first_run_page_walks_through_its_steps(page):
     expect(page.get_by_role("heading", name=re.compile("Who can change things"))).to_be_visible()
     page.get_by_role("button", name="Not now").click()
     expect(page.get_by_role("heading", name="That's it")).to_be_visible()
+
+
+def test_a_reload_comes_back_to_the_open_system_and_game(page, phone):
+    # The Library: the address follows what's open, so a reload lands there
+    page.goto("/")
+    page.locator(".system-item", has_text="Nintendo Entertainment System").first.click()
+    page.get_by_text("Cobalt Harbour", exact=True).first.click()
+    expect(page).to_have_url(re.compile(r"system=nes&game=.*Cobalt"))
+    page.reload()
+    expect(page.locator(".gd-heading", has_text="Cobalt Harbour")).to_be_visible()
+
+    # The Console on a phone: a game picked on the list comes back picked, not open
+    phone.goto("/console?system=nes&at=Cobalt%20Harbour.nes")
+    expect(phone.locator(".console-columns.list-only")).to_be_visible()
+    phone.get_by_text("Cobalt Harbour", exact=True).first.click()
+    expect(phone).to_have_url(re.compile(r"game=.*Cobalt"))
+    phone.reload()
+    expect(phone.get_by_role("button", name="‹ Games")).to_be_visible()
+
+
+def test_cockney_changes_the_words_but_not_the_games(page):
+    page.goto("/?system=nes&game=./Cobalt%20Harbour.nes")
+    page.evaluate("localStorage.setItem('retromanager.language', 'cockney')")
+    page.reload()
+    expect(page.locator(".rm-label", has_text="Lib'ry")).to_be_visible()
+    expect(page.get_by_text("Who Made It")).not_to_have_count(0)
+    expect(page.locator(".gd-heading", has_text="Cobalt Harbour")).to_be_visible()   # a game's name is its own
+    assert page.evaluate("document.documentElement.lang") == "en-GB"
+    page.evaluate("localStorage.setItem('retromanager.language', 'en')")
+    page.reload()
+    expect(page.locator(".rm-label", has_text="Library")).to_be_visible()

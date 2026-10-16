@@ -48,3 +48,6 @@ android/signing.env
 
 # The library that's made beside docker-compose.yml when no other is named
 /RetroGames/
+# The systems' logos for the "Logos" system pictures: brands' marks, from HVR88's
+# Monochrome Gaming Logos; fetched by tools/fetch_system_logos.py, not passed on
+frontend/logos/*.svg
