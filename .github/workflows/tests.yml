@@ -35,4 +35,4 @@ jobs:
 
       # The phone app's plain decisions (android/src/.../Decide.java), with the runner's own JDK
       - name: The phone app's tests
-        run: android/test.sh
+        run: bash android/test.sh
