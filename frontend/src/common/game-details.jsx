@@ -500,8 +500,120 @@ const GD_ROM_STATUS = {
     skipped: ['Not checked', 'var(--text-secondary)', 'A folder, a disc list, or a file too large to hash'],
 };
 const GD_ROM_SOURCES = { NoIntros: 'No-Intro', NoIntro: 'No-Intro', MAMEArcade: 'MAME', MAMEMess: 'MAME' };
-function GDRomFile({ system, game }) {
+// Uploading a file in 8 MB pieces (/api/uploads, as on the Add games page): a dropped
+// connection picks up where the server got to. onProgress(received, size)
+async function gdUpload(file, onProgress) {
+    const CHUNK = 8 * 1024 * 1024;
+    const post = (url, body) => fetch(`${GD_API}${url}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+    const start = await post('/api/uploads', { name: file.name, size: file.size, key: `replace|${file.lastModified}` });
+    if (!start.success) throw new Error(start.error || "The upload couldn't start");
+    let received = start.received, failures = 0;
+    onProgress(received, file.size);
+    while (received < file.size) {
+        try {
+            const res = await fetch(`${GD_API}/api/uploads/${start.id}?offset=${received}`, {
+                method: 'PUT', body: file.slice(received, Math.min(received + CHUNK, file.size)), headers: { 'Content-Type': 'application/octet-stream' } });
+            const d = await res.json();
+            if (!d.success && res.status !== 409) throw new Error(d.error || `HTTP ${res.status}`);
+            received = d.received;
+            failures = 0;
+        } catch (e) {
+            if (++failures > 6) throw e;
+            await new Promise(r => setTimeout(r, Math.min(30, 2 ** failures) * 1000));
+            const status = await fetch(`${GD_API}/api/uploads/${start.id}`).then(r => r.json()).catch(() => null);
+            if (status && status.success) received = status.received;
+        }
+        onProgress(received, file.size);
+    }
+    return start.id;
+}
+
+// The ROM's version, as noted (backend/rom_versions.py), and an updated ROM put in its place: it
+// takes the old one's name, so saves, states and pictures still go with it; the old file is kept
+// (Tools > Storage)
+function GDRomVersion({ system, game, notify, onReplaced }) {
+    const [record, setRecord] = React.useState(null);
+    const [editing, setEditing] = React.useState(null); // the version being typed
+    const [replacing, setReplacing] = React.useState(null); // {file, version, progress, busy, error}
+    const rom = String(game.path).replace(/^(\.\/)+/, '');
+    React.useEffect(() => {
+        setRecord(null); setEditing(null); setReplacing(null);
+        fetch(`${GD_API}/api/systems/${encodeURIComponent(system)}/rom-version?${new URLSearchParams({ rom })}`).then(r => r.json())
+            .then(d => setRecord(d.success ? d : {})).catch(() => setRecord({}));
+    }, [system, rom, game.rom_version]);
+    const saveVersion = async () => {
+        try {
+            const d = await gdPut(`/api/systems/${encodeURIComponent(system)}/rom-version`, { rom, version: editing });
+            if (!d.success) throw new Error(d.error);
+            setRecord(d); setEditing(null);
+            onReplaced && onReplaced(null, d.version || '');
+        } catch (e) { notify && notify(`The version wasn't saved: ${e.message}`, 'error'); }
+    };
+    const replace = async () => {
+        const { file, version } = replacing;
+        setReplacing(r => ({ ...r, busy: true, error: null, progress: 0 }));
+        try {
+            const upload = await gdUpload(file, (got, size) => setReplacing(r => ({ ...r, progress: size ? got / size : 1 })));
+            setReplacing(r => ({ ...r, progress: 1, placing: true }));
+            const d = await fetch(`${GD_API}/api/systems/${encodeURIComponent(system)}/replace-rom`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rom, upload, version }) }).then(r => r.json());
+            if (!d.success) throw new Error(d.error);
+            setRecord(d); setReplacing(null);
+            notify && notify(`Replaced with ${file.name}${d.rom !== rom ? `, now ${d.rom.split('/').pop()}` : ''}. The old file is kept in Tools › Storage.`, 'success');
+            onReplaced && onReplaced(d.rom !== rom ? `./${d.rom}` : null, d.version || '');
+        } catch (e) { setReplacing(r => ({ ...r, busy: false, placing: false, error: e.message })); }
+    };
+    if (!record) return null;
+    const ext = rom.includes('.') ? rom.slice(rom.lastIndexOf('.')) : '';
+    const newExt = replacing?.file && replacing.file.name.includes('.') ? replacing.file.name.slice(replacing.file.name.lastIndexOf('.')).toLowerCase() : ext.toLowerCase();
+    const keptName = newExt === ext.toLowerCase() ? rom.split('/').pop() : rom.split('/').pop().replace(/\.[^.]+$/, newExt);
+    return (
+        <>
+            <dl className="gd-facts">
+                <dt>Version</dt>
+                <dd>{editing !== null ? (
+                    <span className="gd-row">
+                        <input className="gd-input" style={{width: 160}} value={editing} autoFocus maxLength={60} placeholder="1.1, v2, 2024-06-01…" aria-label="Version"
+                            onChange={e => setEditing(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveVersion(); if (e.key === 'Escape') setEditing(null); }} />
+                        <button className="gd-btn small" onClick={saveVersion}>Save</button>
+                        <button className="gd-linkbutton" onClick={() => setEditing(null)}>Cancel</button>
+                    </span>
+                ) : (
+                    <>{record.version || <span className="gd-note">not noted</span>}{' '}
+                        <button className="gd-linkbutton admin-only" onClick={() => setEditing(record.version || '')}>{record.version ? 'Change' : 'Note it'}</button></>
+                )}</dd>
+                {(record.history || []).length > 0 && <><dt>Before</dt><dd className="gd-note">
+                    {record.history.map((h, i) => <div key={i}>{h.version || 'no version noted'}, replaced {new Date(h.at * 1000).toLocaleDateString()} (kept in Tools › Storage)</div>)}
+                </dd></>}
+            </dl>
+            {/* (not a disc and its tracks: those are several files) */}
+            {!['.cue', '.m3u', '.gdi', '.ccd', '.toc', '.mds'].includes(ext.toLowerCase()) && <div className="admin-only" style={{marginTop: 8}}>
+                {!replacing ? (
+                    <button className="gd-btn small" onClick={() => setReplacing({ file: null, version: record.version || '' })}>Replace with an updated ROM…</button>
+                ) : (
+                    <div className="gd-replace">
+                        <label className="gd-row"><span>New file</span>
+                            <input type="file" disabled={replacing.busy} onChange={e => setReplacing(r => ({ ...r, file: e.target.files[0] || null }))} /></label>
+                        <label className="gd-row"><span>Its version</span>
+                            <input className="gd-input" style={{width: 160}} value={replacing.version} maxLength={60} disabled={replacing.busy} placeholder="1.1, v2…"
+                                onChange={e => setReplacing(r => ({ ...r, version: e.target.value }))} /></label>
+                        {replacing.file && <div className="gd-note">It's saved as <span className="gd-mono">{keptName}</span>, so the saves, save states and pictures named after the game keep working. The file it has now is kept in Tools › Storage.</div>}
+                        {replacing.busy && <div className="gd-note">{replacing.placing ? 'Putting it in place…' : `Uploading ${Math.floor((replacing.progress || 0) * 100)}%…`}</div>}
+                        {replacing.error && <div className="gd-note" style={{color: 'var(--accent-pink)'}}>{replacing.error}</div>}
+                        <div className="gd-row">
+                            <button className="gd-btn small" disabled={!replacing.file || replacing.busy} onClick={replace}>Replace the ROM</button>
+                            <button className="gd-linkbutton" disabled={replacing.busy} onClick={() => setReplacing(null)}>Cancel</button>
+                        </div>
+                    </div>
+                )}
+            </div>}
+        </>
+    );
+}
+
+function GDRomFile({ system, game, notify, onMoved, onVersion }) {
     const [info, setInfo] = React.useState(null);
+    const [reload, setReload] = React.useState(0);
     const [copied, setCopied] = React.useState(null);
     // The game's files one by one, for a game the ROM check has no checksums
     // for (a disc game is a .cue and its tracks, which it doesn't hash)
@@ -520,7 +632,7 @@ function GDRomFile({ system, game }) {
             .then(d => { if (cancelled) return; const got = d.success ? d : { checked: false }; setInfo(got); if (!got.sha1) loadFiles(false); })
             .catch(() => { if (!cancelled) { setInfo({ checked: false }); loadFiles(false); } });
         return () => { cancelled = true; };
-    }, [system, game.path]);
+    }, [system, game.path, reload]);
     const copy = (label, value) => {
         const done = () => { setCopied(label); setTimeout(() => setCopied(c => (c === label ? null : c)), 1500); };
         try { navigator.clipboard.writeText(value).then(done, () => {}); } catch (e) {}
@@ -574,6 +686,12 @@ function GDRomFile({ system, game }) {
                 </div>
             )}
             {!sums.length && files && !files.length && <div className="gd-note" style={{marginTop: 6}}>No checksums: this game is a folder, not a file.</div>}
+            {!(files && !files.length && !sums.length) && (
+                <div style={{marginTop: 10}}>
+                    <GDRomVersion system={system} game={game} notify={notify}
+                        onReplaced={(newPath, version) => (newPath ? onMoved && onMoved(newPath) : (setReload(n => n + 1), version !== undefined && onVersion && onVersion(version)))} />
+                </div>
+            )}
         </div>
     );
 }
@@ -779,9 +897,11 @@ function GDSeries({ system, game, notify }) {
 //   onDeleted    (rom path) after the game is removed
 //   editState    a ref kept at {dirty, save}, for a page that asks before
 //                leaving unsaved edits
+//   onScrape     the Library's Fill the gaps for this game (while its details are being edited,
+//                Scrape fills the form from Scraper instead)
 //   Scraper      the Library's scrape popup; without it Scrape opens the game
 //                in the Library
-function GameDetails({ system, systemLabel, game, path, seed, actions, notify, onChanged, onSaved, onDeleted, editState, Scraper }) {
+function GameDetails({ system, systemLabel, game, path, seed, actions, notify, onChanged, onSaved, onDeleted, editState, Scraper, onScrape }) {
     gdUsePhone();   // (in the phone app: redrawn when the connection or the phone's games change)
     const [pinning, setPinning] = React.useState(false);
     // In the phone app: the "more" menu beside Play
@@ -834,17 +954,25 @@ function GameDetails({ system, systemLabel, game, path, seed, actions, notify, o
     React.useEffect(() => { setOverride(null); }, [game, fetched]);
     const keep = (fields) => setOverride(o => ({ key, fields: { ...(o && o.key === key ? o.fields : {}), ...fields } }));
 
-    const dirty = !!(draft && full && GD_EDIT_FIELDS.some(f => !gdSame(draft[f], full[f])));
+    // (and the ROM's version, which RetroManager keeps itself: backend/rom_versions.py)
+    const versioned = !!(full && full.rom_exists !== false);
+    const dirty = !!(draft && full && (GD_EDIT_FIELDS.some(f => !gdSame(draft[f], full[f])) || (versioned && !gdSame(draft.rom_version, full.rom_version))));
     const setField = (field, value) => setDraft(d => ({ ...d, [field]: value }));
-    const startEdit = () => { if (full && !draft) setDraft(Object.fromEntries(GD_EDIT_FIELDS.map(f => [f, full[f]]))); };
+    const startEdit = () => { if (full && !draft) setDraft({ ...Object.fromEntries(GD_EDIT_FIELDS.map(f => [f, full[f]])), ...(versioned ? { rom_version: full.rom_version || '' } : {}) }); };
     const save = async () => {
         if (!draft || !full) return true;
         if (!String(draft.name || '').trim()) { report('The game needs a name', 'error'); return false; }
         setSaving(true);
         const result = await gdSaveGame(system, { ...full, ...draft });
+        if (result.ok && versioned && !gdSame(draft.rom_version, full.rom_version)) {
+            try {
+                const d = await gdPut(`/api/systems/${encodeURIComponent(system)}/rom-version`, { rom: String(full.path).replace(/^(\.\/)+/, ''), version: draft.rom_version });
+                if (!d.success) throw new Error(d.error);
+            } catch (e) { report(`Saved, but not the version: ${e.message}`, 'error'); }
+        }
         setSaving(false);
         if (!result.ok) { report(result.error, 'error'); return false; }
-        const fields = { ...Object.fromEntries(GD_EDIT_FIELDS.map(f => [f, result.game[f]])), has_metadata: true };
+        const fields = { ...Object.fromEntries(GD_EDIT_FIELDS.map(f => [f, result.game[f]])), ...(versioned ? { rom_version: (draft.rom_version || '').trim() } : {}), has_metadata: true };
         keep(fields);
         setDraft(null);
         setReload(n => n + 1);
@@ -880,6 +1008,14 @@ function GameDetails({ system, systemLabel, game, path, seed, actions, notify, o
         window.addEventListener('retromanager:edit-game', edit);
         return () => window.removeEventListener('retromanager:edit-game', edit);
     }, []);
+    // "Search one source by hand", from Fill the gaps: the scrape popup, for this game
+    React.useEffect(() => {
+        const classic = (e) => {
+            if (Scraper && full && e.detail && e.detail.system === system && gdEncode(e.detail.path) === gdEncode(full.path)) setScraping(true);
+        };
+        window.addEventListener('retromanager:classic-scrape', classic);
+        return () => window.removeEventListener('retromanager:classic-scrape', classic);
+    }, [key, !!full]);
     // Scrape, pressed on another page, opened the game here
     React.useEffect(() => {
         const want = window.gdScrapeOnOpen;
@@ -892,7 +1028,7 @@ function GameDetails({ system, systemLabel, game, path, seed, actions, notify, o
 
     const field = gdPictureField(shown, picturePref);
     const stars = typeof shown.rating === 'number' ? Math.min(Math.max(shown.rating, 0), 1) * 5 : null;
-    const facts = [['Developer', shown.developer], ['Publisher', shown.publisher], ['Released', gdReleased(shown)], ['Genre', shown.genre], ['Players', shown.players]].filter(f => f[1]);
+    const facts = [['Developer', shown.developer], ['Publisher', shown.publisher], ['Released', gdReleased(shown)], ['Genre', shown.genre], ['Players', shown.players], ['Version', shown.rom_version]].filter(f => f[1]);
     const romPath = full ? full.path : path;
     // The page's picture versions (as the Bookcase has them), so a preloaded picture is the one shown
     const versions = (seed && seed.v) || {};
@@ -962,11 +1098,12 @@ function GameDetails({ system, systemLabel, game, path, seed, actions, notify, o
                             <button className="gd-btn primary" onClick={save} disabled={saving} title={dirty ? 'Write your changes to gamelist.xml' : 'Nothing has changed yet'}>{saving ? 'Saving…' : 'Save'}</button>
                             <button className="gd-btn" onClick={() => setDraft(null)} disabled={saving} title="Leave the game as it was">Cancel</button>
                         </> : !gdPhone && <>
-                            <button className="gd-btn gd-icon admin-only" onClick={startEdit} title="Edit this game’s details (E)" aria-label="Edit">✏</button>
-                            <button className="gd-btn gd-icon admin-only" onClick={() => setDeleting(true)} title="Remove this game" aria-label="Delete">🗑</button>
+                            <button className="gd-btn admin-only gd-edit-button" onClick={startEdit} title="Edit this game’s details (E)">{gdIcon('pencil')}Edit</button>
+                            <button className="gd-btn gd-icon gd-delete-button admin-only" onClick={() => setDeleting(true)} title="Remove this game" aria-label="Delete">{gdIcon('bin')}</button>
                         </>)}
                         {full && (Scraper
-                            ? <button className="gd-btn admin-only" onClick={() => setScraping(true)} title="Look this game up and fill in its details">Scrape</button>
+                            ? <button className="gd-btn admin-only" onClick={() => (onScrape && !draft ? onScrape(full) : setScraping(true))}
+                                title={onScrape && !draft ? "Every source's pictures and details for this game, beside what it has, to choose from" : 'Look this game up and fill in its details'}>Scrape</button>
                             : !draft && !gdPhone && <a className="gd-btn admin-only" href={`/?${new URLSearchParams({ system, game: full.path, scrape: '1' })}`} title="Look this game up, in the Library">Scrape</a>)}
                     </div>
                 </div>
@@ -1024,7 +1161,7 @@ function GameDetails({ system, systemLabel, game, path, seed, actions, notify, o
                         <GDSaves system={system} game={full} />
                         <GDSeries system={system} game={full} notify={report} />
                         <GDGamelist system={system} game={full} draft={draft} set={setField} notify={report} onMoved={newPath => changed({}, newPath)} />
-                        {full.rom_exists !== false && <GDSection id="romfile" title="ROM file" summary="Checksums"><GDRomFile system={system} game={full} /></GDSection>}
+                        {full.rom_exists !== false && <GDSection id="romfile" title="ROM file" summary="Version, checksums, replace"><GDRomFile system={system} game={full} notify={report} onMoved={newPath => changed({}, newPath)} onVersion={version => keep({ rom_version: version })} /></GDSection>}
                     </div>
                 )}
             </div>

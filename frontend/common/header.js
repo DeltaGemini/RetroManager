@@ -18,7 +18,8 @@
 
     const TOOLS = [
         { key: 'health', icon: '🩺', label: 'Library health', help: 'Every system’s Scan in one place' },
-        { key: 'scrape', icon: '🔎', label: 'Library scrape', help: 'Scrape every system in the background' },
+        { key: 'fill', icon: '🧩', label: 'Fill the gaps', help: 'Missing pictures and details, from every source side by side' },
+        { key: 'scrape', icon: '🔎', label: 'Background scrape', help: 'Every system from ScreenScraper, unattended: sure matches filled, the rest listed' },
         { key: 'viewer', icon: '🖼️', label: 'Media viewer', help: 'Every game’s box, Mix, logo, manual... and what’s missing' },
         { key: 'history', icon: '🕹️', label: 'Play history', help: 'What’s been played, and by whom' },
         { key: 'achievements', icon: '🏆', label: 'Achievement overview', help: 'Games ranked by how much you’ve completed' },
@@ -358,7 +359,7 @@
                     h('span', null, h('span', { style: { display: 'block' } }, t.label), h('span', { className: 'rm-help' }, t.help))))));
     }
 
-    // What's running in the background (the library scrape, the ROM check, series
+    // What's running in the background (the background scrape, the ROM check, series
     // matching): asked every minute, every 3 s while something runs, and at once
     // when a page says it started or stopped something (RM.tasksChanged).
     const TASKS_EVENT = 'retromanager:tasks';
@@ -550,6 +551,9 @@
                     h('p', { key: 'own-note', className: 'rm-set-empty' }, 'Saves already known to be someone’s stay theirs. Choosing another name asks first, and says how many it would affect.')),
                 group('Storage',
                     row('games', 'Games on this phone', 'by system and size', () => setScreen({ name: 'storage' })),
+                    // (an app from before it could tell has none of this)
+                    'updateGames' in info && row('update-games', 'Keep games up to date', null, () => app.setting('update-games', info.updateGames ? 'off' : 'on'),
+                        { radio: true, on: !!info.updateGames, note: 'a game replaced in RetroManager (an updated ROM) is fetched again when next played, also ones copied here another way. Off: only the ones the app fetched, and not if changed on the phone' }),
                     row('kept', 'Pages kept for offline', info.kept, () => app.setting('forget', ''), { note: 'press to forget them' })),
                 // (an admin's: a player can't add to the library)
                 (!me || me.admin) && group('Library',

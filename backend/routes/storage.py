@@ -46,6 +46,8 @@ AREAS = [
      'Compare one with the gamelist now, or put it back.', False, ('gamelists',)),
     ('gamelist-copies', DATA_DIR / 'gamelist-backups', 'Gamelists copied before library-wide changes',
      'Every gamelist, copied before a change to all of them (moving the media folder, say).', False, ()),
+    ('replaced-roms', DATA_DIR / 'replaced-roms', 'ROM files replaced by updated ones',
+     "The file each game had before Replace the ROM put a new one in its place, with its version.", False, ()),
     ('duplicates', DATA_DIR / 'duplicates', 'Duplicate games set aside',
      'Copies of games removed by the duplicates tool. The copy you kept is still in your library.', False, ('*',)),
     ('save-backups', SAVE_BACKUP_BASE, 'Saves and save states set aside',

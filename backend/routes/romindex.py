@@ -231,13 +231,13 @@ maintenance = Maintenance(DATA_DIR, _nightly)
 
 def start_background_work():
     """Called once the app is set up: start the nightly housekeeping, and pick up
-    a ROM check or library scrape that a restart cut short."""
+    a ROM check or background scrape that a restart cut short."""
     maintenance.start()
     try:
         if rom_index.resume_if_interrupted():
             logger.info("Resumed the ROM check a restart interrupted")
         if scrape_queue.resume_if_interrupted():
-            logger.info("Resumed the library scrape a restart interrupted")
+            logger.info("Resumed the background scrape a restart interrupted")
         # Have the Console page's lists ready before anyone asks for them
         from backend.routes import console
         console.refresh_in_background()

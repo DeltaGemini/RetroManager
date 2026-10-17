@@ -1,6 +1,6 @@
 """
 What's running in the background, for the strip under the header on every
-page: the library scrape, the ROM check, the series matching and the fetching of
+page: the background scrape, the ROM check, the series matching and the fetching of
 LaunchBox's list of games, each with its
 progress, and for a little while after it ends, how it went.
 """
@@ -45,7 +45,7 @@ def _scrape():
     parts = [f"{len(s['applied'])} filled", f"{len(s['review'])} to review"]
     if s['failed']:
         parts.append(f"{len(s['failed'])} failed")
-    return dict(key='scrape', tool='scrape', label='Library scrape', running=s['running'], stopping=s['stopping'],
+    return dict(key='scrape', tool='scrape', label='Background scrape', running=s['running'], stopping=s['stopping'],
                 done=s['done'], total=s['total'], current=_current(s), finished=_seconds_since(s['finished']),
                 summary=', '.join(parts), problem=s['stopped_reason'] if s['stopped_reason'] != 'Stopped' else None,
                 stopped=s['stopped_reason'] == 'Stopped')

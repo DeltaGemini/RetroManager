@@ -58,7 +58,7 @@ def _game_files(system_path, rom_path):
 @app.route("/api/phone/info", methods=["GET"])
 def phone_info():
     """?system=&rom=. What the phone app needs to start a game in RetroArch:
-    {playable, name, system, rom, players, cores, files: [{path, size}], media, save, me, profiles, shared_saves}.
+    {playable, name, system, rom, players, cores, files: [{path, size, stamp, modified}], media, save, me, profiles, shared_saves}.
     `media` is its pictures and manual, as paths for /api/media/ (`media_stamps`:
     each one's date and size), and `bios` the system's BIOS files ([{name, size}]),
     which RetroArch keeps in its system folder.
@@ -73,7 +73,13 @@ def phone_info():
     if not players:
         return jsonify(success=True, playable=False, error=f"No emulator the app knows of plays {system_name}.")
     try:
-        files = [{'path': f.relative_to(system_path).as_posix(), 'size': f.stat().st_size} for f in _game_files(system_path, rom_path)]
+        # (each with its date and size as `stamp`, and its date in ms as `modified`: the phone fetches it
+        # again when it's been replaced, as an updated ROM, even one the same size)
+        files = []
+        for f in _game_files(system_path, rom_path):
+            stat = f.stat()
+            files.append({'path': f.relative_to(system_path).as_posix(), 'size': stat.st_size,
+                          'stamp': f"{int(stat.st_mtime)}-{stat.st_size}", 'modified': int(stat.st_mtime * 1000)})
     except OSError as e:
         logger.exception("Couldn't list a game's files for the phone")
         return jsonify(success=False, error=str(e)), 500

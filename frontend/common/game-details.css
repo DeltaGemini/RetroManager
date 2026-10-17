@@ -243,8 +243,11 @@ details.gd-group > summary { cursor: pointer; }
 .gd-actions-app > .gd-badge { align-self: center; }
 /* "More" is at the row's right; its menu opens under the row, from that side */
 .gd-actions-app > .gd-menu-wrap { display: flex; position: static; margin-left: auto; }
-.gd-edit-button { gap: 8px; padding: 0 16px; }
-.gd-edit-button .gd-icon-line { color: inherit; }
+.gd-edit-button { display: inline-flex; align-items: center; gap: 6px; }
+.gd-actions-app > .gd-edit-button { gap: 8px; padding: 0 16px; }
+.gd-edit-button .gd-icon-line, .gd-delete-button .gd-icon-line { color: inherit; flex: 0 0 auto; }
+.gd-delete-button { display: inline-flex; align-items: center; justify-content: center; }
+.gd-delete-button:hover { color: var(--accent-pink); }
 /* The game's logo beside its name */
 .gd-head-logo { flex: 0 0 auto; width: 84px; height: 56px; object-fit: contain; align-self: center; }
 .gd-head-logo + .gd-heading { flex: 1 1 150px; min-width: 0; }
@@ -263,3 +266,6 @@ details.gd-group > summary { cursor: pointer; }
 .gd-more hr { border: none; border-top: 1px solid var(--border-color); margin: 5px 8px; }
 .gd-icon-line { flex: 0 0 20px; color: var(--text-secondary); }
 .gd-more button.danger .gd-icon-line { color: inherit; }
+.gd-replace { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; }
+.gd-replace .gd-row > span:first-child { min-width: 80px; color: var(--text-secondary); }
+.gd-replace input[type=file] { min-width: 0; max-width: 100%; }

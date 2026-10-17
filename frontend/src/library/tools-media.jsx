@@ -10,17 +10,18 @@ const VIEWER_SIZE_KEY = 'rm-media-viewer-size';
 // Kinds that aren't pictures: shown as a tile saying the game has one
 const VIEWER_FILES = { manuals: '📄 Manual', videos: '🎬 Video' };
 
-function MediaViewerPanel({ onClose }) {
+// `options` (from Fill the gaps, or coming back from it): {system, kind, show} to open on
+function MediaViewerPanel({ options, onClose }) {
     const [kind, setKind] = React.useState(() => {
+        if (options && options.kind) return options.kind;
         try { return localStorage.getItem(VIEWER_KIND_KEY) || 'box2d'; } catch (e) { return 'box2d'; }
     });
     const [data, setData] = React.useState(null);
     const [error, setError] = React.useState(null);
-    const [system, setSystem] = React.useState('');
-    const [show, setShow] = React.useState('all'); // all | has | missing
+    const [system, setSystem] = React.useState((options && options.system) || '');
+    const [show, setShow] = React.useState((options && options.show) || 'all'); // all | has | missing
     const [search, setSearch] = React.useState('');
     const [picked, setPicked] = React.useState({}); // key -> true
-    const [scraping, setScraping] = React.useState(null); // the games being scraped
     const [reload, setReload] = React.useState(0);
     // Tile width in pixels, from the size slider (spines are drawn a third as wide)
     const [size, setSize] = React.useState(() => {
@@ -89,16 +90,14 @@ function MediaViewerPanel({ onClose }) {
     };
     const allShownPicked = games.length > 0 && games.every(g => picked[keyOf(g)]);
 
+    // Fill the gaps, with every source's version beside what each game has
+    const fillable = typeof FILL_MEDIA !== 'undefined' && FILL_MEDIA.includes(kind);
+    const openFill = (fillOptions) => window.dispatchEvent(new CustomEvent('retromanager:open-tool', {
+        detail: { tool: 'fill', options: { ...fillOptions, from: 'viewer', viewer: { system, kind, show } } } }));
+
     if (mixGames) {
         return <MixGeneratePanel selection={mixGames} onBack={() => setMixGames(null)} onClose={onClose}
             onDone={() => { setPicked({}); setReload(n => n + 1); }} />;
-    }
-    if (scraping) {
-        return (
-            <BulkScrapePanel chosen={scraping} initialMedia={[kind]} initialReplace={scraping.some(g => g.picture)}
-                onClose={() => setScraping(null)}
-                onDone={() => { setPicked({}); setReload(n => n + 1); }} />
-        );
     }
 
     const field = {padding: 6, borderRadius: 4, border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: 13};
@@ -109,7 +108,7 @@ function MediaViewerPanel({ onClose }) {
           <div style={{width: 'min(1700px, calc(100vw - 80px))', maxWidth: '100%'}}>
             <h2 style={{marginBottom: 4}}>Media viewer</h2>
             <div style={{color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12}}>
-                One kind of media for every game. Click games to pick them (Shift-click for a run of them), then scrape them again.{' '}
+                One kind of media for every game. Click games to pick them (Shift-click for a run of them), then fill them from every source.{' '}
                 <button onClick={() => setOverviewOpen(o => !o)} style={{background: 'none', border: 'none', padding: 0, color: 'var(--accent-orange)', cursor: 'pointer', fontSize: 13, textDecoration: 'underline'}}>
                     {overviewOpen ? 'Hide' : 'What each system is missing'}
                 </button>
@@ -134,9 +133,15 @@ function MediaViewerPanel({ onClose }) {
                                             const n = s.missing[f];
                                             return (
                                                 <td key={f} style={{padding: 2, textAlign: 'center'}}>
-                                                    {n ? <button onClick={() => jump(s.system, f)} title={`${s.full_name}'s games without a ${mediaSourceLabel(f)}`}
-                                                            style={{background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', fontWeight: 600, fontSize: 13,
-                                                                    color: n === s.total ? 'var(--accent-pink)' : 'var(--accent-orange)'}}>{n}</button>
+                                                    {n ? <span style={{display: 'inline-flex', alignItems: 'center', gap: 2}}>
+                                                            <button onClick={() => jump(s.system, f)} title={`${s.full_name}'s games without a ${mediaSourceLabel(f)}`}
+                                                                style={{background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', fontWeight: 600, fontSize: 13,
+                                                                        color: n === s.total ? 'var(--accent-pink)' : 'var(--accent-orange)'}}>{n}</button>
+                                                            {typeof FILL_MEDIA !== 'undefined' && FILL_MEDIA.includes(f) && (
+                                                                <button onClick={() => openFill({ system: s.system, kinds: [f], show: 'gaps' })} title={`Fill ${s.full_name}'s missing ${mediaSourceLabel(f)}, from every source`}
+                                                                    style={{background: 'none', border: '1px solid var(--border-color)', borderRadius: 4, cursor: 'pointer', padding: '0 5px', fontSize: 10, color: 'var(--text-secondary)'}}>Fill</button>
+                                                            )}
+                                                        </span>
                                                        : <span style={{color: 'var(--success)'}}>✓</span>}
                                                 </td>
                                             );
@@ -193,11 +198,13 @@ function MediaViewerPanel({ onClose }) {
                         Generate Mix{chosen.length ? ` (${chosen.length})` : ''}
                     </button>
                 )}
-                <button className="btn btn-primary btn-small" disabled={!chosen.length || kind === 'videos'}
-                    title={kind === 'videos' ? 'Videos are scraped from the game itself or a Library scrape' : `Look the picked games up on ScreenScraper, check the matches, then download their ${label}`}
-                    onClick={() => setScraping(chosen.map(g => ({ ...g, key: keyOf(g) })))}>
-                    Scrape {chosen.length || ''} picked
-                </button>
+                {fillable && (
+                    <button className="btn btn-primary btn-small" disabled={!chosen.length}
+                        title={`Every source's ${label} for the picked games, beside what each has, to choose from (Fill the gaps)`}
+                        onClick={() => openFill({ games: chosen.map(g => ({ system: g.system, path: g.path })), kinds: [kind], replace: true, start: true })}>
+                        Fill {chosen.length || ''} picked
+                    </button>
+                )}
             </div>
             {asking && ReactDOM.createPortal(
                 <div onClick={e => { e.stopPropagation(); setAsking(null); }}

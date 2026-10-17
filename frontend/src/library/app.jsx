@@ -18,9 +18,11 @@ function App() {
     const [tool, setTool] = useState(null);
     // A system a tool opens on, when another panel sent us there (Scan's duplicates, say)
     const [toolSystem, setToolSystem] = useState(null);
+    // ...and anything else it's handed (the Media viewer's picked games for Fill the gaps, say)
+    const [toolOptions, setToolOptions] = useState(null);
     useEffect(() => {
-        // window.dispatchEvent(new CustomEvent('retromanager:open-tool', {detail: {tool, system}})) from any panel
-        const open = (e) => { setScanResult(null); setToolSystem(e.detail?.system || null); setTool(e.detail?.tool || null); };
+        // window.dispatchEvent(new CustomEvent('retromanager:open-tool', {detail: {tool, system, options}})) from any panel
+        const open = (e) => { setScanResult(null); setToolSystem(e.detail?.system || null); setToolOptions(e.detail?.options || null); setTool(e.detail?.tool || null); };
         window.addEventListener('retromanager:open-tool', open);
         return () => window.removeEventListener('retromanager:open-tool', open);
     }, []);
@@ -69,7 +71,11 @@ function App() {
         const target = systems.find(sys => sys.name === params.get('system'));
         if (!target) return;
         // &scrape=1 (Scrape on another page) opens the scraper for it too
-        if (params.get('game') && params.get('scrape')) window.gdScrapeOnOpen = { system: target.name, path: params.get('game') };
+        // (Scrape, pressed on another page: Fill the gaps for the game, as the game's own Scrape does here)
+        if (params.get('game') && params.get('scrape')) {
+            window.dispatchEvent(new CustomEvent('retromanager:open-tool', { detail: { tool: 'fill',
+                options: { games: [{ system: target.name, path: params.get('game') }], replace: true, start: true, single: true } } }));
+        }
         setSelectedSystem(target);
         loadGames(target.name, params.get('game') || null);
         if (isMobile) goStep(params.get('game') ? 2 : 1);
@@ -402,7 +408,7 @@ function App() {
             {tool === 'scrape' && (
                 <LibraryScrapePanel status={scrapeStatus} refresh={refreshScrapeStatus} onClose={() => setTool(null)} onChanged={refreshLibrary} />
             )}
-            {tool === 'viewer' && <MediaViewerPanel onClose={() => { setTool(null); refreshLibrary(); }} />}
+            {tool === 'viewer' && <MediaViewerPanel options={toolOptions} onClose={() => { setTool(null); setToolOptions(null); refreshLibrary(); }} />}
             {tool === 'storage' && <StoragePanel initialSystem={toolSystem} onClose={() => { setTool(null); setToolSystem(null); refreshLibrary(); }} showNotification={showNotification} />}
             {tool === 'history' && <PlayHistoryPanel onClose={() => setTool(null)} />}
             {tool === 'achievements' && <AchievementOverviewPanel onClose={() => setTool(null)} />}
@@ -410,6 +416,9 @@ function App() {
             {tool === 'series' && <SeriesPanel onClose={() => setTool(null)} showNotification={showNotification} />}
             {tool === 'collections' && <CollectionsPanel onClose={() => setTool(null)} />}
             {tool === 'roms' && <RomCheckPanel onClose={() => setTool(null)} />}
+            {tool === 'fill' && <FillGapsPanel initialSystem={toolSystem || selectedSystem?.name} systems={systems} options={toolOptions} showNotification={showNotification}
+                // (sent from the Media viewer: back to it)
+                onClose={() => { const back = toolOptions && toolOptions.from === 'viewer'; setToolSystem(null); setToolOptions(back ? toolOptions.viewer || null : null); setTool(back ? 'viewer' : null); }} onChanged={() => { loadSystems(); if (selectedSystem) loadGames(selectedSystem.name, selectedGame?.path); }} />}
             {tool === 'duplicates' && <DuplicatesPanel initialSystem={toolSystem} onClose={() => { setTool(null); setToolSystem(null); }} showNotification={showNotification}
                 onChanged={() => { loadSystems(); if (selectedSystem) loadGames(selectedSystem.name); }} />}
             {tool === 'settings' && <SettingsPanel onClose={() => setTool(null)} showNotification={showNotification} />}

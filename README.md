@@ -39,7 +39,7 @@ To run the published image instead of building it, put `image: ghcr.io/deltagemi
 |---|---|
 | [Setting up](docs/setup.md) | Where the library goes, settings, running and updating, the folder layout, troubleshooting |
 | [The Library and its tools](docs/library.md) | Browsing, editing and adding games; every tool under 🧰 Tools |
-| [Scraping](docs/scraping.md) | The sources, what each gives, bulk and library scrapes, matching |
+| [Scraping](docs/scraping.md) | The sources, what each gives, Fill the gaps and the Background scrape, matching |
 | [Console, Bookcase, Timeline and playing](docs/console.md) | The pages for looking through the collection, and playing in the browser |
 | [The Android app](docs/phone.md) | Installing it, playing in RetroArch, saves, offline, controllers, shortcuts |
 | [Profiles](docs/profiles.md) | A profile per person, sign-in, and telling RetroArch about them |

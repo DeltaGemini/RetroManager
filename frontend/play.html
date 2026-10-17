@@ -54,6 +54,12 @@
         .rm-pad-ctl.down { opacity: 1; filter: brightness(1.5); }
         /* EmulatorJS's own touch pad makes way for it */
         body.rm-pad-on .ejs_virtualGamepad_parent { display: none !important; }
+        /* EmulatorJS's menu button keeps its menu bar open until it's pressed again (pinMenuBar) */
+        body.rm-menu-pinned .ejs_menu_bar.ejs_menu_bar_hidden { opacity: 1 !important; pointer-events: auto !important; transform: none !important; }
+        body.rm-menu-pinned .ejs_small_screen .ejs_menu_bar.ejs_menu_bar_hidden { transform: translate(-50%, 0) !important; }
+        body.rm-menu-pinned .ejs_virtualGamepad_open { opacity: 1 !important; }
+        .rm-menu-button { opacity: 0.5; cursor: pointer; }
+        .rm-menu-button:hover, .rm-menu-button:focus-visible { opacity: 0.9; }
         /* Once the game is on, the bar keeps only what's still of use, on one line where it fits */
         body.playing #profile, body.playing #profile-label, body.playing #start { display: none; }
         body.playing .bar { padding: 6px 12px; gap: 8px; }
@@ -270,6 +276,46 @@
             setStatus('Leaving...');
             setTimeout(() => { window.location.href = $('back').href; }, 400);
         }
+        // EmulatorJS's own menu button (☰) only flips its menu bar, which also comes and goes
+        // with the mouse and hides itself after 3 seconds: a click could close what the
+        // mouse had just opened. Here it opens the bar and keeps it open until pressed again.
+        function pinMenuBar(emulator) {
+            let button = emulator.elements.menuToggle;
+            // EmulatorJS only makes its button where it thinks there's a touch screen: elsewhere, the same one of ours
+            if (!button) {
+                button = document.createElement('div');
+                button.className = 'ejs_virtualGamepad_open rm-menu-button';
+                button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path d="M0 96c0-17.7 14.3-32 32-32h384c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zm0 160c0-17.7 14.3-32 32-32h384c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zm448 160c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32h384c17.7 0 32 14.3 32 32z"/></svg>';
+                button.setAttribute('role', 'button');
+                button.tabIndex = 0;
+                button.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); button.click(); } });
+                emulator.elements.parent.appendChild(button);
+                emulator.elements.menuToggle = button;
+            }
+            // (touches aren't cancelled, so the tap still ends in a click)
+            const swallow = (e) => { e.stopImmediatePropagation(); if (e.type === 'mousedown' || e.type === 'click') e.preventDefault(); };
+            ['touchstart', 'touchend', 'mousedown', 'mouseup', 'pointerdown', 'pointerup'].forEach(type => button.addEventListener(type, swallow, { capture: true, passive: false }));
+            button.addEventListener('click', (e) => {
+                swallow(e);
+                const pinned = document.body.classList.toggle('rm-menu-pinned');
+                try { pinned ? emulator.menu.open(true) : emulator.menu.close(); } catch (err) {}
+            }, { capture: true });
+            button.title = 'Menu';
+        }
+
+        // The browser's copies of this game from before the file was replaced (EmulatorJS
+        // keeps each version under its own address, the old ones taking room for nothing)
+        async function forgetOldCopies(emulator) {
+            try {
+                const current = String(window.EJS_gameUrl).split('/').pop();
+                const name = current.split('?')[0];
+                const kept = await emulator.storage.rom.getSizes();
+                for (const key of Object.keys(kept || {})) {
+                    if (key !== current && key.split('?')[0] === name) await emulator.storage.rom.remove(key);
+                }
+            } catch (e) {}
+        }
+
         // Select and Start held together for a second on a controller leaves the game
         function watchForExit(manager) {
             if (!navigator.getGamepads) return;
@@ -468,7 +514,9 @@
             window.EJS_player = '#game';
             // A Pi save state only loads on the emulator core that made it
             window.EJS_core = chosenState ? chosenState.core : info.core;
-            window.EJS_gameUrl = info.rom_url.split('/').map(encodeURIComponent).join('/');
+            // (with the file's version: EmulatorJS keeps ROMs in the browser under this address's last
+            // part, and a replaced ROM is often the same size, which is all it checks)
+            window.EJS_gameUrl = info.rom_url.split('/').map(encodeURIComponent).join('/') + (info.rom_version ? `?v=${info.rom_version}` : '');
             window.EJS_gameName = info.name;
             if (info.bios_url) window.EJS_biosUrl = info.bios_url.split('/').map(encodeURIComponent).join('/');
             window.EJS_pathtodata = info.emulatorjs_url;
@@ -486,6 +534,8 @@
                 offerPiStates(manager);
                 offerSendToPi(manager);
                 watchForExit(manager);
+                pinMenuBar(window.EJS_emulator);
+                forgetOldCopies(window.EJS_emulator);
                 if (padLayout) startPad(padLayout, manager);
                 if (pendingSave) {
                     try {

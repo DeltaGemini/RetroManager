@@ -545,7 +545,7 @@ public class MainActivity extends Activity {
                 return new JSONObject().put("server", prefs.server()).put("folder", folder == null ? JSONObject.NULL : folder.path())
                         .put("retroArch", player.retroArch() == null ? JSONObject.NULL : player.retroArch()).put("retroArchs", new JSONArray(player.installed()))
                         .put("profile", prefs.profile() == null ? JSONObject.NULL : prefs.profile()).put("profiles", prefs.profiles())
-                        .put("kept", Player.size(cache.size())).put("version", mine).put("pinSaves", prefs.pinSaves())
+                        .put("kept", Player.size(cache.size())).put("version", mine).put("pinSaves", prefs.pinSaves()).put("updateGames", prefs.updateGames())
                         .put("unclaimed", prefs.unclaimed() == null ? JSONObject.NULL : prefs.unclaimed())
                         .put("claimUndo", prefs.claimUndo() == null ? JSONObject.NULL : new JSONObject()
                                 .put("person", prefs.claimUndo().optString("person")).put("games", prefs.claimUndo().optInt("games"))
@@ -616,6 +616,7 @@ public class MainActivity extends Activity {
                     case "setup-apply": setup.apply(); break;
                     case "setup-check": setup.check(); break;
                     case "setup-pin": prefs.pinSaves("on".equals(value)); break;
+                    case "update-games": prefs.updateGames("on".equals(value)); break;
                     case "sync-states": player.syncAllStates(); break;
                     case "reload":
                         cache.reached(true);

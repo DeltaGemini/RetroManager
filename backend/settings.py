@@ -61,7 +61,7 @@ SCHEMA = [
          "default": "drawn", "choices": [["drawn", "RetroManager's drawn tiles"], ["theme", "The Switch theme's pictures, where a system has one"]]},
     ]),
     ("Matching and media", "", [
-        {"key": "libretro_thumbnails", "env": "LIBRETRO_THUMBNAILS", "label": "libretro thumbnails in bulk and library scrapes",
+        {"key": "libretro_thumbnails", "env": "LIBRETRO_THUMBNAILS", "label": "libretro thumbnails in the Background scrape",
          "default": "fallback", "choices": [["fallback", "When ScreenScraper has no image of that kind"],
                                             ["first", "Before ScreenScraper (saves its quota)"], ["off", "Never"]]},
         {"key": "gametdb", "env": "GAMETDB", "label": "Disc and cartridge pictures from GameTDB (GameCube, Wii, DS, 3DS, PS3), found by the ID in the ROM",

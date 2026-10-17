@@ -1,19 +1,22 @@
 """
-Scraping from ScreenScraper and IGDB: search, apply, bulk scrape and the library scrape.
+Scraping from ScreenScraper and IGDB: search, apply, matching on the other sources
+(for Fill the gaps) and the background scrape.
 """
 
+import re
 import shutil
 import time
 
 from flask import jsonify
 from pathlib import Path
+from backend.bulk_scrape import name_score
 from backend.models import Game
 from backend.scrape_queue import ScrapeQueue
 from backend.folder_games import folder_game_name
 from backend.scraper import ScreenscraperError, ScreenscraperNotFound
 from backend.igdb_scraper import IGDBError
 from backend.libretro_thumbs import THUMBNAIL_TYPES
-from backend.retroachievements import ID_PREFIX as RA_ID_PREFIX, RetroAchievementsError
+from backend.retroachievements import ID_PREFIX as RA_ID_PREFIX
 from backend.systems import screenscraper_system_id, thegamesdb_platform_id
 from backend.media_index import strip_dot_slash, title_key
 from backend.steamgriddb import SteamGridDBError
@@ -24,7 +27,6 @@ from backend.core import (
     _request_json,
     _request_rom_file,
     _saveable_fields,
-    _system_path_or_none,
     app,
     bulk_matcher,
     DATA_DIR,
@@ -116,59 +118,81 @@ def download_scraper_media():
     except Exception as e:
         logger.exception("Error in download_scraper_media")
         return jsonify(success=False, error=str(e)), 500
-# Text fields bulk scraping may fill; existing values are never replaced
+# Text fields a background scrape may fill; existing values are never replaced
 BULK_TEXT_FIELDS = ('name', 'desc', 'genre', 'developer', 'publisher', 'releasedate', 'players', 'rating')
-# Media bulk scraping may download (videos are left out: large and slow)
+# Media a background scrape may download (videos are left out: large and slow)
 BULK_MEDIA_FOLDERS = ('box2d', 'box3d', 'boxside', 'screenshot', 'screenshottitle', 'wheel', 'fanart', 'mix', 'support', 'manuals')
 
 
-@app.route("/api/bulk-scrape/match", methods=["POST"])
-def bulk_scrape_match():
-    """Body: {system_name, rom_path, query?}. Best ScreenScraper match with a confidence and
-    alternatives. `query` replaces the automatic lookup with a title search."""
-    data = _request_json()
-    system_path = _system_path_or_none(data.get("system_name"))
-    rom_path = strip_dot_slash(data.get("rom_path"))
-    if not system_path or not rom_path:
-        return jsonify(success=False, error="Missing or unknown system_name / rom_path"), 400
-    try:
-        result = bulk_matcher.match(data["system_name"], rom_path, system_path / rom_path, (data.get("query") or "").strip() or None,
-                                    title=folder_game_name(data["system_name"], rom_path))
-        return jsonify(success=True, **result)
-    except ScreenscraperError as e:
-        # Quota, overload, bad credentials...: the UI stops and shows this
-        return jsonify(success=False, error=str(e), fatal=True)
-    except Exception as e:
-        logger.exception("Error matching game")
-        return jsonify(success=False, error=str(e)), 500
+# Matching on a source other than ScreenScraper: its matches' ids are
+# "<source>:<its id>", which apply_scrape fetches from that source
+BULK_SOURCES = ('igdb', 'retroachievements', 'steam', 'steamgriddb', 'thegamesdb', 'launchbox', 'gametdb', 'libretro')
+# A source's names for its pictures -> RetroManager's folders (the rest are its folders' own names)
+_SOURCE_PICTURES = {'cover': 'box2d', 'grid': 'box2d', 'hero': 'fanart', 'artwork': 'fanart', 'logo': 'wheel'}
 
 
-@app.route("/api/bulk-scrape/apply", methods=["POST"])
-def bulk_scrape_apply():
-    """Body: {system_name, rom_path, game_id, media: [folders]}. Fills the game's empty
-    fields from the match, downloads media it doesn't have yet, links <image>,
-    <thumbnail> and <video>, and saves the entry. Back up the gamelist first."""
-    data = _request_json()
-    system_name = data.get("system_name")
-    system_path = _system_path_or_none(system_name)
-    rom_path = strip_dot_slash(data.get("rom_path"))
-    game_id = data.get("game_id")
-    if not system_path or not rom_path or not game_id:
-        return jsonify(success=False, error="Missing system_name, rom_path or game_id"), 400
-    wanted_media = [m for m in (data.get("media") or []) if m in BULK_MEDIA_FOLDERS]
+def _as_folders(media):
+    """A source's media {name: url} as RetroManager's folders, the first of each (screenshot_1 before _2)."""
+    folders = {}
+    for key in sorted((media or {}), key=lambda k: (re.sub(r'_\d+$', '', k), int((re.findall(r'_(\d+)$', k) or ['0'])[0]))):
+        url = media[key]
+        if not url:
+            continue
+        name = re.sub(r'_\d+$', '', key)
+        folder = _SOURCE_PICTURES.get(name, name)
+        if folder in BULK_MEDIA_FOLDERS and folder not in folders:
+            folders[folder] = url
+    return folders
 
-    try:
-        result = apply_scrape(system_name, rom_path, game_id, wanted_media, replace=bool(data.get("replace")))
-        if not result.get('success'):
-            return jsonify(**result), 404 if result.get('error') == "Game not found" else 500
-        return jsonify(**result)
-    except ScreenscraperError as e:
-        return jsonify(success=False, error=str(e), fatal=True)
-    except RetroAchievementsError as e:
-        return jsonify(success=False, error=str(e))
-    except Exception as e:
-        logger.exception("Error applying bulk scrape")
-        return jsonify(success=False, error=str(e)), 500
+
+def _source_search(source, system_name, rom_path, name):
+    """A source's search results for a game, a checksum match first: summaries
+    {id, name, cover_url, platform_names, year, is_hack, hash_match}."""
+    data = {'system_name': system_name, 'rom_path': rom_path, 'name': name}
+    if source == 'igdb':
+        return _igdb_results(data, name)
+    from backend.routes.sources import _OTHER_SOURCES
+    return _OTHER_SOURCES[source][2](data, name)
+
+
+def _source_game(source, game_id, system_name):
+    """A source's game as gamelist fields plus `media` by RetroManager's folders."""
+    if source == 'igdb':
+        game = igdb_scraper.get_game_info(game_id)
+        if not game:
+            raise ValueError("IGDB returned no data for that game.")
+        data = igdb_scraper.extract_game_data(game)
+    else:
+        from backend.routes.sources import _OTHER_SOURCES
+        data = _OTHER_SOURCES[source][3]({'game_id': game_id, 'system_name': system_name}) or {}
+    return {**data, 'media': _as_folders(data.get('media'))}
+
+
+def _source_errors():
+    from backend.routes.sources import _OTHER_SOURCES
+    return (IGDBError, ValueError) + tuple(e for entry in _OTHER_SOURCES.values() for e in entry[1])
+
+
+def _match_from_source(source, system_name, rom_path, query):
+    """bulk_matcher.match's answer, from another source: its results scored by
+    how near their names are to the game's (a checksum match is exact)."""
+    title = query or folder_game_name(system_name, rom_path) or re.sub(r'\s*[\(\[][^\)\]]*[\)\]]', '', Path(rom_path).stem).strip()
+    results = _source_search(source, system_name, rom_path, title)
+    alternatives = []
+    for r in results[:8]:
+        score = 1.0 if r.get('hash_match') else name_score(title, {'noms': [{'text': r.get('name') or ''}]})
+        alternatives.append({'id': f"{source}:{r['id']}", 'nom': r.get('name'), 'year': r.get('year'),
+                             'systemenom': r.get('platform_names') or '', 'image': r.get('cover_url'),
+                             'score': round(score, 2), 'is_hack': bool(r.get('is_hack')), 'hash_match': bool(r.get('hash_match'))})
+    alternatives.sort(key=lambda a: (not a['hash_match'], a['is_hack'], -a['score']))
+    best = alternatives[0] if alternatives else None
+    if not best:
+        confidence = 'none'
+    elif best['hash_match']:
+        confidence = 'exact'
+    else:
+        confidence = 'likely' if best['score'] >= 0.9 else 'unsure' if best['score'] >= 0.5 else 'none'
+    return {'confidence': confidence, 'match_id': best['id'] if best else None, 'alternatives': alternatives, 'source': source}
 
 
 def _media_urls(system_name, folder, scraped_url, thumbnails):
@@ -287,7 +311,11 @@ def apply_scrape(system_name, rom_path, game_id, wanted_media, replace=False):
     if game is None:
         return dict(success=False, error="Game not found")
     known_names = []
-    if str(game_id).startswith(RA_ID_PREFIX):
+    source, _, raw = str(game_id).partition(':')
+    if source in BULK_SOURCES and raw:
+        # A match from another source (Fill the gaps, or the scrape popup)
+        scraped = _source_game(source, raw, system_name)
+    elif str(game_id).startswith(RA_ID_PREFIX):
         scraped = ra_scraper.extract_game_data(ra_scraper.get_game_info(game_id))
     else:
         jeu = jeu_cache.get(game_id) or scraper.get_game_info(game_id)
@@ -423,7 +451,7 @@ def apply_scrape(system_name, rom_path, game_id, wanted_media, replace=False):
 
 
 def _scrape_targets(systems, include_media, media):
-    """Games for the library scrape: missing metadata first, then (optionally)
+    """Games for the background scrape: missing metadata first, then (optionally)
     games missing any of the chosen media."""
     wanted = set(systems or [])
     metadata, missing_media = [], []
@@ -435,7 +463,7 @@ def _scrape_targets(systems, include_media, media):
         try:
             games = scanner.get_games_for_system(system.name)
         except Exception as e:
-            logger.warning(f"Library scrape: couldn't list {system.name}: {e}")
+            logger.warning(f"Background scrape: couldn't list {system.name}: {e}")
             continue
         for game in games:
             if not game.rom_exists:
@@ -463,7 +491,7 @@ scrape_queue = ScrapeQueue(
 
 @app.route("/api/scrape-queue", methods=["GET"])
 def scrape_queue_status():
-    """Progress of the library scrape: running, total, done, current, applied,
+    """Progress of the background scrape: running, total, done, current, applied,
     review (matches too uncertain to apply), failed."""
     return jsonify(success=True, **scrape_queue.snapshot())
 
@@ -488,6 +516,21 @@ def scrape_queue_stop():
     return jsonify(success=True)
 
 
+def _igdb_results(data, game_name):
+    """IGDB's search results, the game Hasheous knows the ROM as first. Raises IGDBError."""
+    rom_file = _request_rom_file(data)
+    known = _hasheous_lookup(data.get("system_name"), rom_file) if rom_file else None
+    games = igdb_scraper.search_game(game_name, data.get("system_name"))
+    hash_match = None
+    igdb_id = ((known or {}).get('ids') or {}).get('igdb')
+    if igdb_id and igdb_id.isdigit():
+        game = next((g for g in games if str(g.get('id')) == igdb_id), None) or igdb_scraper.get_search_result(igdb_id)
+        if game:
+            hash_match = igdb_scraper.summarize_search_result(game, hash_match=True)
+    results = sorted((igdb_scraper.summarize_search_result(g) for g in games), key=lambda r: r['is_hack'])
+    return _hash_match_first(results, hash_match)
+
+
 @app.route("/api/igdb/search", methods=["POST"])
 def igdb_search():
     """Body: {name, system_name?, rom_path?}. With rom_path, the game Hasheous
@@ -497,21 +540,10 @@ def igdb_search():
     if not game_name:
         return jsonify(success=False, error="Missing game name"), 400
 
-    rom_file = _request_rom_file(data)
-    known = _hasheous_lookup(data.get("system_name"), rom_file) if rom_file else None
     try:
-        games = igdb_scraper.search_game(game_name, data.get("system_name"))
-        hash_match = None
-        igdb_id = ((known or {}).get('ids') or {}).get('igdb')
-        if igdb_id and igdb_id.isdigit():
-            game = next((g for g in games if str(g.get('id')) == igdb_id), None) or igdb_scraper.get_search_result(igdb_id)
-            if game:
-                hash_match = igdb_scraper.summarize_search_result(game, hash_match=True)
+        results = _igdb_results(data, game_name)
     except IGDBError as e:
         return jsonify(success=False, error=str(e), results=[])
-
-    results = sorted((igdb_scraper.summarize_search_result(g) for g in games), key=lambda r: r['is_hack'])
-    results = _hash_match_first(results, hash_match)
     if not results:
         return jsonify(success=False, error=f'IGDB found nothing for "{game_name}". Try a shorter name.', results=[])
     return jsonify(success=True, results=results, source='igdb')

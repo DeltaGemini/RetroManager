@@ -33,7 +33,7 @@ A system opens on the same game list the Library has (each game's logo over its 
   - **Manufacturers**: Nintendo, Sega, Sony, Atari, Computers, Other.
 
   A shelf that mixes systems keeps each box its own size. Generation and manufacturer shelves keep each system's games together; a franchise's shelf runs in the chosen sort order (**Sort: Year** puts a series in release order). Generations and manufacturers are the Library's (`frontend/common/systems.js`); series detection is `frontend/common/series.js`.
-- **Spines** use the game's `boxside` image. Download spines with the **Spine** media type in single or bulk scraping (ScreenScraper `box-2D-side`). Without one, the spine shows the left edge of the cover with the title down it.
+- **Spines** use the game's `boxside` image. Download spines with the **Spine** media type in the Scrape popup or Fill the gaps (ScreenScraper `box-2D-side`). Without one, the spine shows the left edge of the cover with the title down it.
 - **Hover** (or keyboard focus) turns the box to face you: it widens to its Box 2D cover, the boxes beside it slide over to make room, and the game's name and year show underneath. Boxes without a cover enlarge the spine instead.
 - **Click** (or tap, or Enter) pulls the box out: it slides up out of the shelf, leaving a gap, and swings towards you. Then the game's [details](library.md#game-details) open in a popup. **Put it back** (or Esc) slides it back into its gap. With reduced motion switched on, the card opens straight away.
 - **Keyboard:** ← → along a shelf, ↑ ↓ between shelves, Enter opens.

@@ -128,6 +128,10 @@ def test_phone_play_lists_a_games_files_and_serves_them(client, root):
     assert phone_players("Nintendo 3DS")[0]["package"] == "org.azahar_emu.azahar" and phone_players("nope") == []
     assert {f["path"]: f["size"] for f in info["files"]} == {"Disc Game.cue": (root / "roms/psx/Disc Game.cue").stat().st_size, "Disc Game (Track 1).bin": 2048}
     assert "guest" in info["profiles"]
+    # Each file's date and size, so the phone fetches a replaced one (an updated ROM, the same size) again
+    cue = (root / "roms/psx/Disc Game.cue").stat()
+    stamped = {f["path"]: f for f in info["files"]}["Disc Game.cue"]
+    assert stamped["stamp"] == f"{int(cue.st_mtime)}-{cue.st_size}" and stamped["modified"] == int(cue.st_mtime * 1000)
     assert not client.get("/api/phone/info", query_string={"system": "snes", "rom": "nope.sfc"}).get_json()["playable"]
     assert client.get("/api/phone/rom/psx/Disc Game (Track 1).bin").data == b"\x04" * 2048
     part = client.get("/api/phone/rom/gba/Pocket Game.gba", headers={"Range": "bytes=4000-"})

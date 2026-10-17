@@ -58,6 +58,14 @@ Refs are `upload:<id>` or `inbox:<path in the inbox>`.
 | GET | `/api/storage/compare` | `?area=&item=`: the item's files (the first 150) beside the library's own versions, each marked the same or different |
 | GET | `/api/storage/file` | `?area=&item=&rel=&side=aside\|now`: one of the two files being compared |
 | GET | `/api/storage/diff` | `?area=&item=&rel=`: a gamelist copy's entry-by-entry changes against the gamelist now, or a text file's changed lines |
+| POST | `/api/fill/look` | `{system_name, rom_path, sources, rematch?}`: a game's match on each source (remembered, or matched now) and each matched source's pictures and details |
+| POST | `/api/fill/apply` | `{system_name, rom_path, pictures: {folder: url}, fields: {field: value}, remember}`: put the chosen ones in, and remember the matches |
+| GET | `/api/fill/remembered` | `?system=`: which of its games have matches remembered, and on which sources |
+| POST | `/api/boxes/make` | `{system_name, rom_path, kind: box3d \| boxside}`: a 3D box or spine made from the game's cover, kept a day: `token`, `url`. Fill the gaps applies it as `made:<token>` |
+| GET | `/api/boxes/made/<token>` | A made 3D box or spine |
+| POST | `/api/fill/picture` | The body is a picture pasted in (PNG, JPEG, WebP, GIF; 30 MB at most), kept a day: `token`, `url`; applied as `made:<token>` |
+| GET/PUT | `/api/systems/<system>/rom-version` | `?rom=` / `{rom, version}`: the version noted for a game's ROM, with what it replaced |
+| POST | `/api/systems/<system>/replace-rom` | `{rom, upload, version?}`: an `/api/uploads` file put in place of the ROM under its name; the old one kept in `replaced-roms/` |
 | GET | `/api/duplicates` | Every game more than once, by name (the Scan) and by identical files (the ROM check), as one list (`?system=` for one) |
 | POST | `/api/storage/delete` | `{area, items}`, `{area, older_than_days}` or `{area, all: true}`: delete for good |
 | GET | `/api/media-viewer` | `?folder=box2d` (or mix, wheel...): every game of every system with that picture's path, or none |
@@ -152,10 +160,8 @@ Older routes, taking a JSON body with `system`:
 | GET | `/api/scrape-sources` | Which sources the Scrape popup can use, and which need a key |
 | POST | `/api/sources/<source>/search` | Search `retroachievements`, `steam`, `steamgriddb` or `libretro` |
 | POST | `/api/sources/<source>/game-info` | Normalised metadata and media for one result from that source |
-| POST | `/api/bulk-scrape/match` | `{system_name, rom_path, query?}`: best match (ScreenScraper, or RetroAchievements by checksum), confidence and alternatives |
-| POST | `/api/bulk-scrape/apply` | `{system_name, rom_path, game_id, media}`: fill empty fields, download missing media, link and save |
-| GET | `/api/scrape-queue` | Library scrape progress: `running`, `total`, `done`, `current`, `applied`, `review`, `failed` |
-| POST | `/api/scrape-queue/start` | `{systems?, include_media?, media?, recheck?}`: start a library scrape |
+| GET | `/api/scrape-queue` | Background scrape progress: `running`, `total`, `done`, `current`, `applied`, `review`, `failed` |
+| POST | `/api/scrape-queue/start` | `{systems?, include_media?, media?, recheck?}`: start a background scrape |
 | POST | `/api/scrape-queue/stop` | Stop after the current game |
 
 Request and response shapes are in [SCRAPING.md](scraping.md).
@@ -179,7 +185,7 @@ With login on, every other `/api/` request needs a signed-in device (401 otherwi
 
 | Method | Route | Purpose |
 |---|---|---|
-| GET | `/api/tasks` | Background tasks running or just ended (library scrape, ROM check, series matching): `label`, `running`, `done`, `total`, `current`, `summary`, `problem`. Empty for players |
+| GET | `/api/tasks` | Background tasks running or just ended (Background scrape, ROM check, series matching): `label`, `running`, `done`, `total`, `current`, `summary`, `problem`. Empty for players |
 | GET | `/api/systems/<system>/saves?rom=<rom path>` | A game's saves and states, with person, type, slot, size and date |
 | GET | `/api/save-screenshot/<saves\|savestates>/<path>` | A save state's `.png` screenshot |
 | GET | `/api/systems/<system>/saves/download?rom=<rom path>` | A zip of one game's saves and states |

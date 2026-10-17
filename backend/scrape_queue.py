@@ -3,7 +3,7 @@ Library-wide scraping in the background: every game missing metadata (and,
 optionally, games missing media) on every system, one at a time.
 
 Confident matches (ScreenScraper recognised the file, or the name matches
-closely) are applied the same way as Bulk scrape: empty fields only, media the
+closely) are applied as Fill the gaps would from the order: empty fields only, media the
 game doesn't have yet. Anything less certain is left for review. Each system's
 gamelist is backed up before its first change.
 
@@ -75,7 +75,7 @@ class ScrapeQueue:
     def start(self, systems: Optional[List[str]], include_media: bool, media: List[str], recheck: bool) -> Dict:
         with self._lock:
             if self.status['running']:
-                return {'success': False, 'error': 'A library scrape is already running'}
+                return {'success': False, 'error': 'A background scrape is already running'}
             targets = self._list_targets(systems, include_media, media)
             cutoff = time.time() - RECHECK_DAYS * 86400
             fresh = [t for t in targets
@@ -145,7 +145,7 @@ class ScrapeQueue:
                     reason = str(e)
                     break
                 except Exception as e:
-                    logger.exception(f"Library scrape failed for {system}/{rom_path}")
+                    logger.exception(f"Background scrape failed for {system}/{rom_path}")
                     item['error'] = str(e)
                     self._append('failed', item)
                 self._set(done=i + 1)

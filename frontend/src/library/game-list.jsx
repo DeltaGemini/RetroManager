@@ -5,7 +5,6 @@
 
 function GameList({ games, selectedGame, onGameSelect, onScan, onReload, scanning, loading, system, showNotification }) {
     const [settingsOpen, setSettingsOpen] = React.useState(false);
-    const [bulkOpen, setBulkOpen] = React.useState(false);
     const [collectOpen, setCollectOpen] = React.useState(false);
     // The header's "Bulk" menu closes on a click outside it, or Escape
     const [bulkMenu, setBulkMenu] = React.useState(false);
@@ -51,9 +50,9 @@ function GameList({ games, selectedGame, onGameSelect, onScan, onReload, scannin
                                 aria-haspopup="menu" aria-expanded={bulkMenu} title="Work on many games at once">Bulk ▾</button>
                             {bulkMenu && (
                                 <div role="menu" className="rm-menu" style={{width: 240}}>
-                                    <button role="menuitem" onClick={() => { setBulkMenu(false); setBulkOpen(true); }}>
-                                        <span style={{fontSize: 16}} aria-hidden="true">🔎</span>
-                                        <span><span style={{display: 'block'}}>Scrape...</span><span className="rm-help">Match many games, review, then fill them in</span></span>
+                                    <button role="menuitem" onClick={() => { setBulkMenu(false); window.dispatchEvent(new CustomEvent('retromanager:open-tool', { detail: { tool: 'fill', system: system.name } })); }}>
+                                        <span style={{fontSize: 16}} aria-hidden="true">🧩</span>
+                                        <span><span style={{display: 'block'}}>Fill the gaps...</span><span className="rm-help">Every source's pictures and details, side by side</span></span>
                                     </button>
                                     <button role="menuitem" onClick={() => { setBulkMenu(false); setCollectOpen(true); }}>
                                         <span style={{fontSize: 16}} aria-hidden="true">📁</span>
@@ -71,9 +70,6 @@ function GameList({ games, selectedGame, onGameSelect, onScan, onReload, scannin
                         </button>
             </>}>
             {collectOpen && system && <BulkCollectPanel system={system} games={games} onClose={() => setCollectOpen(false)} />}
-            {bulkOpen && system && (
-                <BulkScrapePanel system={system} games={games} onClose={() => setBulkOpen(false)} onDone={() => onReload && onReload()} />
-            )}
             <Modal open={settingsOpen} onClose={()=>setSettingsOpen(false)}>
                 <h2 style={{marginBottom:16}}>Game List Settings</h2>
                 <div style={{marginBottom:24}}>

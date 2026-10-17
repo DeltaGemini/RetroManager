@@ -27,7 +27,9 @@ function DetailPanel({ game, system, onSaved, onDeleted, showNotification, detai
             {/* The scrolling area reaches the pane's right edge (past its 20px padding), so the scrollbar sits at the edge */}
             <div style={{position: 'relative', zIndex: 2, flex: 1, overflowY: 'auto', minHeight: 0, marginRight: -20, paddingRight: 20}}>
                 <GameDetails system={system.name} systemLabel={system.full_name || system.name} game={game} notify={showNotification}
-                    onSaved={onSaved} onDeleted={onDeleted} editState={detailStateRef} Scraper={ScraperSearchPopup} />
+                    onSaved={onSaved} onDeleted={onDeleted} editState={detailStateRef} Scraper={ScraperSearchPopup}
+                    onScrape={(g) => window.dispatchEvent(new CustomEvent('retromanager:open-tool', { detail: { tool: 'fill',
+                        options: { games: [{ system: system.name, path: g.path }], replace: true, start: true, single: true } } }))} />
             </div>
         </div>
     );

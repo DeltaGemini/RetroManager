@@ -413,7 +413,7 @@ class RetroAchievementsAPI:
 
     def summarize_search_result(self, game: Dict) -> Dict[str, Any]:
         """Short form of a game-list entry, shaped like a ScreenScraper result so
-        the bulk scrape review can list both."""
+        the matches can list both."""
         title = split_title(game.get('title') or '')
         summary = {
             'id': f"{ID_PREFIX}{game.get('id')}",

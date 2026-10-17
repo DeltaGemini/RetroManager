@@ -29,8 +29,11 @@ from backend.core import (
 def get_games(system_name):
     try:
         games = scanner.get_games_for_system(system_name)
+        from backend.routes.rom_replace import rom_versions   # (each ROM's version, as noted: backend/rom_versions.py)
+        versions = rom_versions.for_system(system_name)
         return jsonify(success=True, games=[
             {**g.to_dict(), **library_state.for_game(f"{system_name}/{strip_dot_slash(g.path)}", person()),
+             'rom_version': versions.get(strip_dot_slash(g.path), ''),
              'playable': g.rom_exists and browser_playable(system_name, g.path),
              'phone_playable': g.rom_exists and bool(phone_players(system_name))} for g in games])
     except Exception as e:
@@ -48,7 +51,10 @@ def get_game(system_name, rom_path):
         # Where each of its downloaded pictures came from: {media folder: {source, at}}
         came_from = media_sources.for_paths(v for v in fields.values() if isinstance(v, str) and '/' in v and not v.startswith(('.', '/')))
         folders = {k: came_from[v] for k, v in fields.items() if isinstance(v, str) and v in came_from and k not in ('image', 'thumbnail', 'video')}
-        return jsonify(success=True, game={**fields, 'media_sources': folders, **library_state.for_game(f"{system_name}/{strip_dot_slash(rom_path)}", person()),
+        from backend.routes.rom_replace import rom_versions   # (its version, as noted: backend/rom_versions.py)
+        version = rom_versions.get(f"{system_name}/{strip_dot_slash(rom_path)}").get('version') or ''
+        return jsonify(success=True, game={**fields, 'media_sources': folders, 'rom_version': version,
+                                           **library_state.for_game(f"{system_name}/{strip_dot_slash(rom_path)}", person()),
                                            'playable': game.rom_exists and browser_playable(system_name, rom_path),
                                            'phone_playable': game.rom_exists and bool(phone_players(system_name))})
     except Exception as e:

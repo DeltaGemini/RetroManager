@@ -1,4 +1,4 @@
-// Tools: library scrape.
+// Tools: the background scrape (every system, on the server).
 // Part of the library page (index.html), which loads these files in order;
 // they share one global scope, so each can use what the ones before it define.
 
@@ -22,7 +22,7 @@ const HEALTH_COLUMNS = [
 // Link that opens a game in the library (used from Tools panels)
 const gameLink = (system, romPath) => `/?${new URLSearchParams({ system, game: `./${String(romPath).replace(/^\.\//, '')}` })}`;
 
-// Progress of the background library scrape, polled while it runs
+// Progress of the background scrape, polled while it runs
 function useScrapeQueue() {
     const [status, setStatus] = React.useState(null);
     const refresh = React.useCallback(async () => {
@@ -99,7 +99,7 @@ function LibraryScrapePanel({ status, refresh, onClose, onChanged }) {
 
     return (
         <Modal open={true} onClose={onClose}>
-            <h2 style={{marginBottom: 4}}>Library scrape</h2>
+            <h2 style={{marginBottom: 4}}>Background scrape</h2>
             <div style={{color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16, maxWidth: 640}}>
                 Scrapes every system from ScreenScraper in the background; you can close this and keep using the app.
                 Confident matches fill empty fields and add media a game doesn't have yet. Uncertain ones are listed for you to check.
@@ -135,7 +135,7 @@ function LibraryScrapePanel({ status, refresh, onClose, onChanged }) {
                     <label style={{display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginBottom: 16, color: 'var(--text-secondary)'}}>
                         <input type="checkbox" checked={recheck} onChange={e => setRecheck(e.target.checked)} /> Recheck games already checked in the last 30 days
                     </label>
-                    <button className="btn btn-primary" onClick={start}>Start library scrape</button>
+                    <button className="btn btn-primary" onClick={start}>Start the background scrape</button>
                     {error && <div style={{color: 'var(--accent-pink)', marginTop: 8}}>{error}</div>}
                     {s.finished && (
                         <div style={{marginTop: 16, fontSize: 13, color: s.stopped_reason && s.stopped_reason !== 'Stopped' ? 'var(--accent-pink)' : 'var(--text-secondary)'}}>

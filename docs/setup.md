@@ -74,7 +74,7 @@ The scraping sources' accounts and keys aren't in `docker-compose.yml`. Set them
 - **RetroAchievements**: your web API key, and the user whose earned achievements are shown.
 - **SteamGridDB**: your API key.
 - **TheGamesDB**: your API key (asked for on its forums).
-- **Matching and media**: when libretro thumbnails are used in bulk and library scrapes, and whether ROMs are recognised by checksum through hasheous.org.
+- **Matching and media**: when libretro thumbnails are used in a Background scrape, and whether ROMs are recognised by checksum through hasheous.org.
 
 Settings take effect as soon as you save. They're kept in `settings.json` in `DATA_PATH` (`RetroGames/retromanager/`), readable only by the container's user. Saved passwords and keys are never sent back to the browser: the panel only says whether one is saved, and lets you replace or remove it. A source with nothing set is greyed out in the Scrape popup.
 

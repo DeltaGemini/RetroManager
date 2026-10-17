@@ -27,32 +27,31 @@ Behind these, **Hasheous** (hasheous.org, no account) turns a ROM's checksum int
 
 Media downloads one file at a time with a progress bar. If a search, lookup or download fails, a message at the top of the popup says why (see [Troubleshooting](#troubleshooting)); if some downloads fail, everything else is still applied and the popup stays open to list the failures.
 
-## Bulk scraping
+## Many games at once
 
-**Bulk scrape** (in the game list header) scrapes many games of one system at once, from ScreenScraper:
+**Fill the gaps** (🧰 Tools, or a system's **Bulk ▾ › Fill the gaps...**) scrapes many games at once, from every source side by side: see [Fill the gaps](library.md#fill-the-gaps). It covers pictures, manuals, videos and text; manuals and videos come from ScreenScraper only. **Background scrape** (below) does every system unattended.
 
-1. **Choose games.** Start from a group (Missing metadata, No description, No image in gamelist, All) and untick any you want to skip. Choose which media to download; videos aren't offered, because they're large and slow.
-2. **Find matches.** Each game is looked up by its ROM file name, which ScreenScraper recognises for most No-Intro/Redump-named ROMs. If that fails, the file's checksum is looked up (see [Checksum matching](#checksum-matching)), which finds renamed files and, with a RetroAchievements key, ROM hacks. If that fails or looks wrong too, it falls back to a title search, using the title the checksum gave when there is one. Each result gets a confidence:
+How a game is matched (Fill the gaps and Background scrape alike):
 
-   | Confidence | Meaning | Ticked? |
-   |---|---|---|
-   | **Exact** | This exact ROM file was recognised, by its name or its checksum | Yes |
-   | **Likely** | The game's name closely matches the ROM's title | Yes |
-   | **Unsure** | A game was found but the names differ | No |
-   | **No match** | Nothing found | No |
+- **ScreenScraper:** by the ROM file name, which it recognises for most No-Intro/Redump-named ROMs. If that fails, the file's checksum is looked up (see [Checksum matching](#checksum-matching)), which finds renamed files and, with a RetroAchievements key, ROM hacks. If that fails or looks wrong too, it falls back to a title search, using the title the checksum gave when there is one.
+- **Another source:** by the game's title (its file name without the region and version tags), with a match from the ROM's checksum first where that source can be asked so (IGDB, RetroAchievements and SteamGridDB, through Hasheous; GameTDB by the ID inside the ROM).
 
-   Matching takes 1–4 seconds per game and can be stopped at any time.
-3. **Review.** Pick another result from the dropdown, or for Unsure/No match rows search a different name. **Needs attention** shows only the rows to check.
-4. **Apply.** The gamelist is backed up once, then each ticked game gets:
-   - **Empty fields filled.** Fields that already have a value are never replaced. A game without an entry gets its name from ScreenScraper.
-   - **Missing media downloaded.** Types the game already has a file for are skipped, unless **Replace the media these games already have** is ticked in step 1 (for pictures that are the wrong ones): then each ticked type is downloaded again where the match has one, and the old file is copied to `DATA_PATH/replaced-media/<date-time>/` first. Where ScreenScraper has no box art, screenshot, title screen or wheel (or the download fails), the libretro thumbnail is used if there is one; choose **Before ScreenScraper** in Tools › Settings to try libretro first for those four, which saves ScreenScraper quota, or `off` to never use it.
-   - **Image, Thumbnail and Video linked** in the gamelist where they're empty or broken.
+Each match gets a confidence:
+
+| Confidence | Meaning |
+|---|---|
+| **Exact** | This exact ROM file was recognised, by its name or its checksum |
+| **Likely** | The game's name closely matches the ROM's title (numbers must agree, so sequels aren't taken) |
+| **Unsure** | A game was found but the names differ: not used unless you pick it |
+| **No match** | Nothing found |
+
+Where ScreenScraper has no box art, screenshot, title screen or wheel (or the download fails), a Background scrape uses the libretro thumbnail if there is one; choose **Before ScreenScraper** in Tools › Settings to try libretro first for those four, which saves ScreenScraper quota, or `off` to never use it. In Fill the gaps libretro is a source of its own, in the order you choose.
 
 Each media file is a ScreenScraper request, so a large batch uses a noticeable part of the daily quota; a ScreenScraper user account (Tools › Settings) raises it. If the quota runs out, the batch stops and says so, and everything applied so far is kept.
 
-## Library scrape
+## Background scrape
 
-**🧰 Tools › Library scrape** runs the same matching over every system in the background, without a review step: **Exact** and **Likely** matches are applied straight away (empty fields and missing media only), and **Unsure** and **No match** games are listed under **Needs a look** for you to scrape by hand. Optionally it also covers games that have metadata but lack some media. Games it has checked are skipped for 30 days. Details are in the [README](library.md#library-scrape).
+**🧰 Tools › Background scrape** runs the same ScreenScraper matching over every system in the background, without a review step: **Exact** and **Likely** matches are applied straight away (empty fields and missing media only), and **Unsure** and **No match** games are listed under **Needs a look** for you to scrape by hand. Optionally it also covers games that have metadata but lack some media. Games it has checked are skipped for 30 days. Details are in the [README](library.md#background-scrape).
 
 Names from ScreenScraper and IGDB are put in the house name style (`Series: Subtitle`, see the README's Scan section) before they're shown or saved.
 
@@ -64,7 +63,7 @@ A match from RetroAchievements (a ROM hack ScreenScraper doesn't list, say) fill
 
 **Then GameTDB**, for a disc or cartridge picture only, on GameCube, Wii, DS, 3DS and PS3. The game's own ID is read from the ROM (`.iso`, `.gcm`, `.ciso`, `.wbfs`, `.rvz`, `.wia`, `.nds`, `.3ds`, `.cci`, a `.cia` that isn't encrypted or has its code in its name, a PS3 `.iso` or game folder), so the picture is that game's and no other's. No account and no quota; **Tools › Settings › Matching and media** turns it off.
 
-**Then the LaunchBox Games Database**, when it's turned on in the same place (it's off to begin with). It has pictures of every kind, cartridges and discs among them, and fan-made ones for many ROM hacks. It has no search to ask: RetroManager fetches its list of every game (about 110 MB) once a month and keeps an index of the platforms it knows in `launchbox.db` in `DATA_PATH` (about 120 MB); the strip under the header shows it being fetched, and a library scrape won't start until the first one is done. A game is found by title on the system's own platform (ignoring tags and punctuation), by any of the names LaunchBox knows it by. A real cartridge or disc is preferred to a fan-made one, and a North American or worldwide picture to another region's.
+**Then the LaunchBox Games Database**, when it's turned on in the same place (it's off to begin with). It has pictures of every kind, cartridges and discs among them, and fan-made ones for many ROM hacks. It has no search to ask: RetroManager fetches its list of every game (about 110 MB) once a month and keeps an index of the platforms it knows in `launchbox.db` in `DATA_PATH` (about 120 MB); the strip under the header shows it being fetched, and a background scrape won't start until the first one is done. A game is found by title on the system's own platform (ignoring tags and punctuation), by any of the names LaunchBox knows it by. A real cartridge or disc is preferred to a fan-made one, and a North American or worldwide picture to another region's.
 
 Both are sources in the **Scrape** popup as well: **LaunchBox** searches its list by the words of the name and offers every picture it has of the game to choose between; **GameTDB** has no search, so it shows the one game the ROM's ID is, or says why it can't tell.
 
@@ -156,7 +155,7 @@ Accounts, keys and options are set in the app, in **🧰 Tools › Settings**, a
 | RetroAchievements web API key | retroachievements.org › Settings › Keys. Without it the source is off |
 | RetroAchievements user name | Whose earned achievements each game's page shows |
 | SteamGridDB API key | steamgriddb.com › Preferences › API. Without it the source is off |
-| libretro thumbnails | When they're used in bulk and library scrapes: see [Bulk scraping](#bulk-scraping) |
+| libretro thumbnails | When they're used in a Background scrape: see [Many games at once](#many-games-at-once) |
 | Recognise ROMs by checksum | Hasheous on or off: see [Checksum matching](#checksum-matching) |
 
 Without a ScreenScraper user account, requests use the anonymous quota, and ScreenScraper blocks anonymous use when it's busy. A free account removes most of the failures listed below.
@@ -188,7 +187,7 @@ The container log (`docker compose logs -f retromanager`) has the full response 
 
 - **IGDB ranking**: IGDB's search ranking can put ROM hacks and fan games above the original. A result marked **ROM match** is the file itself; otherwise check the release year and platform before picking a result.
 - **Steam endpoints are unofficial**: the store search and details routes aren't a documented API, so Valve could change them.
-- **Previews use quota**: ScreenScraper media URLs go through its API, so opening previews in the popup (and match thumbnails in Bulk scrape) counts against the quota.
+- **Previews use quota**: ScreenScraper media URLs go through its API, so opening previews in the popup (and pictures, manuals and videos in Fill the gaps) counts against the quota.
 
 ## API
 
@@ -278,6 +277,6 @@ The two routes behave identically, and download media from any source.
 
 ## TheGamesDB
 
-Set the key in **Tools › Settings › TheGamesDB** (or `THEGAMESDB_API_KEY`). It's a source in the **Scrape** popup, searched by name and kept to the game's system where RetroManager knows TheGamesDB's number for it (`_TGDB_PLATFORMS` in `backend/systems.py`; a system that isn't there is searched on every platform). It isn't used by bulk scraping or the library scrape.
+Set the key in **Tools › Settings › TheGamesDB** (or `THEGAMESDB_API_KEY`). It's a source in the **Scrape** popup, searched by name and kept to the game's system where RetroManager knows TheGamesDB's number for it (`_TGDB_PLATFORMS` in `backend/systems.py`; a system that isn't there is searched on every platform). It's a source in Fill the gaps too; the Background scrape doesn't use it.
 
 Every request counts against the key's monthly allowance: a search is one, and opening a result is two (the game, then its pictures). The lists that turn its genre, developer and publisher numbers into names are fetched once and kept in the data folder (`thegamesdb-names.json`) for a month. Its age rating (an ESRB letter) isn't a score, so Rating is left alone. A back cover and a banner are offered but start on **Skip**, having no folder of their own.

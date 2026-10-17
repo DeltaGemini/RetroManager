@@ -99,6 +99,11 @@ final class Prefs {
     }
     void pinned(JSONArray games) { prefs.edit().putString("pinned", games.toString()).apply(); }
 
+    /** Whether games on the phone that the app didn't fetch itself (copied there, or put there by
+     *  Syncthing) are fetched again when RetroManager's copy is replaced, like the app's own (Player.fetch). */
+    boolean updateGames() { return prefs.getBoolean("updateGames", true); }
+    void updateGames(boolean update) { prefs.edit().putBoolean("updateGames", update).apply(); }
+
     /** Whether the app writes the save folders into the override of each core it starts (Setup.pin). */
     boolean pinSaves() { return prefs.getBoolean("pinSaves", false); }
     void pinSaves(boolean pin) { prefs.edit().putBoolean("pinSaves", pin).apply(); }

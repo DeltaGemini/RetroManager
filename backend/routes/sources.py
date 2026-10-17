@@ -36,14 +36,12 @@ from backend.routes.scraping import _hash_match_first
 # Each has a search and a game-info route shaped like ScreenScraper's and IGDB's;
 # media is downloaded through /api/scraper/download-media.
 # -----------------------------------------------------------------------------
-@app.route("/api/scrape-sources", methods=["GET"])
-def scrape_sources():
-    """Which sources the Scrape popup can offer. `available` is false for one
-    that needs a key that isn't set, with `hint` saying which."""
+def available_sources():
+    """Every source, with whether it can be used here: [{id, label, available, hint}]."""
     def source(source_id, label, available, missing):
         return {'id': source_id, 'label': label, 'available': available,
                 'hint': None if available else f'Add {missing} in Tools > Settings to use {label}'}
-    return jsonify(success=True, sources=[
+    return [
         source('screenscraper', 'ScreenScraper', scraper.configured, 'the ScreenScraper developer credentials'),
         source('igdb', 'IGDB', igdb_scraper.configured, 'the IGDB client ID and secret'),
         source('retroachievements', 'RetroAchievements', ra_scraper.configured, 'your RetroAchievements API key'),
@@ -56,7 +54,14 @@ def scrape_sources():
         {'id': 'gametdb', 'label': 'GameTDB', 'available': True},
         {'id': 'libretro', 'label': 'libretro thumbnails', 'available': libretro_thumbs.enabled,
          'hint': None if libretro_thumbs.enabled else 'libretro thumbnails are switched off in Tools > Settings'},
-    ], hasheous=hasheous.enabled, libretro_mode=settings.get('libretro_thumbnails'))
+    ]
+
+
+@app.route("/api/scrape-sources", methods=["GET"])
+def scrape_sources():
+    """Which sources the Scrape popup can offer. `available` is false for one
+    that needs a key that isn't set, with `hint` saying which."""
+    return jsonify(success=True, sources=available_sources(), hasheous=hasheous.enabled, libretro_mode=settings.get('libretro_thumbnails'))
 
 
 def _ra_search(data, game_name):

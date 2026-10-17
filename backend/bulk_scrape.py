@@ -1,5 +1,5 @@
 """
-Match many ROMs to ScreenScraper games at once, for the Bulk scrape panel.
+Match many ROMs to ScreenScraper games at once, for Fill the gaps and the Background scrape.
 
 Each ROM is first identified by its file name (ScreenScraper keeps a database of
 ROM file names), then by its checksum (Hasheous and RetroAchievements know files

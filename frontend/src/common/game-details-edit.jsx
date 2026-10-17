@@ -89,6 +89,8 @@ function GDFactsEdit({ draft, set }) {
             <dd><input className="gd-input" type="date" value={date} onChange={e => set('releasedate', e.target.value ? `${e.target.value.replace(/-/g, '')}T000000` : undefined)} /></dd>
             <dt>Genre</dt><dd>{text('genre')}</dd>
             <dt>Players</dt><dd>{text('players')}</dd>
+            {/* RetroManager's own, not the gamelist's (backend/rom_versions.py) */}
+            {draft.rom_version !== undefined && <><dt>Version</dt><dd><input className="gd-input" type="text" maxLength={60} placeholder="1.1, v2, 2024-06-01…" value={draft.rom_version || ''} onChange={e => set('rom_version', e.target.value)} /></dd></>}
         </dl>
     );
 }

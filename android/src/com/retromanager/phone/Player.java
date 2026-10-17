@@ -558,10 +558,8 @@ final class Player {
             JSONObject file = files.getJSONObject(i);
             Folder.Entry there = folder.stat("roms/" + system + "/" + file.getString("path"));
             if (there != null) {
-                // A file of that name is taken as the game, whatever its size: it's the phone's own.
-                // Unless the app fetched it itself and the server's has changed since: then it's fetched again.
-                String got = prefs.synced("got|" + system + "/" + file.getString("path"));
-                if (got == null || !got.equals(String.valueOf(there.size)) || there.size == file.optLong("size") || cache.offline()) continue;
+                if (cache.offline() || !replaced(system, file, there)) continue;
+                file.put("again", true);
             }
             missing.add(file);
             total += file.optLong("size");
@@ -582,10 +580,32 @@ final class Player {
             String path = file.getString("path");
             StringBuilder address = new StringBuilder("/api/phone/rom/" + Uri.encode(system));
             for (String part : path.split("/")) address.append('/').append(Uri.encode(part));
-            fetchFile(folder, address.toString(), "roms/" + system + "/" + path, file.optLong("size"), done, total);
+            fetchFile(folder, address.toString(), "roms/" + system + "/" + path, file.optLong("size"), done, total, file.optBoolean("again"));
             done += file.optLong("size");
-            prefs.synced("got|" + system + "/" + path, String.valueOf(file.optLong("size")));
+            prefs.synced("got|" + system + "/" + path, file.optString("stamp", String.valueOf(file.optLong("size"))));
         }
+    }
+
+    /** Whether a game's file on the phone is an older copy of RetroManager's, to fetch again (an updated
+     *  ROM, which is often the same size). The app notes the server's date and size ("stamp") of each
+     *  file it fetches. One it noted only the size of (an older app), or didn't fetch (copied there, or
+     *  put there by Syncthing, which keeps a file's date), is older if its size differs or the server's
+     *  is dated after it. One that isn't the app's is only fetched again with "Keep games up to date" on,
+     *  and from then on is the app's; with it off, one changed on the phone since it was fetched stays. */
+    private boolean replaced(String system, JSONObject file, Folder.Entry there) {
+        String key = "got|" + system + "/" + file.optString("path");
+        String got = prefs.synced(key), stamp = file.optString("stamp", "");
+        long size = file.optLong("size");
+        boolean newer = size != there.size || (file.optLong("modified") > 0 && there.modified > 0 && file.optLong("modified") > there.modified + 2000);
+        if (got != null && got.contains("-")) {
+            if (stamp.isEmpty() || got.equals(stamp)) return false;
+            // (changed on the phone since it was fetched: the phone's own now, unless games are kept up to date)
+            return prefs.updateGames() || got.endsWith("-" + there.size);
+        }
+        boolean ours = got != null && got.equals(String.valueOf(there.size));
+        if (!ours && !prefs.updateGames()) return false;
+        if (!newer && !stamp.isEmpty()) prefs.synced(key, stamp);   // the same: noted, so the next change is seen
+        return newer;
     }
 
     /** Fetches one file to a place in the RetroArch folder. While it arrives it
@@ -593,8 +613,14 @@ final class Player {
      *  (in case the folder is one it keeps in step). If the connection drops, what
      *  arrived is kept and the next try carries on from there. */
     private void fetchFile(Folder folder, String address, String target, long expected, long before, long total) throws Stop {
+        fetchFile(folder, address, target, expected, before, total, false);
+    }
+
+    /** (fresh: a newer copy of a file that's there, so a part left from fetching the old one isn't carried on) */
+    private void fetchFile(Folder folder, String address, String target, long expected, long before, long total, boolean fresh) throws Stop {
         String file = target.substring(target.lastIndexOf('/') + 1), name = Folder.clean(file);
         String partial = target.substring(0, target.length() - file.length()) + ".syncthing." + name + ".tmp";
+        if (fresh) folder.delete(partial);
         Folder.Entry part = folder.stat(partial);
         long have = part == null ? 0 : part.size;
         if (have > 0 && expected > 0 && have >= expected) {

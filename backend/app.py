@@ -34,6 +34,9 @@ from backend.routes import (  # noqa: F401 (imported for their routes)
     tasks,
     storage,
     duplicates,
+    boxes,
+    fill,
+    rom_replace,
 )
 
 # Not when a test imports the app

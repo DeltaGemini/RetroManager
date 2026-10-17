@@ -25,7 +25,7 @@
             'Profiles': "Who's Who", 'Language': 'Lingo', 'Colour theme': 'Colours', 'Open in Console': 'Open on the Telly',
             'Sign out': "'Op It", 'Sign in': 'Come In, Then', 'Settings': 'Gubbins', 'This phone': 'Me Dog and Bone',
             // Tools
-            'Library health': "Is It Poorly?", 'Library scrape': 'Fetch the Lot', 'Media viewer': 'Pictures, Innit',
+            'Library health': "Is It Poorly?", 'Background scrape': 'Fetch the Lot', 'Media viewer': 'Pictures, Innit',
             'Play history': 'Wot You Played', 'Achievement overview': 'Gongs', 'Missing in series': "Wot's Missin'",
             'Collections': 'Me Collections', 'ROM check': 'Check Me ROMs', 'Duplicates': 'Double Trouble',
             'Saves': 'Me Saves', 'Storage': 'The Lock-Up', 'Profiles and login': "Who's Who",

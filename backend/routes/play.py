@@ -283,8 +283,10 @@ def _modified(path):
 @app.route("/api/play/info", methods=["GET"])
 def play_info():
     """?system=&rom=. Whether the game can be played in the browser, and what
-    the player needs: {playable, core, name, rom_url, bios_url, emulatorjs_url,
-    states, profiles: [{name, has_save, modified, has_state}]}."""
+    the player needs: {playable, core, name, rom_url, rom_version, bios_url, emulatorjs_url,
+    states, profiles: [{name, has_save, modified, has_state}]}. rom_version changes when the
+    file does: EmulatorJS keeps ROMs in the browser by name and only fetches one again when
+    its size differs, so a ROM replaced by one the same size (most are) would play the old."""
     system_name, rom_path = request.args.get("system", ""), strip_dot_slash(request.args.get("rom", ""))
     rom_file, core = _playable_rom(system_name, rom_path)
     if not rom_file:
@@ -297,9 +299,14 @@ def play_info():
             save, state = _save_file(system_name, rom_path, profile), _state_file(system_name, rom_path, profile)
             profiles.append({'name': profile, 'has_save': save.is_file(), 'modified': _modified(save), 'has_state': state.is_file()})
     is_disc = rom_file.suffix.lower() == '.cue'
+    try:
+        stat = rom_file.stat()
+        version = f"{stat.st_mtime_ns:x}-{stat.st_size:x}"
+    except OSError:
+        version = None
     return jsonify(
         success=True, playable=True, core=core, name=(game.name if game else rom_file.stem),
-        rom_url=f"/api/rom-disc/{system_name}/{rom_path}.zip" if is_disc else f"/api/rom/{system_name}/{rom_path}",
+        rom_url=f"/api/rom-disc/{system_name}/{rom_path}.zip" if is_disc else f"/api/rom/{system_name}/{rom_path}", rom_version=version,
         bios_url=f"/api/play/bios/{system_name}/{bios_file(system_name).name}" if bios_file(system_name) else None,
         emulatorjs_url="/emulatorjs/", states=_usable(SAVESTATES_BASE), profiles=profiles)
 

@@ -31,7 +31,7 @@ ENV MEDIA_PATH=/media
 EXPOSE 5000
 
 ENV PYTHONPATH=/app
-# One worker: the library scrape, upload staging and caches live in its memory.
+# One worker: the background scrape, upload staging and caches live in its memory.
 # Threads serve requests side by side; the long timeout covers big uploads and
 # slow scraping sources.
 CMD ["gunicorn", "--workers", "1", "--threads", "16", "--timeout", "600", "--bind", "0.0.0.0:5000", "--access-logfile", "-", "backend.app:app"]
