@@ -78,7 +78,7 @@ The Switch colour themes' background works that way too: the photograph this ins
 
 ### Making a release
 
-`tools/export_public.sh <folder>` makes the copy that's given to others in another checkout (the public repository): everything that's in git here and nothing that isn't, plus the Android app as last built. Look over `git status` and `git diff` there, commit, and tag it (`v1.2.3`): the tag starts `.github/workflows/release.yml`, which builds the image for PCs and 64-bit Raspberry Pis, publishes it to `ghcr.io`, and makes a GitHub release with the app attached. The app is built and signed beforehand with `android/build.sh`, never in the workflow: its key stays with whoever makes the releases.
+First add the version's section to `CHANGELOG.md`: a numbered list of its big changes, then the bugs found and fixed since the version before (a release with no section stops before anything is published, and the section is what its release page shows, under the notice that no games are included). Then `tools/export_public.sh <folder>` makes the copy that's given to others in another checkout (the public repository): everything that's in git here and nothing that isn't, plus the Android app as last built. Look over `git status` and `git diff` there, commit, and tag it (`v1.2.3`): the tag starts `.github/workflows/release.yml`, which builds the image for PCs and 64-bit Raspberry Pis, publishes it to `ghcr.io`, and makes a GitHub release with the app attached. The app is built and signed beforehand with `android/build.sh`, never in the workflow: its key stays with whoever makes the releases.
 
 ### Deploying to the Pi from Windows
 

@@ -22,6 +22,26 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The release's notes: the notice, then this version's section of CHANGELOG.md (its big
+      # changes and the bugs fixed). A version with no section there isn't released (checked first, before anything is published).
+      - name: The release notes
+        id: notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          awk -v v="$version" '
+            /^## / { on = (index($0, "## " v " ") == 1 || $0 == "## " v); next }
+            on' CHANGELOG.md > section.md
+          if ! grep -q '[^[:space:]]' section.md; then
+            echo "CHANGELOG.md has no section for $version: add its big changes and bugs fixed first." >&2
+            exit 1
+          fi
+          {
+            echo "**No games or media included.** RetroManager organises a game library you already have. It does not supply, link to or help obtain ROMs, BIOS files, disc images, or game artwork, screenshots or videos. Any games shown in pictures of RetroManager are for illustration only and belong to their publishers. See [CREDITS.md](${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/CREDITS.md) for what is included and under which terms."
+            echo
+            cat section.md
+          } > notes.md
+
       - name: The image's name (lower case, as the registry wants it)
         run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
 
@@ -58,7 +78,7 @@ jobs:
       - name: Make the release
         uses: softprops/action-gh-release@v3
         with:
+          name: RetroManager ${{ steps.notes.outputs.version }}
           generate_release_notes: true
           files: ${{ steps.app.outputs.file }}
-          body: |
-            **No games or media included.** RetroManager organises a game library you already have. It does not supply, link to or help obtain ROMs, BIOS files, disc images, or game artwork, screenshots or videos. Any games shown in pictures of RetroManager are for illustration only and belong to their publishers. See [CREDITS.md](${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/CREDITS.md) for what is included and under which terms.
+          body_path: notes.md
