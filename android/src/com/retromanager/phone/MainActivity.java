@@ -58,27 +58,27 @@ public class MainActivity extends Activity {
     private static final int PICK_FOLDER = 1;
     private static final int PICK_FILES = 3;
     private android.webkit.ValueCallback<Uri[]> picking;
-    private static final String PLAY = Recent.PLAY, PLAY_RECENT = "com.retromanager.phone.PLAY_RECENT";
+    static final String PLAY = Recent.PLAY, PLAY_RECENT = "com.retromanager.phone.PLAY_RECENT";
     // When the recent games (widget, app icon shortcuts) were last asked for
-    private long recentAt;
-    private static final String VERSION = "1.0";
+    long recentAt;
+    static final String VERSION = "1.0";
 
-    private Prefs prefs;
-    private OfflineCache cache;
-    private Player player;
-    private Setup setup;
+    Prefs prefs;
+    OfflineCache cache;
+    Player player;
+    Setup setup;
     private Updater updater;
-    private WebView web;
-    private volatile Folder folder;
+    WebView web;
+    volatile Folder folder;
     private AlertDialog progress;
     private TextView progressText;
     private ProgressBar progressBar;
     // Each system's game files on the phone, as the page was last told (see RMApp.localRoms)
-    private final Map<String, String> roms = new HashMap<>();
-    private String allRoms;
+    final Map<String, String> roms = new HashMap<>();
+    String allRoms;
     private boolean fetching;
     private final java.util.concurrent.ExecutorService lister = java.util.concurrent.Executors.newSingleThreadExecutor();
-    private volatile long probed;
+    volatile long probed;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -98,7 +98,7 @@ public class MainActivity extends Activity {
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setUserAgentString(settings.getUserAgentString() + " RetroManagerApp/" + VERSION);
         CookieManager.getInstance().setAcceptCookie(true);
-        web.addJavascriptInterface(new Bridge(), "RMApp");
+        web.addJavascriptInterface(new Bridge(this), "RMApp");
         web.setWebChromeClient(new WebChromeClient() {
             // "Choose files", on the Add games page: the phone's own file picker
             @Override public boolean onShowFileChooser(WebView view, android.webkit.ValueCallback<Uri[]> chosen, FileChooserParams params) {
@@ -312,7 +312,7 @@ public class MainActivity extends Activity {
 
     /** A game's picture as a home screen icon: the whole picture in the middle,
      *  over itself filling the square and darkened, so no shape of icon cuts into it. */
-    private Icon icon(String picture) {
+    Icon icon(String picture) {
         Bitmap art = null;
         Folder folder = this.folder;
         if (picture != null && !picture.isEmpty()) {
@@ -500,402 +500,10 @@ public class MainActivity extends Activity {
 
     // --- What the page can ask for ---
 
-    private final class Bridge {
-        /** Starts a game in RetroArch, fetching it first if the phone hasn't got it. */
-        /** The page says who's signed in, each time it loads: someone else, and the
-         *  widget and app icon's games played last are theirs at once. */
-        @JavascriptInterface public void signedIn(String person) {
-            String now = person == null ? "" : person;
-            if (now.equals(prefs.recentFor())) return;
-            prefs.recentFor(now);
-            recentAt = System.currentTimeMillis();
-            new Thread(() -> Recent.refresh(MainActivity.this)).start();
-        }
+    // (What the page can ask for: Bridge.java)
 
-        @JavascriptInterface public void play(String system, String rom) {
-            if (system == null || rom == null || system.contains("/") || system.startsWith(".")) return;
-            player.play(system, rom);
-        }
 
-        /** The answer to a question the page drew for the app (window.RMDialog): the option's
-         *  place, 0 or 1 for a button, or -1 for "put away"; and what was typed, if it asked. */
-        @JavascriptInterface public void dialogAnswer(String id, int index, String text) {
-            runOnUiThread(() -> {
-                Answer answer = asked.remove(id);
-                if (answer != null) answer.answer(index, text);
-            });
-        }
-
-        /** Cancel, pressed on the page's "fetching" box. */
-        @JavascriptInterface public void cancelFetch() {
-            player.cancel();
-        }
-
-        // --- The page's own "This phone" panel (common/header.js) ---
-
-        /** What the panel shows: {server, folder, retroArch, retroArchs, profile, profiles, kept, version}. */
-        @JavascriptInterface public String settingsInfo() {
-            try {
-                String mine;
-                try {
-                    mine = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-                } catch (Exception e) {
-                    mine = "?";
-                }
-                return new JSONObject().put("server", prefs.server()).put("folder", folder == null ? JSONObject.NULL : folder.path())
-                        .put("retroArch", player.retroArch() == null ? JSONObject.NULL : player.retroArch()).put("retroArchs", new JSONArray(player.installed()))
-                        .put("profile", prefs.profile() == null ? JSONObject.NULL : prefs.profile()).put("profiles", prefs.profiles())
-                        .put("kept", Player.size(cache.size())).put("version", mine).put("pinSaves", prefs.pinSaves()).put("updateGames", prefs.updateGames())
-                        .put("unclaimed", prefs.unclaimed() == null ? JSONObject.NULL : prefs.unclaimed())
-                        .put("claimUndo", prefs.claimUndo() == null ? JSONObject.NULL : new JSONObject()
-                                .put("person", prefs.claimUndo().optString("person")).put("games", prefs.claimUndo().optInt("games"))
-                                .put("at", prefs.claimUndo().optLong("at"))).toString();
-            } catch (org.json.JSONException e) {
-                return "{}";
-            }
-        }
-
-        /** One of the panel's actions: "server", "folder", "retroarch" (value: the app), "profile" (value: the
-         *  name, or "" for nobody), "forget", "update", "reload", "open" (value: an address, for the browser). */
-        @JavascriptInterface public void setting(String what, String value) {
-            runOnUiThread(() -> {
-                if (isFinishing() || isDestroyed() || what == null) return;
-                switch (what) {
-                    case "server": askServer(null, null); break;
-                    case "folder": askFolder(); break;
-                    case "retroarch": if (player.installed().contains(value)) prefs.retroArch(value); break;
-                    case "profile": prefs.profile(value == null ? "" : value); break;
-                    case "unclaimed":
-                        // (choosing the one already chosen does nothing; another asks first)
-                        if (value == null || value.isEmpty() || value.equals(prefs.unclaimed())) break;
-                        new Thread(() -> {
-                            int others = player.claim(folder(), value, false);
-                            String[] options = others > 0
-                                    ? new String[]{"Just the unsorted ones", "Also take over the " + others + " game" + (others == 1 ? "" : "s") + " noted as someone else's"}
-                                    : new String[]{"Make it " + value};
-                            int picked = choose("Unsorted saves are " + value + "'s?",
-                                    "Saves on this phone that RetroManager hasn't sorted out yet (the ones that were here before the app) will count as " + value + "'s."
-                                            + (others > 0 ? " " + others + " game" + (others == 1 ? "'s save is" : "s' saves are") + " noted as someone else's: they stay theirs, unless you take them over too." : ""),
-                                    options);
-                            if (picked < 0) { tellPage(); return; }
-                            prefs.unclaimed(value);
-                            if (picked == 1) {
-                                int taken = player.claim(folder(), value, true);
-                                say(taken + " game" + (taken == 1 ? "'s save" : "s' saves") + " on this phone are now " + value + "'s. Undo it in these settings if that was a slip.");
-                            } else {
-                                say("Unsorted saves are " + value + "'s. Nobody else's were touched.");
-                            }
-                            tellPage();
-                        }).start();
-                        break;
-                    case "undo-claim":
-                        new Thread(() -> {
-                            JSONObject undo = prefs.claimUndo();
-                            if (undo == null || !confirm("Undo taking over saves?", "The " + undo.optInt("games") + " games' saves taken to be "
-                                    + undo.optString("person") + "'s go back to whose they were before.", "Undo it")) return;
-                            int back = player.undoClaim();
-                            say(back + " game" + (back == 1 ? "'s save" : "s' saves") + " back to whose they were.");
-                            tellPage();
-                        }).start();
-                        break;
-                    case "forget":
-                        try {
-                            ask(spec("confirm", "Forget the pages kept for offline?", "The pages and game lists kept for when there's no connection are forgotten, and kept again as they're opened. Pictures in the media folder stay.").put("yes", "Forget"), (index, text) -> {
-                                if (index != 0) return;
-                                cache.clear();
-                                say("Forgotten.");
-                                tellPage();
-                            });
-                        } catch (org.json.JSONException e) {
-                            // nothing to ask with
-                        }
-                        break;
-                    case "update": checkUpdate(true); break;
-                    // RetroArch's setup (Setup.java): "save" this phone's, "apply" the kept one, "check", and "pin" (value: on or off)
-                    case "setup-save": setup.save(); break;
-                    case "setup-apply": setup.apply(); break;
-                    case "setup-check": setup.check(); break;
-                    case "setup-pin": prefs.pinSaves("on".equals(value)); break;
-                    case "update-games": prefs.updateGames("on".equals(value)); break;
-                    case "sync-states": player.syncAllStates(); break;
-                    case "reload":
-                        cache.reached(true);
-                        web.reload();
-                        break;
-                    case "open":
-                        if (value != null && value.matches("(?i)^https?://.*")) start(new Intent(Intent.ACTION_VIEW, Uri.parse(value)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-                        break;
-                    default: break;
-                }
-                tellPage();
-            });
-        }
-
-        /** What plays each system, for the panel: [{name, label, plays, chosen, options: [{id, label, note, get}]}]. */
-        @JavascriptInterface public String emulatorsInfo() {
-            JSONArray out = new JSONArray(), systems = player.systems();
-            Player.History history = player.new History(folder);
-            try {
-                for (int i = 0; i < systems.length(); i++) {
-                    JSONObject system = systems.optJSONObject(i);
-                    String name = system.optString("name");
-                    JSONArray players = Player.players(system), options = new JSONArray();
-                    java.util.Set<String> failed = prefs.failed(name);
-                    for (int j = 0; j < players.length(); j++) {
-                        JSONObject one = players.optJSONObject(j);
-                        JSONObject option = new JSONObject().put("id", one.optString("id")).put("label", one.optString("name"));
-                        if ("core".equals(one.optString("kind"))) {
-                            option.put("note", failed.contains(one.optString("core")) ? "didn't start when tried" : history.used(one.optString("core")) ? "installed" : "");
-                        } else if (player.has(one.optString("package"))) {
-                            option.put("note", "installed · keeps its own saves");
-                        } else {
-                            option.put("note", "not installed").put("get", one.optString("get"));
-                        }
-                        options.put(option);
-                    }
-                    JSONObject plays = player.choose(history, name, null, players);
-                    out.put(new JSONObject().put("name", name).put("label", system.optString("label", name))
-                            .put("plays", plays == null ? JSONObject.NULL : plays.optString("name"))
-                            .put("chosen", prefs.core(name) == null ? JSONObject.NULL : prefs.core(name)).put("options", options));
-                }
-            } catch (org.json.JSONException e) {
-                // as far as it got
-            }
-            return out.toString();
-        }
-
-        /** What a system is played with: a player's id, "retroarch:<core>" for one typed in, or "" to let the app choose. */
-        @JavascriptInterface public void setEmulator(String system, String id) {
-            if (system == null || system.contains("/")) return;
-            if (id != null && id.startsWith("retroarch:")) prefs.failed(system, id.substring("retroarch:".length()), false);
-            prefs.core(system, id == null || id.isEmpty() ? null : id);
-            tellPage();
-        }
-
-        /** Looks through the roms folder for the panel, which is sent the answer when it's ready
-         *  ("retromanager:phone-storage": {total, free, systems: [{name, label, size, files: [[path, size]]}]}). */
-        @JavascriptInterface public void scanStorage() {
-            Folder folder = MainActivity.this.folder;
-            if (folder == null) return;
-            new Thread(() -> {
-                try {
-                    JSONArray systems = new JSONArray();
-                    long total = 0;
-                    for (Folder.Entry system : folder.list("roms")) {
-                        if (!system.folder || system.name.startsWith(".")) continue;
-                        List<Object[]> files = new ArrayList<>();
-                        sizes(folder, "roms/" + system.name, "", 0, files);
-                        if (files.isEmpty()) continue;
-                        files.sort((a, b) -> Long.compare((Long) b[1], (Long) a[1]));
-                        long size = 0;
-                        JSONArray listed = new JSONArray();
-                        for (Object[] file : files) {
-                            size += (Long) file[1];
-                            if (listed.length() < 400) listed.put(new JSONArray().put(file[0]).put(Player.size((Long) file[1])));
-                        }
-                        total += size;
-                        systems.put(new JSONObject().put("name", system.name).put("label", player.systemEntry(system.name).optString("label", system.name))
-                                .put("count", files.size()).put("size", Player.size(size)).put("bytes", size).put("files", listed));
-                    }
-                    String free;
-                    try {
-                        free = Player.size(new android.os.StatFs(folder.path()).getAvailableBytes());
-                    } catch (Exception e) {
-                        free = "";
-                    }
-                    String found = new JSONObject().put("total", Player.size(total)).put("free", free).put("systems", systems).toString();
-                    runOnUiThread(() -> {
-                        if (!isFinishing() && !isDestroyed())
-                            web.evaluateJavascript("window.dispatchEvent(new CustomEvent('retromanager:phone-storage', { detail: " + found + " }))", null);
-                    });
-                } catch (org.json.JSONException e) {
-                    // nothing to show
-                }
-            }).start();
-        }
-
-        /** Fetches a game to the phone without starting it. */
-        @JavascriptInterface public void fetch(String system, String rom, String name) {
-            if (system == null || rom == null || system.contains("/") || system.startsWith(".")) return;
-            player.fetch(system, rom, name == null || name.isEmpty() ? rom : name);
-        }
-
-        /** Fetches several, after asking: a JSON list of [system, rom]. */
-        @JavascriptInterface public void fetchAll(String games) {
-            try {
-                player.fetchAll(new JSONArray(games));
-            } catch (org.json.JSONException e) {
-                // nothing to fetch
-            }
-        }
-
-        /** Asks what this one game is played with (over what its system is). */
-        @JavascriptInterface public void chooseEmulator(String system, String rom, String name) {
-            if (system == null || rom == null || system.contains("/") || system.startsWith(".")) return;
-            emulators(system, rom.startsWith("./") ? rom.substring(2) : rom, name);
-        }
-
-        /** Takes a game off the phone (its files in the roms folder), after asking. The server's copy isn't touched. */
-        @JavascriptInterface public void removeLocal(String system, String rom, String name) {
-            if (system == null || rom == null || system.contains("/") || system.startsWith(".")) return;
-            player.remove(system, name == null || name.isEmpty() ? rom : name, rom);
-        }
-
-        /** A system's game files on the phone: a JSON list of paths in its roms folder. */
-        @JavascriptInterface public String localRoms(String system) {
-            Folder folder = MainActivity.this.folder;
-            if (folder == null || system == null || system.contains("/") || system.startsWith(".")) return "[]";
-            synchronized (roms) {
-                String listed = roms.get(system);
-                if (listed == null) {
-                    JSONArray found = new JSONArray();
-                    list(folder, "roms/" + system, "", 0, found);
-                    listed = found.toString();
-                    roms.put(system, listed);
-                }
-                return listed;
-            }
-        }
-
-        /** Every system's game files on the phone: a JSON object of system folder -> paths in it.
-         *  It's the list as last worked out, given at once; the page is told
-         *  ("retromanager:phone-roms") when a fresh look finds it has changed. */
-        @JavascriptInterface public String localSystems() {
-            synchronized (roms) {
-                if (allRoms == null) {
-                    try (java.io.InputStream in = new java.io.FileInputStream(romsFile())) {
-                        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-                        OfflineCache.copy(in, out);
-                        allRoms = out.toString("UTF-8");
-                    } catch (java.io.IOException e) {
-                        allRoms = "{}";
-                    }
-                }
-                return allRoms;
-            }
-        }
-
-        /** The systems nothing on this phone plays yet: a JSON list of their folders. */
-        @JavascriptInterface public String unplayable() {
-            return player.unplayable();
-        }
-
-        /** Whether RetroManager can't be reached. The page asks every few seconds,
-         *  which is also what has the server looked for again. */
-        @JavascriptInterface public boolean offline() {
-            long now = android.os.SystemClock.elapsedRealtime();
-            String server = prefs.server();
-            if (server != null && now - probed > 5000) {
-                probed = now;
-                new Thread(() -> {
-                    try {
-                        HttpURLConnection connection = (HttpURLConnection) new URL(server + "/api/health").openConnection();
-                        connection.setConnectTimeout(3000);
-                        connection.setReadTimeout(3000);
-                        connection.getResponseCode();
-                        connection.disconnect();
-                        cache.reached(true);
-                    } catch (Exception e) {
-                        cache.reached(false);
-                    }
-                }).start();
-            }
-            return cache.offline();
-        }
-
-        /** Puts a game on the phone's home screen, as an icon that starts it:
-         *  `picture` is its media path ("snes/box2d/Game.png"), for the icon. */
-        @JavascriptInterface public void pin(String system, String rom, String name, String picture) {
-            if (system == null || rom == null || system.contains("/") || system.startsWith(".")) return;
-            ShortcutManager shortcuts = getSystemService(ShortcutManager.class);
-            if (shortcuts == null || !shortcuts.isRequestPinShortcutSupported()) {
-                alert("Home screen", "This phone's home screen doesn't take icons from apps.");
-                return;
-            }
-            new Thread(() -> {
-                String label = name == null || name.isEmpty() ? rom : name;
-                // Straight into RetroArch where that can be; otherwise through the app, which fetches the game or hands it to its emulator
-                Intent play = player.direct(system, rom);
-                if (play == null) play = new Intent(MainActivity.this, MainActivity.class).setAction(PLAY).putExtra("system", system).putExtra("rom", rom);
-                ShortcutInfo shortcut = new ShortcutInfo.Builder(MainActivity.this, "game:" + system + "/" + rom)
-                        .setShortLabel(label).setLongLabel(label).setIcon(icon(picture)).setIntent(play).build();
-                try {
-                    // (the phone asks before it adds it)
-                    if (!shortcuts.requestPinShortcut(shortcut, null)) say("The home screen wouldn't take it.");
-                } catch (Exception e) {
-                    say("Couldn't add it: " + e.getMessage());
-                }
-            }).start();
-        }
-
-        /** "Offline", pressed: looks for RetroManager again now. If it still isn't there, offers
-         *  to start Tailscale, which is how it's reached away from home. */
-        @JavascriptInterface public void checkOnline() {
-            new Thread(() -> {
-                if (reachable()) {
-                    backOnline("RetroManager is back.");
-                    return;
-                }
-                boolean tailscale = player.has(TAILSCALE);
-                runOnUiThread(() -> {
-                    try {
-                        JSONObject spec = spec("confirm", "RetroManager still can't be reached",
-                                tailscale ? "Away from home it's reached over Tailscale, which may be off. Start it?"
-                                        : "The phone isn't on RetroManager's network. Away from home it needs a VPN to it, such as Tailscale.")
-                                .put("yes", tailscale ? "Start Tailscale" : "OK");
-                        if (tailscale) spec.put("other", "Open Tailscale");
-                        ask(spec, (index, text) -> {
-                            if (!tailscale || index < 0) return;
-                            if (index == 1) {
-                                Intent open = getPackageManager().getLaunchIntentForPackage(TAILSCALE);
-                                if (open != null) start(open);
-                                return;
-                            }
-                            // Tailscale connects when it's sent this (it's how other apps switch it on)
-                            try {
-                                sendBroadcast(new Intent(TAILSCALE + ".CONNECT_VPN").setClassName(TAILSCALE, TAILSCALE + ".IPNReceiver"));
-                            } catch (Exception e) {
-                                say("Tailscale couldn't be started from here: open it instead.");
-                                return;
-                            }
-                            say("Starting Tailscale…");
-                            new Thread(() -> {
-                                // (it takes a few seconds to come up)
-                                for (int tries = 0; tries < 6; tries++) {
-                                    try { Thread.sleep(2500); } catch (InterruptedException e) { return; }
-                                    if (reachable()) {
-                                        backOnline("Connected: RetroManager is back.");
-                                        return;
-                                    }
-                                }
-                                say("Still no RetroManager. Open Tailscale to see whether it connected.");
-                            }).start();
-                        });
-                    } catch (org.json.JSONException e) {
-                        // nothing to ask with
-                    }
-                });
-            }).start();
-        }
-
-        /** Opens the whole of RetroManager (the Library and the rest) in the phone's browser. */
-        @JavascriptInterface public void openBrowser() {
-            String server = prefs.server();
-            if (server == null) return;
-            String problem = start(new Intent(Intent.ACTION_VIEW, Uri.parse(server + "/")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            if (problem != null) say("No browser opened: " + problem);
-        }
-
-        @JavascriptInterface public String version() {
-            return VERSION;
-        }
-
-        @JavascriptInterface public void openSettings() {
-            runOnUiThread(MainActivity.this::settings);
-        }
-    }
-
-    private static void list(Folder folder, String base, String inside, int depth, JSONArray found) {
+    static void list(Folder folder, String base, String inside, int depth, JSONArray found) {
         for (Folder.Entry entry : folder.list(inside.isEmpty() ? base : base + "/" + inside)) {
             String path = inside.isEmpty() ? entry.name : inside + "/" + entry.name;
             if (!entry.folder) found.put(path);
@@ -903,13 +511,24 @@ public class MainActivity extends Activity {
         }
     }
 
-    private java.io.File romsFile() {
+    java.io.File romsFile() {
         return new java.io.File(getFilesDir(), "roms.json");
     }
 
     /** The roms folder may have changed (a game arrived, or the app came back):
      *  its files are listed again, off the page's own thread since a big folder
      *  takes a moment, and the page is told if the list is a different one. */
+    /** How many cores are marked as not starting a game, on every system (Check this phone, and clearing them). */
+    int failedCores() {
+        JSONObject all = prefs.allFailed();
+        int n = 0;
+        for (java.util.Iterator<String> it = all.keys(); it.hasNext(); ) {
+            JSONArray cores = all.optJSONArray(it.next());
+            n += cores == null ? 0 : cores.length();
+        }
+        return n;
+    }
+
     void romsChanged() {
         Folder folder = this.folder;
         if (folder == null) return;
@@ -944,17 +563,17 @@ public class MainActivity extends Activity {
     // the page's colours. When none is (setting up, or a page that couldn't be
     // reached), the phone's own boxes are used.
 
-    private interface Answer {
+    interface Answer {
         /** `index`: the option, or 0 for the main button and 1 for the other one; -1 if it was put away. */
         void answer(int index, String text);
     }
 
-    private final Map<String, Answer> asked = new HashMap<>();
+    final Map<String, Answer> asked = new HashMap<>();
     private int dialogs;
 
     /** Shows a question (UI thread): {kind: "choose" | "confirm" | "alert" | "input", title, message,
      *  options, yes, other, cancel (false: it can't be put away), value, hint}. */
-    private void ask(JSONObject spec, Answer answer) {
+    void ask(JSONObject spec, Answer answer) {
         if (isFinishing() || isDestroyed()) {
             answer.answer(-1, null);
             return;
@@ -1024,7 +643,7 @@ public class MainActivity extends Activity {
         box.show();
     }
 
-    private static JSONObject spec(String kind, String title, String message) {
+    static JSONObject spec(String kind, String title, String message) {
         try {
             return new JSONObject().put("kind", kind).put("title", title).put("message", message == null ? "" : message);
         } catch (org.json.JSONException e) {
@@ -1222,7 +841,7 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    private static void sizes(Folder folder, String base, String inside, int depth, List<Object[]> found) {
+    static void sizes(Folder folder, String base, String inside, int depth, List<Object[]> found) {
         for (Folder.Entry entry : folder.list(inside.isEmpty() ? base : base + "/" + inside)) {
             String path = inside.isEmpty() ? entry.name : inside + "/" + entry.name;
             if (entry.name.startsWith(".")) continue;
@@ -1242,7 +861,7 @@ public class MainActivity extends Activity {
     /** Whether RetroManager has a newer build of this app (android/build.sh puts
      *  it there, with its number in /app/version.json): says so once for each,
      *  or every time when asked (`asked`). */
-    private void checkUpdate(boolean asked) {
+    void checkUpdate(boolean asked) {
         String server = prefs.server();
         if (server == null) return;
         new Thread(() -> {
@@ -1287,10 +906,10 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    private static final String TAILSCALE = "com.tailscale.ipn";
+    static final String TAILSCALE = "com.tailscale.ipn";
 
     /** Whether RetroManager answers now (not from the main thread). */
-    private boolean reachable() {
+    boolean reachable() {
         String server = prefs.server();
         if (server == null) return false;
         try {
@@ -1308,7 +927,7 @@ public class MainActivity extends Activity {
     }
 
     /** RetroManager is there again: the page is loaded afresh, since what's showing is the phone's kept copy. */
-    private void backOnline(String message) {
+    void backOnline(String message) {
         say(message);
         runOnUiThread(() -> {
             if (!isFinishing() && !isDestroyed()) web.reload();
@@ -1350,7 +969,7 @@ public class MainActivity extends Activity {
     // --- Setting up ---
 
     /** Asks for RetroManager's address: `problem` is what was wrong with `typed`, the last try. */
-    private void askServer(String problem, String typed) {
+    void askServer(String problem, String typed) {
         try {
             JSONObject spec = spec("input", "Where is RetroManager?", problem != null ? problem : "The address you open RetroManager at in a browser.")
                     .put("value", typed != null ? typed : prefs.server() == null ? "http://" : prefs.server()).put("hint", "http://192.168.1.10:5000")
@@ -1404,7 +1023,7 @@ public class MainActivity extends Activity {
         else open();
     }
 
-    private void askFolder() {
+    void askFolder() {
         try {
             ask(spec("confirm", "Where is RetroArch's folder?", "Choose the RetroArch folder on this phone (usually \"RetroArch\" in the phone's storage). Games are kept in its roms folder, pictures in media, and RetroArch's own saves folder is used.\n\nOn the next screen, open that folder and press \"Use this folder\".")
                     .put("yes", "Choose").put("cancel", folder != null), (index, text) -> {
@@ -1457,7 +1076,7 @@ public class MainActivity extends Activity {
 
     // --- This phone's settings (📱 in the page's header) ---
 
-    private void settings() {
+    void settings() {
         if (isFinishing() || isDestroyed()) return;
         List<String> labels = new ArrayList<>();
         List<Runnable> actions = new ArrayList<>();
@@ -1517,7 +1136,7 @@ public class MainActivity extends Activity {
             alert("Emulators", "The list of systems comes from RetroManager, which hasn't been reached yet.");
             return;
         }
-        Player.History history = player.new History(folder);
+        History history = new History(folder);
         String[] labels = new String[systems.length()];
         for (int i = 0; i < labels.length; i++) {
             JSONObject system = systems.optJSONObject(i);
@@ -1540,7 +1159,7 @@ public class MainActivity extends Activity {
             if (isFinishing() || isDestroyed()) return;
             JSONObject system = player.systemEntry(name);
             JSONArray players = Player.players(system);
-            Player.History history = player.new History(folder);
+            History history = new History(folder);
             java.util.Set<String> failed = prefs.failed(name);
             // What's chosen is kept for the system, or for the one game
             String key = rom == null ? name : name + "/" + rom;

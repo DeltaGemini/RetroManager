@@ -3,11 +3,10 @@ System and ROM scanner
 Discovers systems, ROMs, and media assets on the filesystem
 """
 
-import os
 import logging
 import re
 from pathlib import Path
-from typing import List, Dict, Set
+from typing import List, Dict
 from lxml import etree
 
 from backend.models import System, Game
@@ -234,7 +233,6 @@ class SystemScanner:
 
     def _find_rom_files(self, system_path: Path) -> List[str]:
         """Find all ROM files in a system directory, preferring .cue over .bin/.iso for the same base name (prevents duplicate entries for PSX/Playstation). Condense multi-track games (e.g., Track 1, Track 2) into a single entry."""
-        rom_files = []
         cue_basenames = set()
         all_files = []
         cue_files = []

@@ -257,16 +257,17 @@ def _save_file(system_name, rom_path, profile):
     return _saves_folder(system_name, rom_path, profile) / name
 
 
-def _state_file(system_name, rom_path, profile):
+def _state_file(system_name, rom_path, profile, auto=False):
     """Where a browser save state for this game lives:
-    savestates/<person>/<system>/Browser/<rom>.state (the shared one without the person)."""
+    savestates/<person>/<system>/Browser/<rom>.state (the shared one without the person);
+    with auto, the one made on leaving the game, <rom>.state.auto beside it."""
     if not _owner(profile):
         return None
     # (the browser's own states stay in savestates/ even where RetroArch's are beside the games:
     # "<rom>.state" there is RetroArch's slot 0)
     profile = _whose(profile)
     base = Path(SAVESTATES_BASE) if profile == SHARED else Path(SAVESTATES_BASE) / profile
-    return base / system_name / 'Browser' / f"{Path(strip_dot_slash(rom_path)).stem}.state"
+    return base / system_name / 'Browser' / f"{Path(strip_dot_slash(rom_path)).stem}.state{'.auto' if auto else ''}"
 
 
 def _usable(folder):
@@ -284,7 +285,7 @@ def _modified(path):
 def play_info():
     """?system=&rom=. Whether the game can be played in the browser, and what
     the player needs: {playable, core, name, rom_url, rom_version, bios_url, emulatorjs_url,
-    states, profiles: [{name, has_save, modified, has_state}]}. rom_version changes when the
+    states, profiles: [{name, has_save, modified, has_state, stopped}]}. rom_version changes when the
     file does: EmulatorJS keeps ROMs in the browser by name and only fetches one again when
     its size differs, so a ROM replaced by one the same size (most are) would play the old."""
     system_name, rom_path = request.args.get("system", ""), strip_dot_slash(request.args.get("rom", ""))
@@ -297,7 +298,10 @@ def play_info():
         # (the shared set first: it's the only one until people are added, or where saves are beside the games)
         for profile in [SHARED] + ([] if saves_beside_roms() else SAVE_PROFILES):
             save, state = _save_file(system_name, rom_path, profile), _state_file(system_name, rom_path, profile)
-            profiles.append({'name': profile, 'has_save': save.is_file(), 'modified': _modified(save), 'has_state': state.is_file()})
+            auto = _state_file(system_name, rom_path, profile, auto=True)
+            profiles.append({'name': profile, 'has_save': save.is_file(), 'modified': _modified(save), 'has_state': state.is_file(),
+                             # (where they stopped: the state made on leaving the game)
+                             'stopped': _modified(auto) if auto and auto.is_file() else None})
     is_disc = rom_file.suffix.lower() == '.cue'
     try:
         stat = rom_file.stat()
@@ -398,10 +402,11 @@ def put_play_save():
 
 @app.route("/api/play/state", methods=["GET"])
 def get_play_state():
-    """?system=&rom=&profile=. The person's browser save state for the game (404 if none)."""
+    """?system=&rom=&profile=[&auto=1]. The person's browser save state for the game (404 if none);
+    with auto, the one made when they last left it."""
     system_name, rom_path = request.args.get("system", ""), request.args.get("rom", "")
     rom_file, _ = _playable_rom(system_name, rom_path)
-    state = _state_file(system_name, rom_path, request.args.get("profile", "")) if rom_file else None
+    state = _state_file(system_name, rom_path, request.args.get("profile", ""), auto=request.args.get("auto") == "1") if rom_file else None
     if not state or not state.is_file():
         return jsonify(success=False, error="No save state"), 404
     return send_file(state, mimetype='application/octet-stream', max_age=0)
@@ -409,11 +414,12 @@ def get_play_state():
 
 @app.route("/api/play/state", methods=["PUT"])
 def put_play_state():
-    """?system=&rom=&profile=. Body: the save state. Keeps the person's one
-    browser save state for the game; the one before it is kept beside it as .bak."""
+    """?system=&rom=&profile=[&auto=1]. Body: the save state. Keeps the person's one
+    browser save state for the game (with auto, the one made on leaving it, apart from the
+    one they saved); the one before it is kept beside it as .bak."""
     system_name, rom_path = request.args.get("system", ""), request.args.get("rom", "")
     rom_file, _ = _playable_rom(system_name, rom_path)
-    state = _state_file(system_name, rom_path, request.args.get("profile", "")) if rom_file else None
+    state = _state_file(system_name, rom_path, request.args.get("profile", ""), auto=request.args.get("auto") == "1") if rom_file else None
     if not state:
         return jsonify(success=False, error="Unknown game or person"), 404
     data = request.get_data(cache=False)

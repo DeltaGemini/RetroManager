@@ -313,8 +313,34 @@ final class Setup {
                     else if (!entry.folder) loose++;
                 }
                 said.append("\nSaves: ").append(loose + sorted == 0 ? "none yet" : sorted + " in folders (by system or core), " + loose + " loose").append("\n");
-                List<String> cores = player.new History(folder).cores();
+                List<String> cores = new History(folder).cores();
                 said.append("Cores RetroArch has played with: ").append(cores.isEmpty() ? "none yet" : String.join(", ", cores)).append("\n");
+                // Cores passed over because a game started with them didn't show in RetroArch's history
+                JSONObject failed = prefs.allFailed();
+                List<String> marked = new ArrayList<>();
+                for (java.util.Iterator<String> it = failed.keys(); it.hasNext(); ) {
+                    String system = it.next();
+                    JSONArray list = failed.optJSONArray(system);
+                    List<String> names = new ArrayList<>();
+                    for (int i = 0; list != null && i < list.length(); i++) names.add(list.optString(i));
+                    if (!names.isEmpty()) marked.add(system + ": " + String.join(", ", names));
+                }
+                said.append("Cores marked as not starting a game: ").append(marked.isEmpty() ? "none" : String.join("; ", marked)).append("\n");
+                // The last games started from the app, and whether RetroArch's history has them where they were started
+                JSONArray launches = prefs.launches();
+                if (launches.length() > 0) {
+                    said.append("\nGames started lately (✓ in RetroArch's history):\n");
+                    for (int i = 0; i < launches.length(); i++) {
+                        JSONObject launch = launches.optJSONObject(i);
+                        if (launch == null) continue;
+                        said.append(launch.optBoolean("began") ? "✓ " : "✗ ").append(launch.optString("system")).append("/").append(launch.optString("rom"))
+                                .append(" with ").append(launch.optString("core")).append(", ").append(day(launch.optLong("at") / 1000)).append("\n");
+                        if (!launch.optBoolean("began")) {
+                            said.append("   given: ").append(launch.optString("path")).append("\n   history has: ")
+                                    .append(launch.isNull("recorded") ? "nothing for it" : launch.optString("recorded")).append("\n");
+                        }
+                    }
+                }
                 List<String> overrides = new ArrayList<>();
                 for (Folder.Entry core : folder.list("config")) {
                     if (core.folder && folder.stat("config/" + core.name + "/" + core.name + ".cfg") != null) overrides.add(core.name);

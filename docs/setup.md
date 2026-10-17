@@ -74,7 +74,7 @@ The scraping sources' accounts and keys aren't in `docker-compose.yml`. Set them
 - **RetroAchievements**: your web API key, and the user whose earned achievements are shown.
 - **SteamGridDB**: your API key.
 - **TheGamesDB**: your API key (asked for on its forums).
-- **Matching and media**: when libretro thumbnails are used in a Background scrape, and whether ROMs are recognised by checksum through hasheous.org.
+- **Matching and media**: when libretro thumbnails are used for a game being added, and whether ROMs are recognised by checksum through hasheous.org.
 
 Settings take effect as soon as you save. They're kept in `settings.json` in `DATA_PATH` (`RetroGames/retromanager/`), readable only by the container's user. Saved passwords and keys are never sent back to the browser: the panel only says whether one is saved, and lets you replace or remove it. A source with nothing set is greyed out in the Scrape popup.
 
@@ -195,6 +195,13 @@ RetroManager is made for your own network. With login off (as it starts), anyone
 - **Turn on login** (the first-run page offers it, or **Tools › Profiles and login**): you're the admin with a PIN, and people you add can play and keep their own lists but not change the library.
 - **Don't open its port to the internet.** To use it away from home, reach your network over a VPN such as Tailscale or WireGuard instead, which is what the phone app expects.
 - **Keep the API keys to yourself.** They're stored in `settings.json` in RetroManager's own folder; don't share that folder or its backups.
+
+What RetroManager does itself:
+
+- **Other sites' pages can't use it.** It doesn't let other websites call it (no CORS), and refuses any change a browser says came from another site's page (`Sec-Fetch-Site`, or an `Origin` that isn't its own), so a page you visit can't edit your library through your browser, even with login off. The phone app and tools like `curl` aren't browsers and aren't affected.
+- **It only downloads from the internet.** A picture, manual or video's address (from a source, or pasted into Fill the gaps) must be a public one: an address on your own network (a router's page, another machine) is refused, and each redirect is checked.
+- **Files stay in their folders.** A requested media, page or save-state file must be inside its own folder, and a ROM replaced or patched must be one of the system's games.
+- **Admin PINs:** a few wrong ones in a row lock that profile's sign-in for a while.
 
 ## Troubleshooting
 

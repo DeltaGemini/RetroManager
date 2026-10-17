@@ -1,7 +1,6 @@
 """Fill the gaps: looking a game up on the sources, choosing, and remembering the matches.
 The sources are stood in for here, and so is downloading: nothing goes out."""
 
-from pathlib import Path
 
 from backend.thegamesdb import TheGamesDBError
 
@@ -74,3 +73,42 @@ def test_an_unsure_match_isnt_remembered_but_one_chosen_by_hand_is(client, root,
     assert chosen["confidence"] == "chosen" and chosen["id"] == "thegamesdb:5"
     client.post("/api/fill/apply", json={"system_name": "snes", "rom_path": rom, "remember": {"thegamesdb": chosen}})
     assert client.get("/api/fill/remembered?system=snes").get_json()["games"][rom] == ["thegamesdb"]
+
+
+def test_the_background_scrape_finds_but_applies_nothing(client, root, monkeypatch):
+    import time
+    from backend.core import _invalidate_caches
+    (root / "roms" / "gba" / "Found Later.gba").write_bytes(b"\x0d" * 2048)
+    _invalidate_caches()
+    gamelist = (root / "roms" / "gba" / "gamelist.xml")
+    before = gamelist.read_text() if gamelist.exists() else ''
+    _sources(monkeypatch, lambda name: [{'id': 77, 'name': 'Found Later', 'cover_url': None, 'platform_names': 'GBA', 'year': '2002',
+                                         'is_hack': False, 'hash_match': False}] if name == 'Found Later' else [],
+             lambda data: {'desc': 'Found in the background.'})
+
+    started = client.post("/api/fill/background/start", json={"systems": ["gba"], "kinds": ["desc"], "sources": ["thegamesdb"], "recheck": True}).get_json()
+    assert started["success"] and started["total"] >= 1
+    for _ in range(100):
+        status = client.get("/api/fill/background").get_json()
+        if not status["running"]:
+            break
+        time.sleep(0.05)
+    games = {g["rom"]: g for s in status["systems"] if s["system"] == "gba" for g in s["games"]}
+    assert games["Found Later.gba"]["offered"] == ["desc"]
+    assert (gamelist.read_text() if gamelist.exists() else '') == before          # nothing applied
+    kept = client.get("/api/fill/found?system=gba&rom=Found%20Later.gba").get_json()
+    assert kept["sources"]["thegamesdb"]["candidates"]["fields"]["desc"] == "Found in the background."
+
+    # Applied in Fill the gaps: no longer listed
+    client.post("/api/fill/apply", json={"system_name": "gba", "rom_path": "Found Later.gba", "fields": {"desc": "Found in the background."}})
+    status = client.get("/api/fill/background").get_json()
+    assert "Found Later.gba" not in {g["rom"] for s in status["systems"] for g in s["games"]}
+    assert "Found in the background." in gamelist.read_text()
+
+    # A second run skips what was looked up lately, unless asked to look again
+    again = client.post("/api/fill/background/start", json={"systems": ["gba"], "kinds": ["desc"], "sources": ["thegamesdb"]}).get_json()
+    assert again["skipped_recent"] >= 1
+    for _ in range(100):
+        if not client.get("/api/fill/background").get_json()["running"]:
+            break
+        time.sleep(0.05)

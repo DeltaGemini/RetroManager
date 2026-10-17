@@ -11,13 +11,14 @@ makes <folder>/roms, <folder>/media and the rest, the layout RetroManager
 expects; point it there (as tools/take_screenshots.py does) to look at it.
 """
 
+import json
 import os
 import random
 import sys
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFont
 
 # system folder -> (file extension, years the games are from, box shape (w, h), spine width)
 SYSTEMS = {
@@ -211,6 +212,38 @@ def main(target: Path):
             (folder / f"Untitled Prototype{ext}").write_bytes(b'RetroManager demo: not a game\n')
         if system == 'snes':
             screenshot(rng.choice(PALETTES), random.Random(system)).save(media / 'screenshot' / 'Old Picture.png')
+        # A ROM hack of the first game, made with a patch (game details: Version, Made from, Before)
+        if system == 'gba':
+            base = per_system[system][0]
+            hack = f"{base} Redux"
+            palette = rng.choice(PALETTES)
+            game_rng = random.Random(hack)
+            for kind, picture in {'box2d': box(hack, system, palette, game_rng, shape), 'boxside': spine(hack, palette, (spine_w, shape[1])),
+                                  'screenshot': screenshot(palette, game_rng), 'wheel': logo(hack, palette)}.items():
+                picture.save(media / kind / f"{hack}.png")
+            (folder / f"{hack}{ext}").write_bytes(b'RetroManager demo: not a game (patched)\n')
+            desc = (f"{hack} is a made-up fan hack of {base}, for RetroManager's demo library: new levels, a "
+                    "harder ending, nothing real. Its ROM was made by applying a patch to the base game.")
+            entries.append(f"""  <game>
+    <path>./{escape(hack)}{ext}</path>
+    <name>{escape(hack)}</name>
+    <desc>{escape(desc)}</desc>
+    <image>../../media/{escape(media_system)}/box2d/{escape(hack)}.png</image>
+    <thumbnail>../../media/{escape(media_system)}/screenshot/{escape(hack)}.png</thumbnail>
+    <releasedate>{rng.randint(2015, 2024)}{rng.randint(1, 12):02d}{rng.randint(1, 28):02d}T000000</releasedate>
+    <developer>Fan-made</developer>
+    <genre>Romhack</genre>
+    <players>1</players>
+  </game>""")
+            kept = target / 'retromanager' / 'replaced-roms' / '20260901-120000' / system / f"{hack}{ext}"
+            kept.parent.mkdir(parents=True, exist_ok=True)
+            kept.write_bytes(b'RetroManager demo: not a game (patched, v1.1)\n')
+            versions = {f"{system}/{base}{ext}": {'version': '1.0', 'at': 1780000000},
+                        f"{system}/{hack}{ext}": {'version': '1.2', 'at': 1788000000,
+                                                  'patched_from': {'rom': f"{base}{ext}", 'patch': f"{hack} v1.1.bps"},
+                                                  'history': [{'version': '1.1', 'file': str(kept.relative_to(target / 'retromanager')),
+                                                               'at': 1788000000, 'then_patched_with': f"{hack} v1.1 to v1.2.ups"}]}}
+            (target / 'retromanager' / 'rom-versions.json').write_text(json.dumps(versions, indent=0))
         (folder / 'gamelist.xml').write_text('<?xml version="1.0"?>\n<gameList>\n' + '\n'.join(entries) + '\n</gameList>\n')
         print(f"{system}: {len(entries)} games, pictures in media/{media_system}")
 

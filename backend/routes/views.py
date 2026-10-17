@@ -7,7 +7,8 @@ import os
 from pathlib import Path
 import time
 from backend.systems import browser_playable, phone_players
-from backend.core import _shelf_cache, _stats_cache, app, logger, MEDIA_BASE, scanner
+from backend.core import _shelf_cache, _stats_cache, app, logger, MEDIA_BASE, media_sources, scanner
+from backend.media_sources import MADE
 
 # Stats for the Homepage widget and the header. Walking every system is slow on
 # the NAS, so results are cached until something changes (any non-GET API call)
@@ -134,6 +135,7 @@ def missing_media_report():
     With ?system=snes: each game and which media it has."""
     only = request.args.get("system")
     try:
+        made = media_sources.paths_from(MADE)
         systems = []
         for system in scanner.discover_systems():
             if only and system.name != only:
@@ -141,8 +143,9 @@ def missing_media_report():
             games = [g for g in scanner.get_games_for_system(system.name) if g.rom_exists]
             entry = {'system': system.name, 'full_name': system.get_full_name(), 'total': len(games),
                      'missing': {f: sum(1 for g in games if not getattr(g, f, None)) for f in REPORT_MEDIA_FOLDERS},
-                     # Mix pictures RetroManager generated, which it can make again
-                     'mix_generated': sum(1 for g in games if g.mix_generated)}
+                     # Mix pictures RetroManager generated, and 3D boxes and spines it made, which it can make again
+                     'mix_generated': sum(1 for g in games if g.mix_generated),
+                     'made': {f: sum(1 for g in games if getattr(g, f, None) in made) for f in ('box3d', 'boxside')}}
             if only:
                 entry['games'] = [{'path': g.path, 'name': g.name, 'has_metadata': g.has_metadata,
                                    'media': {f: getattr(g, f, None) for f in REPORT_MEDIA_FOLDERS}}
@@ -164,12 +167,15 @@ _viewer_cache = {"value": None, "time": 0}
 
 def _compute_viewer():
     games = []
+    made = media_sources.paths_from(MADE)
     for system in scanner.discover_systems():
         for g in scanner.get_games_for_system(system.name):
             if g.rom_exists:
                 games.append({'system': system.name, 'system_name': system.get_full_name(), 'path': g.path,
                               'name': g.name, 'has_metadata': g.has_metadata,
-                              'pictures': {f: getattr(g, f, None) or None for f in VIEWER_MEDIA_FOLDERS}})
+                              'pictures': {f: getattr(g, f, None) or None for f in VIEWER_MEDIA_FOLDERS},
+                              # (the kinds of picture RetroManager made for it: a 3D box, a spine)
+                              'made': [f for f in ('box3d', 'boxside') if getattr(g, f, None) in made]})
     games.sort(key=lambda g: ((g['name'] or '').lower(), g['system_name'].lower()))
     return games
 

@@ -16,21 +16,23 @@
         { key: 'stats', label: 'Stats', icon: '📊', href: '/stats' },
     ];
 
+    // The Tools menu's tools, in its groups (TOOL_GROUPS), each group in the order shown
+    const TOOL_GROUPS = [['fill', 'Fill and media'], ['care', 'Library care'], ['play', 'Playing'], ['setup', 'Setup']];
     const TOOLS = [
-        { key: 'health', icon: '🩺', label: 'Library health', help: 'Every system’s Scan in one place' },
-        { key: 'fill', icon: '🧩', label: 'Fill the gaps', help: 'Missing pictures and details, from every source side by side' },
-        { key: 'scrape', icon: '🔎', label: 'Background scrape', help: 'Every system from ScreenScraper, unattended: sure matches filled, the rest listed' },
-        { key: 'viewer', icon: '🖼️', label: 'Media viewer', help: 'Every game’s box, Mix, logo, manual... and what’s missing' },
-        { key: 'history', icon: '🕹️', label: 'Play history', help: 'What’s been played, and by whom' },
-        { key: 'achievements', icon: '🏆', label: 'Achievement overview', help: 'Games ranked by how much you’ve completed' },
-        { key: 'series', icon: '🧩', label: 'Missing in series', help: 'What you have of each series, and your want list' },
-        { key: 'collections', icon: '📁', label: 'Collections', help: 'Your own lists of games: rename, delete, tidy' },
-        { key: 'duplicates', icon: '👯', label: 'Duplicates', help: 'Games in the library more than once' },
-        { key: 'roms', icon: '🔬', label: 'ROM check', help: 'Verified dumps, duplicates and mislabelled files' },
-        { key: 'saves', icon: '💾', label: 'Saves', help: 'Sync conflicts and save backups' },
-        { key: 'storage', icon: '🧹', label: 'Storage', help: 'What’s been set aside (gamelist backups too): compare, restore, clear out' },
-        { key: 'settings', icon: '⚙️', label: 'Settings', help: 'Accounts and keys for the scraping sources' },
-        { key: 'profiles', icon: '👤', label: 'Profiles and login', help: 'Who uses RetroManager, and who can change it' },
+        { key: 'fill', group: 'fill', icon: '🧩', label: 'Fill the gaps', help: 'Missing pictures and details, every source side by side' },
+        { key: 'scrape', group: 'fill', icon: '🔎', label: 'Background scrape', help: 'Every system looked up on the server, to check and apply' },
+        { key: 'viewer', group: 'fill', icon: '🖼️', label: 'Media viewer', help: 'One kind of picture for every game, and what’s missing' },
+        { key: 'health', group: 'care', icon: '🩺', label: 'Library health', help: 'Every system’s Scan in one place' },
+        { key: 'roms', group: 'care', icon: '🔬', label: 'ROM check', help: 'Verified dumps and mislabelled files' },
+        { key: 'duplicates', group: 'care', icon: '👯', label: 'Duplicates', help: 'Games in the library more than once' },
+        { key: 'storage', group: 'care', icon: '🧹', label: 'Storage', help: 'What’s been set aside: compare, restore, clear out' },
+        { key: 'history', group: 'play', icon: '🕹️', label: 'Play history', help: 'What’s been played, and by whom' },
+        { key: 'achievements', group: 'play', icon: '🏆', label: 'Achievements', help: 'Games ranked by how much you’ve completed' },
+        { key: 'series', group: 'play', icon: '📚', label: 'Missing in series', help: 'What you have of each series, and your want list' },
+        { key: 'collections', group: 'play', icon: '📁', label: 'Collections', help: 'Your own lists of games' },
+        { key: 'saves', group: 'play', icon: '💾', label: 'Saves', help: 'Sync conflicts and save backups' },
+        { key: 'settings', group: 'setup', icon: '⚙️', label: 'Settings', help: 'Accounts and keys for the scraping sources' },
+        { key: 'profiles', group: 'setup', icon: '👤', label: 'Profiles and login', help: 'Who uses RetroManager, and who can change it' },
     ];
 
     // Inside the phone app (android/), which puts RMApp on the page: what the phone
@@ -353,10 +355,16 @@
         return h('div', { ref, className: 'rm-menu-wrap' },
             h('button', { className: 'rm-btn', onClick: () => setOpen(o => !o), 'aria-haspopup': 'menu', 'aria-expanded': open, 'aria-label': 'Tools', title: 'Tools' },
                 '🧰', h('span', { className: 'rm-label' }, 'Tools')),
-            open && h('div', { role: 'menu', className: 'rm-menu' },
-                tools.map(t => h('button', { key: t.key, role: 'menuitem', onClick: () => pick(t.key) },
-                    h('span', { style: { fontSize: 16 }, 'aria-hidden': true }, t.icon),
-                    h('span', null, h('span', { style: { display: 'block' } }, t.label), h('span', { className: 'rm-help' }, t.help))))));
+            // (in its groups, side by side where there's room, and scrolling where there isn't)
+            open && h('div', { role: 'menu', className: 'rm-menu rm-tools', 'aria-label': 'Tools' },
+                TOOL_GROUPS.map(([group, title]) => {
+                    const mine = tools.filter(t => t.group === group);
+                    return mine.length > 0 && h('div', { key: group, className: 'rm-tools-group', role: 'group', 'aria-label': title },
+                        h('div', { className: 'rm-menu-heading', role: 'presentation' }, title),
+                        mine.map(t => h('button', { key: t.key, role: 'menuitem', onClick: () => pick(t.key) },
+                            h('span', { style: { fontSize: 16 }, 'aria-hidden': true }, t.icon),
+                            h('span', null, h('span', { style: { display: 'block' } }, t.label), h('span', { className: 'rm-help' }, t.help)))));
+                })));
     }
 
     // What's running in the background (the background scrape, the ROM check, series
@@ -531,6 +539,8 @@
                     row('apply', 'Apply the saved setup', kept ? `from ${kept.device}` : 'none saved yet', kept ? () => app.setting('setup-apply', '') : null,
                         { note: kept ? `${kept.files.length} files, saved ${new Date(kept.at * 1000).toLocaleDateString()}: overrides, core options, shader presets, overlays` : 'save one from a phone that is set up as you like it' }),
                     (!me || me.admin) && row('save', 'Save this phone’s setup', null, () => app.setting('setup-save', ''), { note: 'to RetroManager, for other phones to apply' }),
+                    info.failedCores > 0 && row('clear-failed', 'Try every core again', `${info.failedCores} marked as not starting`, () => app.setting('clear-failed', ''),
+                        { note: 'cores passed over because a game started with them didn’t show in RetroArch’s history (Check this phone lists them)' }),
                     row('pin', 'Same save folders on every phone', null, () => app.setting('setup-pin', info.pinSaves ? 'off' : 'on'),
                         { radio: true, on: !!info.pinSaves, note: 'saves/<system> and states/<system>, whatever RetroArch is set to: written into each core’s override as it’s played' })),
                 group('Saves and save states',
@@ -632,5 +642,5 @@
     // (added to RM, which common/accounts.js has already started)
     //   RM.tasksChanged()  a page started or stopped a background task: the strip asks again now
     const tasksChanged = () => window.dispatchEvent(new Event(TASKS_EVENT));
-    window.RM = Object.assign(window.RM || {}, { Header, ThemeMenu, TOOLS, PAGES, tasksChanged, phone, usePhone, consolePicture });
+    window.RM = Object.assign(window.RM || {}, { Header, ThemeMenu, TOOLS, TOOL_GROUPS, PAGES, tasksChanged, phone, usePhone, consolePicture });
 })();

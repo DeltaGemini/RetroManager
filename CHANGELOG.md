@@ -2,6 +2,32 @@
 
 Each version's big changes, then the bugs found and fixed since the version before. A release's page on GitHub shows its section of this file (`.github/workflows/release.yml`), so a version is tagged only once its section is here.
 
+## 2.4.0 (17 October 2026)
+
+With the phone app 1.417436.
+
+### Big changes
+
+1. **Keys in Fill the gaps' Choose step**: ↑↓ a row, 1–9 a candidate in it (they're numbered), ←→ another game, A apply.
+2. **Made 3D boxes and spines are known as made**: the Media viewer counts them and **Make again n made** shows a fresh one beside each in Fill the gaps, to apply or not. Made and pasted pictures not applied are listed in Storage and cleared nightly.
+3. **Background scrape, checked before anything changes**: it now runs Fill the gaps' look-up (every source in your order, remembered matches) over the systems chosen, on the server, and applies nothing. What it finds waits by system under **Found, to check**; **Review** opens Fill the gaps with those games looked up already, to check and apply. (The old ScreenScraper-only run, which applied matches it thought sure, is gone.)
+4. **Tests for the phone app's decisions** (`android/test.sh`, run before each build and on GitHub), and lint for the Python (ruff).
+5. **One uploader** for Add games and Replace with an updated ROM.
+6. **The Tools menu in groups** (Fill and media, Library care, Playing, Setup), two columns on a computer and one that scrolls on a phone, so it no longer runs off the screen.
+7. **Check this phone** lists the cores marked as not starting a game and the last games started from the app, with the path RetroArch was given beside the one its history has, and **Try every core again** clears the marks (app 1.417409).
+8. **ROM patches** (a game's ROM file section, **Apply a patch…**): an IPS, UPS or BPS patch applied to the ROM, as a new game beside it or in its place; UPS and BPS patches checked against the ROM they're for and the result, an SNES copier header handled.
+9. **Where you stopped**, in the browser: leaving a game keeps a save state of where you were (apart from your own), and Start offers to carry on from it, chosen already.
+10. **Playing and Backlog on the Console**: the row of lists (now **Your lists**) has your Playing and Backlog games as tiles of their own, beside Favourites and the collections.
+
+### Bugs fixed
+
+- Security: any website could call RetroManager from your browser (CORS was open to every site), so with login off a page you visited could change your library or its settings; other sites are now refused, and a change a browser says came from another site's page is refused.
+- Security: a media or page address could reach a folder beside RetroManager's own whose name began the same way (`/media2` beside `/media`).
+- Security: a picture's address could make the server download from the home network (a router's page); only public internet addresses are fetched now, redirects included.
+- Tapping a game's picture in the phone app opened it at full size, larger than the screen: it now opens over the page, fitted to the screen, and a tap or Back closes it (everywhere, not only on the phone).
+- Made 3D boxes: a Game Boy Advance (or other) cover wider than tall laid its box down like an SNES box, at odd angles; only SNES and N64 boxes lie down now, and the boxes are drawn with flatter perspective.
+- Phone app: every game of a system could show "Needs an emulator" though RetroArch had the core (GBA, with mGBA playing Game Boy games): a game started from the app that didn't show in RetroArch's history in time marked its core as not installed for that system, and after a few, all of them. A core RetroArch's history shows playing anything is now never passed over (app 1.417220).
+
 ## 2.3.0 (17 October 2026)
 
 ### Big changes

@@ -1,0 +1,7 @@
+# Linting (GitHub's tests run it): Pyflakes' checks (unused imports and names,
+# undefined names, f-strings without placeholders...) and nothing about style.
+target-version = "py311"
+extend-exclude = ["android", "frontend", "RetroGames"]
+
+[lint]
+select = ["F"]

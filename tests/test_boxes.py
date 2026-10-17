@@ -26,6 +26,8 @@ def test_a_landscape_box_lies_down_but_a_jewel_case_stands():
     assert case_for('PlayStation')['case'] == 'jewel'
     psx = make_spine(_cover((790, 680)), None, 'Disc Game', 'psx')
     assert psx.height == 680                                           # a PS1 cover is wider than tall; its case still stands
+    gba = make_spine(_cover((700, 560)), None, 'Hack Game', 'gba')
+    assert gba.height == 560                                           # a GBA box stands, whatever its cover art's shape
 
 
 def test_a_3d_box_is_the_cover_turned_with_its_spine():
@@ -73,3 +75,24 @@ def test_a_picture_pasted_in_is_kept_and_put_in(client, root):
     assert (folder / "box2d" / "Pasted Game.jpg").is_file()                  # kept as the JPEG it was
     junk = client.post("/api/fill/picture", data=b"not a picture", headers={"Content-Type": "application/octet-stream"}).get_json()
     assert not junk["success"]
+
+
+def test_made_ones_are_known_as_made_and_pasted_ones_arent(client, root):
+    import io
+    from backend.core import _invalidate_caches
+    (root / "roms" / "snes" / "Remade Game.sfc").write_bytes(b"\x0c" * 4096)
+    _invalidate_caches()
+    from backend.core import scanner
+    folder = Path(root / "media") / scanner.media_index("snes").media_system
+    (folder / "box2d").mkdir(parents=True, exist_ok=True)
+    _cover((700, 500), (90, 30, 120)).save(folder / "box2d" / "Remade Game.png")
+    made = client.post("/api/boxes/make", json={"system_name": "snes", "rom_path": "Remade Game.sfc", "kind": "boxside"}).get_json()
+    png = io.BytesIO()
+    Image.new('RGB', (30, 30), (1, 2, 3)).save(png, 'PNG')
+    pasted = client.post("/api/fill/picture", data=png.getvalue(), headers={"Content-Type": "application/octet-stream"}).get_json()
+    client.post("/api/fill/apply", json={"system_name": "snes", "rom_path": "Remade Game.sfc",
+                                         "pictures": {"boxside": f"made:{made['token']}", "box3d": f"made:{pasted['token']}"}})
+    viewer = {g["path"].lstrip("./"): g for g in client.get("/api/media-viewer?folder=boxside").get_json()["games"] if g["system"] == "snes"}
+    assert viewer["Remade Game.sfc"]["made"] == ["boxside"]                  # the made spine, not the pasted box
+    snes = next(s for s in client.get("/api/missing-media").get_json()["systems"] if s["system"] == "snes")
+    assert snes["made"]["boxside"] >= 1 and snes["made"]["box3d"] == 0

@@ -27,11 +27,13 @@ from flask import jsonify, request
 
 from backend.core import (
     _game_moved_hooks, _request_json, _saveable_fields, _system_path_or_none, app, bulk_matcher, DATA_DIR,
-    gamelist_mgr, jeu_cache, logger, MEDIA_BASE, media_sources, mix_provenance, ROMS_BASE, scanner, scraper,
+    gamelist_mgr, jeu_cache, launchbox_index, logger, MEDIA_BASE, media_sources, mix_provenance, ROMS_BASE, scanner, scraper,
 )
+from backend.fill_queue import FillQueue
 from backend.folder_games import folder_game_name
 from backend.match_memory import MatchMemory
 from backend.media_index import strip_dot_slash
+from backend.media_sources import MADE, UPLOADED
 from backend.models import Game
 from backend.routes.boxes import keep_picture, made_file
 from backend.routes.media import _download_one, _remove_other_formats
@@ -110,15 +112,111 @@ def fill_look():
     rom_path = strip_dot_slash(data.get("rom_path"))
     if not _system_path_or_none(system) or not rom_path:
         return jsonify(success=False, error="Missing or unknown system_name / rom_path"), 400
+    return jsonify(success=True, sources=look_game(system, rom_path, data.get("sources"), data.get("rematch") or {}))
+
+
+def look_game(system, rom_path, sources=None, rematch=None):
+    """A game looked up on the sources that are set up (all, or these, in this order), at once:
+    {source: {match, candidates}}. Shared by /api/fill/look and the background scrape."""
     usable = {s['id']: s['available'] for s in available_sources()}
-    wanted = [s for s in (data.get("sources") or FILL_SOURCES) if s in FILL_SOURCES and usable.get(s)]
-    rematch = data.get("rematch") or {}
+    wanted = [s for s in (sources or FILL_SOURCES) if s in FILL_SOURCES and usable.get(s)]
+    rematch = rematch or {}
     if rematch:
         wanted = [s for s in wanted if s == rematch.get('source')]
+    if not wanted:
+        return {}
     remembered = match_memory.get(_key(system, rom_path))
     with ThreadPoolExecutor(max_workers=max(1, len(wanted))) as pool:
         jobs = {s: pool.submit(_look_one, s, system, rom_path, remembered.get(s), rematch if s == rematch.get('source') else None) for s in wanted}
-        return jsonify(success=True, sources={s: job.result() for s, job in jobs.items()})
+        return {s: job.result() for s, job in jobs.items()}
+
+
+# --- The background scrape (backend/fill_queue.py): looked up on the server, nothing applied ---
+
+def _missing(game_fields, kind):
+    value = game_fields.get(kind)
+    return value in (None, '') or (kind == 'rating' and str(value) in ('0', '0.0'))
+
+
+def _background_targets(systems, kinds):
+    """Every game (of these systems) missing any of these kinds: [{system, system_name, rom, name, gaps}]."""
+    wanted = set(systems or [])
+    targets = []
+    for system in scanner.discover_systems():
+        if wanted and system.name not in wanted:
+            continue
+        try:
+            games = scanner.get_games_for_system(system.name)
+        except Exception as e:
+            logger.warning(f"Background scrape: couldn't list {system.name}: {e}")
+            continue
+        for game in games:
+            if not game.rom_exists:
+                continue
+            fields = game.to_dict()
+            gaps = [k for k in kinds if _missing(fields, k)]
+            if gaps:
+                targets.append({'system': system.name, 'system_name': system.get_full_name(), 'rom': strip_dot_slash(game.path),
+                                'name': game.name or Path(game.path).stem, 'gaps': gaps})
+    return targets
+
+
+def _offered(gaps, looked):
+    """The gaps some source matched has something for."""
+    def has(found, kind):
+        c = found.get('candidates') or {}
+        return bool((c.get('fields') or {}).get(kind) if kind in FILL_FIELDS else (c.get('media') or {}).get(kind))
+    return [k for k in gaps if any(has(found, k) for found in looked.values()
+                                    if (found.get('match') or {}).get('confidence') not in (None, 'none'))]
+
+
+fill_queue = FillQueue(DATA_DIR, _background_targets, look_game, _offered)
+_game_moved_hooks.append(fill_queue.game_moved)
+
+
+@app.route("/api/fill/background", methods=["GET"])
+def fill_background():
+    """The background scrape's progress, and what it has found: {running, total, done, current, found,
+    found_now, skipped_recent, started, finished, stopped_reason, systems: [{system, system_name, games}]}."""
+    return jsonify(success=True, **fill_queue.snapshot(), systems=fill_queue.summary())
+
+
+@app.route("/api/fill/background/start", methods=["POST"])
+def fill_background_start():
+    """Body: {systems?: [...], kinds: [...], sources: [ids, most trusted first], recheck?}."""
+    data = _request_json()
+    kinds = [k for k in (data.get("kinds") or []) if k in FILL_MEDIA or k in FILL_FIELDS]
+    sources = [s for s in (data.get("sources") or []) if s in FILL_SOURCES]
+    if 'launchbox' in sources:
+        launchbox_index.refresh_if_needed()
+        if launchbox_index.enabled and launchbox_index.progress['running'] and not launchbox_index.ready:
+            # (games looked up without it wouldn't be looked at again for a month)
+            return jsonify(success=False, error="LaunchBox's list of games is still being fetched (see the strip under the header). Start when it's done, in a few minutes."), 409
+    result = fill_queue.start(data.get("systems") or None, kinds, sources, bool(data.get("recheck")))
+    return jsonify(**result), 200 if result.get('success') else 409
+
+
+@app.route("/api/fill/background/stop", methods=["POST"])
+def fill_background_stop():
+    fill_queue.stop()
+    return jsonify(success=True)
+
+
+@app.route("/api/fill/found", methods=["GET"])
+def fill_found():
+    """?system=&rom=: what the background scrape found for a game, as /api/fill/look gives it ({sources})."""
+    entry = fill_queue.get(_key(request.args.get('system', ''), strip_dot_slash(request.args.get('rom', ''))))
+    if not entry:
+        return jsonify(success=False, error="Nothing found for that game"), 404
+    return jsonify(success=True, sources=entry['sources'], at=entry['at'])
+
+
+@app.route("/api/fill/found/forget", methods=["POST"])
+def fill_found_forget():
+    """Body: {games: [{system, rom}]}: leave what was found for these (no longer listed)."""
+    games = _request_json().get("games") or []
+    fill_queue.forget([_key(g.get('system', ''), strip_dot_slash(g.get('rom', ''))) for g in games if isinstance(g, dict)])
+    return jsonify(success=True)
 
 
 @app.route("/api/fill/picture", methods=["POST"])
@@ -183,7 +281,7 @@ def fill_apply():
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(made, target)
                 _remove_other_formats(target)
-                media_sources.record(target, 'RetroManager (made)')
+                media_sources.record(target, UPLOADED if '.pasted.' in made.name else MADE)
             else:
                 _download_one(url, Path(MEDIA_BASE) / index.media_system / folder, stem)
         except (ValueError, OSError) as e:
@@ -215,6 +313,7 @@ def fill_apply():
         return jsonify(success=False, error="Couldn't write gamelist.xml", downloaded=downloaded, errors=errors)
 
     key = _key(system, rom_path)
+    fill_queue.forget([key])   # (what the background scrape found for it, now dealt with)
     for source, match in (data.get("remember") or {}).items():
         if source in FILL_SOURCES and match and match.get('id') and match.get('confidence') in ('exact', 'likely', 'chosen'):
             match_memory.remember(key, source, match['id'], match.get('name'), match['confidence'])

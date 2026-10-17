@@ -1,6 +1,6 @@
 """
 Scraping from ScreenScraper and IGDB: search, apply, matching on the other sources
-(for Fill the gaps) and the background scrape.
+(for Fill the gaps), and filling in a game as it's added.
 """
 
 import re
@@ -11,24 +11,21 @@ from flask import jsonify
 from pathlib import Path
 from backend.bulk_scrape import name_score
 from backend.models import Game
-from backend.scrape_queue import ScrapeQueue
 from backend.folder_games import folder_game_name
 from backend.scraper import ScreenscraperError, ScreenscraperNotFound
 from backend.igdb_scraper import IGDBError
 from backend.libretro_thumbs import THUMBNAIL_TYPES
 from backend.retroachievements import ID_PREFIX as RA_ID_PREFIX
 from backend.systems import screenscraper_system_id, thegamesdb_platform_id
-from backend.media_index import strip_dot_slash, title_key
+from backend.media_index import title_key
 from backend.steamgriddb import SteamGridDBError
 from backend.thegamesdb import TheGamesDBError
 from backend.core import (
     _hasheous_lookup,
-    _invalidate_caches,
     _request_json,
     _request_rom_file,
     _saveable_fields,
     app,
-    bulk_matcher,
     DATA_DIR,
     gamelist_mgr,
     gametdb,
@@ -118,10 +115,10 @@ def download_scraper_media():
     except Exception as e:
         logger.exception("Error in download_scraper_media")
         return jsonify(success=False, error=str(e)), 500
-# Text fields a background scrape may fill; existing values are never replaced
+# Text fields apply_scrape may fill; existing values are never replaced
 BULK_TEXT_FIELDS = ('name', 'desc', 'genre', 'developer', 'publisher', 'releasedate', 'players', 'rating')
-# Media a background scrape may download (videos are left out: large and slow)
-BULK_MEDIA_FOLDERS = ('box2d', 'box3d', 'boxside', 'screenshot', 'screenshottitle', 'wheel', 'fanart', 'mix', 'support', 'manuals')
+# Media apply_scrape may download, for a game added (videos are left out: large and slow)
+SCRAPE_MEDIA_FOLDERS = ('box2d', 'box3d', 'boxside', 'screenshot', 'screenshottitle', 'wheel', 'fanart', 'mix', 'support', 'manuals')
 
 
 # Matching on a source other than ScreenScraper: its matches' ids are
@@ -140,7 +137,7 @@ def _as_folders(media):
             continue
         name = re.sub(r'_\d+$', '', key)
         folder = _SOURCE_PICTURES.get(name, name)
-        if folder in BULK_MEDIA_FOLDERS and folder not in folders:
+        if folder in SCRAPE_MEDIA_FOLDERS and folder not in folders:
             folders[folder] = url
     return folders
 
@@ -448,72 +445,6 @@ def apply_scrape(system_name, rom_path, game_id, wanted_media, replace=False):
                 from_gametdb=from_others['gametdb'], from_launchbox=from_others['launchbox'],
                 from_thegamesdb=from_others['thegamesdb'], from_steamgriddb=from_others['steamgriddb'],
                 kept=str(kept_at.relative_to(DATA_DIR)) if replaced else None)
-
-
-def _scrape_targets(systems, include_media, media):
-    """Games for the background scrape: missing metadata first, then (optionally)
-    games missing any of the chosen media."""
-    wanted = set(systems or [])
-    metadata, missing_media = [], []
-    for system in scanner.discover_systems():
-        if wanted and system.name not in wanted:
-            continue
-        if not screenscraper_system_id(system.name):
-            continue
-        try:
-            games = scanner.get_games_for_system(system.name)
-        except Exception as e:
-            logger.warning(f"Background scrape: couldn't list {system.name}: {e}")
-            continue
-        for game in games:
-            if not game.rom_exists:
-                continue
-            target = {'system': system.name, 'system_name': system.get_full_name(),
-                      'rom_path': strip_dot_slash(game.path), 'name': game.name}
-            if not game.has_metadata:
-                metadata.append({**target, 'reason': 'metadata'})
-            elif include_media:
-                lacking = [f for f in media if not getattr(game, f, None)]
-                if lacking:
-                    missing_media.append({**target, 'reason': 'media: ' + ', '.join(lacking)})
-    return metadata + missing_media
-scrape_queue = ScrapeQueue(
-    state_dir=DATA_DIR,
-    list_targets=_scrape_targets,
-    match=lambda system, rom_path: bulk_matcher.match(
-        system, rom_path, Path(ROMS_BASE) / system / rom_path, None, title=folder_game_name(system, rom_path)),
-    apply=apply_scrape,
-    backup=lambda system: gamelist_mgr.backup(system, ROMS_BASE),
-    on_change=_invalidate_caches,
-    fatal_errors=(ScreenscraperError,),
-)
-
-
-@app.route("/api/scrape-queue", methods=["GET"])
-def scrape_queue_status():
-    """Progress of the background scrape: running, total, done, current, applied,
-    review (matches too uncertain to apply), failed."""
-    return jsonify(success=True, **scrape_queue.snapshot())
-
-
-@app.route("/api/scrape-queue/start", methods=["POST"])
-def scrape_queue_start():
-    """Body: {systems?: [...], include_media?: bool, media?: [folders], recheck?: bool}."""
-    data = _request_json()
-    media = [m for m in (data.get("media") or BULK_MEDIA_FOLDERS) if m in BULK_MEDIA_FOLDERS]
-    launchbox_index.refresh_if_needed()
-    if launchbox_index.enabled and launchbox_index.progress['running'] and not launchbox_index.ready:
-        # Games checked without it wouldn't be looked at again for a month
-        return jsonify(success=False, error="LaunchBox's list of games is still being fetched (see the strip under the header). Start the scrape when it's done, in a few minutes."), 409
-    result = scrape_queue.start(data.get("systems") or None, bool(data.get("include_media")), media,
-                                bool(data.get("recheck")))
-    return jsonify(**result), 200 if result.get('success') else 409
-
-
-@app.route("/api/scrape-queue/stop", methods=["POST"])
-def scrape_queue_stop():
-    scrape_queue.stop()
-    return jsonify(success=True)
 
 
 def _igdb_results(data, game_name):

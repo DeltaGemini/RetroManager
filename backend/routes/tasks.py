@@ -11,7 +11,7 @@ import time
 from backend.core import app, launchbox_index
 from backend.routes.accounts import is_admin
 from backend.routes.romindex import rom_index
-from backend.routes.scraping import scrape_queue
+from backend.routes.fill import fill_queue
 from backend.routes.series import series_index
 
 # A task that has ended is still listed for this long, to say how it went
@@ -41,10 +41,8 @@ def _count(n, one, many=None):
 
 
 def _scrape():
-    s = scrape_queue.snapshot()
-    parts = [f"{len(s['applied'])} filled", f"{len(s['review'])} to review"]
-    if s['failed']:
-        parts.append(f"{len(s['failed'])} failed")
+    s = fill_queue.snapshot()
+    parts = [f"{_count(s['found_now'], 'game', 'games')} with something found", f"{s['found']} to check in all"]
     return dict(key='scrape', tool='scrape', label='Background scrape', running=s['running'], stopping=s['stopping'],
                 done=s['done'], total=s['total'], current=_current(s), finished=_seconds_since(s['finished']),
                 summary=', '.join(parts), problem=s['stopped_reason'] if s['stopped_reason'] != 'Stopped' else None,

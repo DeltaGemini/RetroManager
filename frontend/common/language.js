@@ -26,7 +26,7 @@
             'Sign out': "'Op It", 'Sign in': 'Come In, Then', 'Settings': 'Gubbins', 'This phone': 'Me Dog and Bone',
             // Tools
             'Library health': "Is It Poorly?", 'Background scrape': 'Fetch the Lot', 'Media viewer': 'Pictures, Innit',
-            'Play history': 'Wot You Played', 'Achievement overview': 'Gongs', 'Missing in series': "Wot's Missin'",
+            'Play history': 'Wot You Played', 'Achievement overview': 'Gongs', 'Achievements': 'Gongs', 'Fill and media': "Fillin' an' Pictures", 'Library care': "Lookin' After the Lot", 'Playing': "'Avin' a Go", 'Setup': 'Sortin\' It Out', 'Missing in series': "Wot's Missin'",
             'Collections': 'Me Collections', 'ROM check': 'Check Me ROMs', 'Duplicates': 'Double Trouble',
             'Saves': 'Me Saves', 'Storage': 'The Lock-Up', 'Profiles and login': "Who's Who",
             // Buttons

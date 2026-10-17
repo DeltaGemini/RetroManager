@@ -68,28 +68,6 @@ const MEDIA_SOURCE_LABELS = {
 const mediaSourceLabel = (key) => MEDIA_SOURCE_LABELS[key]
     || key.replace(/_(\d+)$/, ' $1').replace(/^./, c => c.toUpperCase());
 
-// What a Background scrape can download (videos are left out: large and slow)
-const BULK_MEDIA = [
-    { key: 'box2d', label: 'Box 2D' },
-    { key: 'screenshot', label: 'Screenshot' },
-    { key: 'screenshottitle', label: 'Title screen' },
-    { key: 'wheel', label: 'Wheel' },
-    { key: 'mix', label: 'Mix' },
-    { key: 'box3d', label: 'Box 3D' },
-    { key: 'boxside', label: 'Spine' },
-    { key: 'support', label: 'Cart / disc' },
-    { key: 'fanart', label: 'Fanart' },
-    { key: 'manuals', label: 'Manual' },
-];
-
-// How sure a match is (Background scrape)
-const CONFIDENCE = {
-    exact: { label: 'Exact', color: 'var(--success)', help: 'This exact ROM file was recognised, by its name or its checksum' },
-    likely: { label: 'Likely', color: 'var(--accent-orange)', help: "The game's name closely matches the ROM" },
-    unsure: { label: 'Unsure', color: 'var(--accent-pink)', help: 'The names differ: check before applying' },
-    none: { label: 'No match', color: 'var(--text-secondary)', help: 'Nothing found. Try searching another name' },
-};
-
 const postJson = async (url, body) => {
     const res = await fetch(`${API_BASE}${url}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     return res.json();

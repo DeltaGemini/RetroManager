@@ -61,11 +61,17 @@ Refs are `upload:<id>` or `inbox:<path in the inbox>`.
 | POST | `/api/fill/look` | `{system_name, rom_path, sources, rematch?}`: a game's match on each source (remembered, or matched now) and each matched source's pictures and details |
 | POST | `/api/fill/apply` | `{system_name, rom_path, pictures: {folder: url}, fields: {field: value}, remember}`: put the chosen ones in, and remember the matches |
 | GET | `/api/fill/remembered` | `?system=`: which of its games have matches remembered, and on which sources |
+| GET | `/api/fill/background` | The background scrape's progress (`running`, `total`, `done`, `current`, `found`, `found_now`...) and what it found, by system: `systems: [{system, system_name, games: [{rom, name, offered, at}]}]` |
+| POST | `/api/fill/background/start` | `{systems?, kinds, sources, recheck?}`: look the games missing any of `kinds` up on `sources` (in that order), on the server; nothing is applied |
+| POST | `/api/fill/background/stop` | Stop after the current game |
+| GET | `/api/fill/found` | `?system=&rom=`: what it found for a game, as `/api/fill/look` gives it |
+| POST | `/api/fill/found/forget` | `{games: [{system, rom}]}`: no longer list what was found for them |
 | POST | `/api/boxes/make` | `{system_name, rom_path, kind: box3d \| boxside}`: a 3D box or spine made from the game's cover, kept a day: `token`, `url`. Fill the gaps applies it as `made:<token>` |
 | GET | `/api/boxes/made/<token>` | A made 3D box or spine |
 | POST | `/api/fill/picture` | The body is a picture pasted in (PNG, JPEG, WebP, GIF; 30 MB at most), kept a day: `token`, `url`; applied as `made:<token>` |
 | GET/PUT | `/api/systems/<system>/rom-version` | `?rom=` / `{rom, version}`: the version noted for a game's ROM, with what it replaced |
 | POST | `/api/systems/<system>/replace-rom` | `{rom, upload, version?}`: an `/api/uploads` file put in place of the ROM under its name; the old one kept in `replaced-roms/` |
+| POST | `/api/systems/<system>/patch-rom` | `{rom, upload, as: replace \| new, name?, version?}`: an IPS, UPS or BPS patch (an `/api/uploads` file) applied to the ROM, in its place or as a new game: `rom`, `notes`, `crc32`, `sha1` |
 | GET | `/api/duplicates` | Every game more than once, by name (the Scan) and by identical files (the ROM check), as one list (`?system=` for one) |
 | POST | `/api/storage/delete` | `{area, items}`, `{area, older_than_days}` or `{area, all: true}`: delete for good |
 | GET | `/api/media-viewer` | `?folder=box2d` (or mix, wheel...): every game of every system with that picture's path, or none |
@@ -139,7 +145,7 @@ Older routes, taking a JSON body with `system`:
 | GET, POST | `/api/phone/setup` | The RetroArch setup kept for other phones: its files, and which phone it came from. POST `{device, base, package, files}` makes it the files just sent |
 | GET, PUT | `/api/phone/setup/file?path=` | One file of it, by its path in the RetroArch folder |
 | GET | `/api/phone/cores` | The library's systems RetroArch can play, each with its cores |
-| GET | `/api/console/home` | The Console page's recent games, Favourites and collections (`pending` while first being worked out) |
+| GET | `/api/console/home` | The Console page's recent games, the person's Playing and Backlog, Favourites and collections (`pending` while first being worked out) |
 | GET | `/api/systems/<system>/rom-files?rom=[&hash=1]` | The files a game is made of, with their checksums (`hash=1` works out the missing ones) |
 | GET | `/api/series/game?system=&rom=` | The game's series: every game in it, the library games that are each, and your marks |
 | GET | `/api/series/list?key=` | One series, the same way |
@@ -160,9 +166,6 @@ Older routes, taking a JSON body with `system`:
 | GET | `/api/scrape-sources` | Which sources the Scrape popup can use, and which need a key |
 | POST | `/api/sources/<source>/search` | Search `retroachievements`, `steam`, `steamgriddb` or `libretro` |
 | POST | `/api/sources/<source>/game-info` | Normalised metadata and media for one result from that source |
-| GET | `/api/scrape-queue` | Background scrape progress: `running`, `total`, `done`, `current`, `applied`, `review`, `failed` |
-| POST | `/api/scrape-queue/start` | `{systems?, include_media?, media?, recheck?}`: start a background scrape |
-| POST | `/api/scrape-queue/stop` | Stop after the current game |
 
 Request and response shapes are in [SCRAPING.md](scraping.md).
 

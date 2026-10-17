@@ -274,7 +274,22 @@
         function leaveGame(manager) {
             try { manager.saveSaveFiles(); } catch (e) {}
             setStatus('Leaving...');
-            setTimeout(() => { window.location.href = $('back').href; }, 400);
+            // (where they stopped kept first, a few seconds at most)
+            Promise.race([keepWhereStopped(manager), new Promise(r => setTimeout(r, 4000))])
+                .finally(() => setTimeout(() => { window.location.href = $('back').href; }, 300));
+        }
+        // Where they stopped: a save state made as they leave the game (or the page is put away),
+        // kept apart from the one they save themselves, to carry on from next time (Start's list)
+        let keptAt = 0;
+        async function keepWhereStopped(manager) {
+            if (!profile() || !info || !info.states || !manager || Date.now() - keptAt < 3000) return;
+            keptAt = Date.now();
+            try {
+                const state = await manager.getState();
+                if (!state || !state.length) return;
+                await fetch(`/api/play/state?${query({ profile: profile(), auto: '1' })}`, { method: 'PUT', headers: { 'Content-Type': 'application/octet-stream' },
+                    body: state, keepalive: state.length < 60000 });
+            } catch (e) {}
         }
         // EmulatorJS's own menu button (☰) only flips its menu bar, which also comes and goes
         // with the mouse and hides itself after 3 seconds: a click could close what the
@@ -363,18 +378,34 @@
                 const d = await (await fetch(`/api/play/pi-states?${query()}`)).json();
                 if (d.success) piStates = d.states;
             } catch (e) {}
+            // (where they stopped, chosen to begin with: carrying on is what's wanted most often)
+            if (!chosenState && stoppedState()) chosenState = stoppedState();
             renderPiStates(false);
+            $('profile').addEventListener('change', () => {
+                if (!chosenState || chosenState.stopped) chosenState = stoppedState();
+                renderPiStates(false);
+            });
+        }
+        // The chosen person's state from when they last left the game, as one more to start from
+        function stoppedState() {
+            const mine = info && (info.profiles || []).find(p => p.name === profile());
+            if (!mine || !mine.stopped) return null;
+            return { stopped: true, label: 'Where you stopped', profile: mine.name, modified: mine.stopped, core: info.core, made_by: 'the browser',
+                url: `/api/play/state?${query({ profile: mine.name, auto: '1' })}` };
         }
         function renderPiStates(showAll) {
-            const usable = piStates.filter(s => s.core);
+            const stopped = stoppedState();
+            // (the same one kept chosen as the list is drawn again)
+            if (chosenState && chosenState.stopped) chosenState = stopped;
+            const usable = [...(stopped ? [stopped] : []), ...piStates.filter(s => s.core)];
             const others = piStates.filter(s => !s.core);
-            if (!piStates.length) return;
+            if (!usable.length && !others.length) { const old = $('pi-states'); if (old) old.remove(); $('stage').classList.remove('with-states'); return; }
             $('stage').classList.add('with-states');
             const box = $('pi-states') || $('intro').appendChild(Object.assign(document.createElement('div'), { id: 'pi-states' }));
             box.innerHTML = '';
-            box.appendChild(Object.assign(document.createElement('h2'), { textContent: 'Or carry on from a save state made on the Pi' }));
+            box.appendChild(Object.assign(document.createElement('h2'), { textContent: stopped ? 'Or carry on from a save state' : 'Or carry on from a save state made on the Pi' }));
             box.appendChild(Object.assign(document.createElement('p'), { className: 'small',
-                textContent: "Pick one and press Start. It loads if the browser's emulator matches the one that made it, which is checked once the game is running. A save state also brings back the in-game save as it was at that moment. The Pi's save states themselves aren't changed." }));
+                textContent: (stopped ? "Where you stopped is kept each time you leave a game here. " : '') + "Pick one and press Start. A state from the Pi loads if the browser's emulator matches the one that made it, which is checked once the game is running. A save state also brings back the in-game save as it was at that moment. The Pi's save states themselves aren't changed." }));
             const list = box.appendChild(Object.assign(document.createElement('div'), { className: 'pi-list' }));
             list.setAttribute('role', 'radiogroup');
             list.setAttribute('aria-label', 'Where to start');
@@ -382,7 +413,9 @@
                 const button = Object.assign(document.createElement('button'), { className: 'pi-state', type: 'button' });
                 button.setAttribute('role', 'radio');
                 button.setAttribute('aria-checked', String(chosenState === state));
-                if (state && state.screenshot) {
+                if (state && state.stopped) {
+                    button.appendChild(Object.assign(document.createElement('span'), { className: 'no-shot', textContent: '⏯' }));
+                } else if (state && state.screenshot) {
                     button.appendChild(Object.assign(document.createElement('img'), { alt: '', loading: 'lazy',
                         src: `/api/save-screenshot/savestates/${state.screenshot.split('/').map(encodeURIComponent).join('/')}` }));
                 } else {
@@ -398,7 +431,7 @@
             const PREVIEW = 6;
             (showAll ? usable : usable.slice(0, PREVIEW)).forEach(state => option(state,
                 `${state.label}${state.profile !== 'shared' ? ` · ${state.profile}` : ''}`,
-                `${ago(state.modified)} · ${new Date(state.modified).toLocaleDateString()} · made with ${state.made_by}`));
+                `${ago(state.modified)} · ${new Date(state.modified).toLocaleDateString()} · ${state.stopped ? 'in the browser' : `made with ${state.made_by}`}`));
             if (usable.length > PREVIEW) {
                 const more = list.appendChild(Object.assign(document.createElement('button'), { className: 'pi-more', type: 'button',
                     textContent: showAll ? 'Show fewer' : `Show all ${usable.length}` }));
@@ -411,13 +444,14 @@
                         + (makers.length ? `made with ${makers.join(', ')}, which the browser doesn't have.` : "made by an emulator the browser doesn't have.") }));
             }
         }
-        // The emulator's snapshot of the game right now, without RetroArch's wrapper (null if it can't give one)
+        // A save state without RetroArch's wrapper (the browser's own states have it; the server takes it off the Pi's)
+        const unwrapped = (s) => (s && s.length > 16 && String.fromCharCode(...s.slice(0, 7)) === 'RASTATE'
+            ? s.slice(16, 16 + (s[12] | s[13] << 8 | s[14] << 16 | s[15] << 24 >>> 0)) : s);
+        // The emulator's snapshot of the game right now, without the wrapper (null if it can't give one)
         async function snapshotNow(manager) {
             try {
                 const s = await manager.getState();
-                if (!s || !s.length) return null;
-                const wrapped = String.fromCharCode(...s.slice(0, 7)) === 'RASTATE';
-                return wrapped ? s.slice(16, 16 + (s[12] | s[13] << 8 | s[14] << 16 | s[15] << 24 >>> 0)) : s;
+                return s && s.length ? unwrapped(s) : null;
             } catch (e) { return null; }
         }
         const alike = (a, b) => {
@@ -429,20 +463,22 @@
         };
         // midGame: picked from the bar while playing, not before Start
         async function loadPiState(manager, state, midGame) {
-            const what = `${state.profile !== 'shared' ? `${state.profile}'s ` : 'the '}${state.label.toLowerCase()}`;
+            const what = state.stopped ? 'where you stopped' : `${state.profile !== 'shared' ? `${state.profile}'s ` : 'the '}${state.label.toLowerCase()}`;
             try {
                 setStatus(`Loading ${what}...`);
-                const res = await fetch(`/api/play/pi-state?${query({ path: state.path })}`);
+                const res = await fetch(state.url || `/api/play/pi-state?${query({ path: state.path })}`);
                 if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'the server refused it');
                 const snapshot = new Uint8Array(await res.arrayBuffer());
-                const before = alike(await snapshotNow(manager), snapshot);
+                const bare = unwrapped(snapshot);
+                const before = alike(await snapshotNow(manager), bare);
                 manager.loadState(snapshot);
                 await new Promise(r => setTimeout(r, 1500));
                 // Did it take? The emulator's snapshot should now be nearly the one it was given
-                const after = alike(await snapshotNow(manager), snapshot);
+                const after = alike(await snapshotNow(manager), bare);
                 if (after === null) setStatus(`Sent ${what} to the emulator`);
                 else if (after >= 0.97 || (before !== null && after - before >= 0.03)) setStatus(`Carried on from ${what}`);
-                else setStatus(`That save state didn't load: it was made with a different version of ${state.made_by} from the browser's. ${midGame ? 'The game carries on as it was.' : 'Playing from the start.'}`, true);
+                else setStatus(state.stopped ? `Where you stopped didn't load (the browser's emulator may have been updated since). ${midGame ? 'The game carries on as it was.' : 'Playing from the start.'}`
+                    : `That save state didn't load: it was made with a different version of ${state.made_by} from the browser's. ${midGame ? 'The game carries on as it was.' : 'Playing from the start.'}`, true);
             } catch (e) {
                 setStatus(`Couldn't load the save state: ${e.message}`, true);
             }
@@ -558,7 +594,9 @@
                 const flush = () => { try { manager.saveSaveFiles(); } catch (e) {} };
                 setInterval(flush, 20000);
                 window.addEventListener('pagehide', flush);
-                document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
+                document.addEventListener('visibilitychange', () => { if (document.hidden) { flush(); keepWhereStopped(manager); } });
+                // Back, while playing: where they stopped kept on the way
+                $('back').addEventListener('click', (e) => { e.preventDefault(); leaveGame(manager); });
             };
             // The emulator's own "save file" button sends it straight away
             window.EJS_onSaveSave = (e) => sendSave(e && e.save);

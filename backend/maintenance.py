@@ -21,8 +21,9 @@ from typing import Callable, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 # Files backed up, relative to DATA_PATH
-DATA_FILES = ('settings.json', 'library-state.json', 'rom-index.json', 'scrape-queue.json',
-              'rom-hashes.json', 'retroachievements/rom-games.json', 'series.json', 'accounts.json', 'mix-generated.json')
+DATA_FILES = ('settings.json', 'library-state.json', 'rom-index.json', 'fill-found.json', 'fill-checked.json', 'matches.json',
+              'rom-versions.json', 'rom-hashes.json', 'retroachievements/rom-games.json', 'series.json', 'accounts.json',
+              'mix-generated.json')
 KEEP_BACKUPS = 14
 # The hour (server time) after which the night's housekeeping runs
 NIGHTLY_HOUR = 3

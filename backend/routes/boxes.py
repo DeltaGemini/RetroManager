@@ -35,8 +35,11 @@ def made_file(token):
     return next((p for p in STAGING.glob(f'{token}.*') if p.suffix in PICTURE_TYPES.values()), None)
 
 
-def _clear_old():
+def clear_old():
+    """Made and pasted pictures older than KEEP_HOURS (each time one is made, and nightly)."""
     cutoff = time.time() - KEEP_HOURS * 3600
+    if not STAGING.is_dir():
+        return
     for old in STAGING.glob('*.*'):
         try:
             if old.stat().st_mtime < cutoff:
@@ -81,7 +84,7 @@ def make_box():
         logger.exception(f"Couldn't make a {kind} for {system}/{rom_path}")
         return jsonify(success=False, error=f"It couldn't be made ({e})")
     STAGING.mkdir(parents=True, exist_ok=True)
-    _clear_old()
+    clear_old()
     token = uuid.uuid4().hex
     picture.save(STAGING / f'{token}.png', optimize=True)
     return jsonify(success=True, token=token, url=f"/api/boxes/made/{token}", made_spine=made_spine and kind == 'box3d')
@@ -108,7 +111,8 @@ def keep_picture(data: bytes):
     if kind not in PICTURE_TYPES:
         raise ValueError(f"A {kind} picture can't be used: PNG, JPEG, WebP or GIF")
     STAGING.mkdir(parents=True, exist_ok=True)
-    _clear_old()
+    clear_old()
     token = uuid.uuid4().hex
-    (STAGING / f'{token}{PICTURE_TYPES[kind]}').write_bytes(data)
+    # (".pasted": put in as the person's own, not as made here)
+    (STAGING / f'{token}.pasted{PICTURE_TYPES[kind]}').write_bytes(data)
     return token, f"/api/boxes/made/{token}"

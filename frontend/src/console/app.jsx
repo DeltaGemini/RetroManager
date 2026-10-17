@@ -310,10 +310,10 @@ function ConsoleSystems({ systems, home, installed, pad }) {
             out.push({ label: installed.length > INSTALLED_SHOWN ? `Installed games (${INSTALLED_SHOWN} of ${installed.length})` : 'Installed games',
                 items: sorted.slice(0, INSTALLED_SHOWN).map(game => ({ key: `i:${game._system}/${game.path}`, type: 'game', game, note: 'on this phone' })) });
         }
-        // Favourites, each collection, and a tile that picks a game for you
+        // Playing, Backlog, Favourites, each collection, and a tile that picks a game for you
         const picks = lists.map(list => ({ key: `l:${list.id}`, type: 'list', list }));
         if (shown.length) picks.push({ key: 'surprise', type: 'surprise' });
-        if (picks.length) out.push({ label: lists.length ? 'Favourites and collections' : 'Something to play', items: picks });
+        if (picks.length) out.push({ label: lists.length ? 'Your lists' : 'Something to play', items: picks });
         const item = (system) => ({ key: `s:${system.name}`, type: 'system', system });
         if (view === 'row') out.push({ label: out.length ? 'Systems' : null, big: true, items: shown.map(item) });
         else {
@@ -476,7 +476,7 @@ function ConsoleSystems({ systems, home, installed, pad }) {
                 <button {...common} className={`console-tile console-tile-list${active ? ' active' : ''}`}>
                     {cover && <img src={gdThumb(cover, 320)} alt="" draggable={false} onError={e => { e.target.style.display = 'none'; }} />}
                     <span className="console-tile-label">
-                        <span className="console-tile-icon" aria-hidden="true">{item.list.kind === 'favourites' ? '★' : '📁'}</span>
+                        <span className="console-tile-icon" aria-hidden="true">{item.list.kind === 'favourites' ? '★' : item.list.kind === 'status' ? (item.list.status === 'playing' ? '⏵' : '🕓') : '📁'}</span>
                         <span>{item.list.name}</span>
                         <span className="console-tile-count">{item.list.games.length} game{item.list.games.length === 1 ? '' : 's'}</span>
                     </span>
@@ -631,6 +631,7 @@ function ConsoleGames({ system, list, startOn, startShowing = true, fromHome, on
         saved(fields);
         if (!list || !game) return;
         const belongs = list.kind === 'favourites' ? (fields.favorite === undefined ? null : !!fields.favorite)
+            : list.kind === 'status' ? (fields.play_status === undefined ? null : fields.play_status === list.status)
             : (fields.collections ? fields.collections.includes(list.id) : null);
         if (belongs === null) return;
         const others = list.games.filter(g => keyOf(g) !== keyOf(game));

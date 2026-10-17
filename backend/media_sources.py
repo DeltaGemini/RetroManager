@@ -23,6 +23,8 @@ _HOSTS = {
     'akamaihd.net': 'Steam',
 }
 UPLOADED = 'a file of yours'
+# A 3D box or spine RetroManager made from the game's own pictures (backend/box_generator.py)
+MADE = 'RetroManager (made)'
 
 
 def source_of(url: str) -> Optional[str]:
@@ -62,6 +64,29 @@ class MediaSources:
                     db.close()
         except (OSError, ValueError, sqlite3.Error) as e:
             logger.warning(f"Couldn't note where {saved} came from: {e}")
+
+    def paths_from(self, source: str) -> set:
+        """The media paths whose file is still the one that came from `source`."""
+        if not self.path.is_file():
+            return set()
+        try:
+            with self._lock:
+                db = self._db()
+                try:
+                    rows = db.execute("SELECT path, size FROM sources WHERE source = ?", (source,)).fetchall()
+                finally:
+                    db.close()
+        except sqlite3.Error as e:
+            logger.warning(f"Couldn't read where media came from: {e}")
+            return set()
+        found = set()
+        for rel, size in rows:
+            try:
+                if (self.media_base / rel).stat().st_size == size:
+                    found.add(rel)
+            except OSError:
+                pass
+        return found
 
     def for_paths(self, paths: Iterable[Optional[str]]) -> Dict[str, Dict]:
         """{media path: {source, at}} for those of these paths (relative to the

@@ -81,6 +81,21 @@ final class Prefs {
         prefs.edit().putString("failed", all.toString()).apply();
     }
 
+    /** Every system's cores marked as not starting a game: {system: [cores]} (for Check this phone). */
+    JSONObject allFailed() { return json("failed"); }
+    void clearFailed() { prefs.edit().remove("failed").apply(); }
+
+    /** The last games started in RetroArch from the app, newest first, as checked afterwards (Player.checkLaunch):
+     *  [{at, system, rom, core, path (the one RetroArch was given), began, recorded (the path its history has, or null)}]. */
+    JSONArray launches() {
+        try { return new JSONArray(prefs.getString("launches", "[]")); } catch (JSONException e) { return new JSONArray(); }
+    }
+    void launchChecked(JSONObject launch) {
+        JSONArray list = new JSONArray().put(launch), old = launches();
+        for (int i = 0; i < old.length() && list.length() < 8; i++) list.put(old.opt(i));
+        prefs.edit().putString("launches", list.toString()).apply();
+    }
+
     /** The game RetroArch was last started on, until it's been seen whether it began: {system, rom, path, core, at}. */
     JSONObject launched() {
         String launched = prefs.getString("launched", null);

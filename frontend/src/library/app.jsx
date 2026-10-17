@@ -26,7 +26,6 @@ function App() {
         window.addEventListener('retromanager:open-tool', open);
         return () => window.removeEventListener('retromanager:open-tool', open);
     }, []);
-    const [scrapeStatus, refreshScrapeStatus] = useScrapeQueue();
     const [scanning, setScanning] = useState(false);
     // A navigation waiting on the unsaved-changes prompt
     const [pendingAction, setPendingAction] = useState(null);
@@ -406,7 +405,7 @@ function App() {
                 />
             )}
             {tool === 'scrape' && (
-                <LibraryScrapePanel status={scrapeStatus} refresh={refreshScrapeStatus} onClose={() => setTool(null)} onChanged={refreshLibrary} />
+                <BackgroundScrapePanel onClose={() => setTool(null)} />
             )}
             {tool === 'viewer' && <MediaViewerPanel options={toolOptions} onClose={() => { setTool(null); setToolOptions(null); refreshLibrary(); }} />}
             {tool === 'storage' && <StoragePanel initialSystem={toolSystem} onClose={() => { setTool(null); setToolSystem(null); refreshLibrary(); }} showNotification={showNotification} />}
@@ -417,8 +416,8 @@ function App() {
             {tool === 'collections' && <CollectionsPanel onClose={() => setTool(null)} />}
             {tool === 'roms' && <RomCheckPanel onClose={() => setTool(null)} />}
             {tool === 'fill' && <FillGapsPanel initialSystem={toolSystem || selectedSystem?.name} systems={systems} options={toolOptions} showNotification={showNotification}
-                // (sent from the Media viewer: back to it)
-                onClose={() => { const back = toolOptions && toolOptions.from === 'viewer'; setToolSystem(null); setToolOptions(back ? toolOptions.viewer || null : null); setTool(back ? 'viewer' : null); }} onChanged={() => { loadSystems(); if (selectedSystem) loadGames(selectedSystem.name, selectedGame?.path); }} />}
+                // (sent from the Media viewer or the background scrape: back to it)
+                onClose={() => { const from = toolOptions && toolOptions.from; setToolSystem(null); setToolOptions(from === 'viewer' ? toolOptions.viewer || null : null); setTool(from === 'viewer' ? 'viewer' : from === 'background' ? 'scrape' : null); }} onChanged={() => { loadSystems(); if (selectedSystem) loadGames(selectedSystem.name, selectedGame?.path); }} />}
             {tool === 'duplicates' && <DuplicatesPanel initialSystem={toolSystem} onClose={() => { setTool(null); setToolSystem(null); }} showNotification={showNotification}
                 onChanged={() => { loadSystems(); if (selectedSystem) loadGames(selectedSystem.name); }} />}
             {tool === 'settings' && <SettingsPanel onClose={() => setTool(null)} showNotification={showNotification} />}

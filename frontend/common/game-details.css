@@ -269,3 +269,9 @@ details.gd-group > summary { cursor: pointer; }
 .gd-replace { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; }
 .gd-replace .gd-row > span:first-child { min-width: 80px; color: var(--text-secondary); }
 .gd-replace input[type=file] { min-width: 0; max-width: 100%; }
+/* A game's picture, larger: fitted to the screen, over everything */
+.gd-picture-view { position: fixed; inset: 0; z-index: 3000; background: rgba(0, 0, 0, 0.88); display: flex; align-items: center; justify-content: center;
+    padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); cursor: zoom-out; }
+.gd-picture-view img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6); }
+.gd-picture-full { position: absolute; right: 14px; bottom: max(14px, env(safe-area-inset-bottom)); font-size: 13px; color: #fff; opacity: 0.75; }
+html.rm-touch .gd-picture-full { display: none; }

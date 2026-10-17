@@ -85,6 +85,15 @@
 }
 .rm-menu button:hover, .rm-menu button:focus-visible { background: var(--bg-tertiary); }
 .rm-menu .rm-help { display: block; font-size: 11px; color: var(--text-secondary); }
+/* The Tools menu: its groups in two columns where there's room, one that scrolls where there isn't */
+.rm-menu.rm-tools { width: 560px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 8px; align-items: start;
+    max-height: calc(100vh - 80px); overflow-y: auto; overscroll-behavior: contain; }
+.rm-tools-group .rm-menu-heading { border-top: none; margin-top: 2px; }
+@media (max-width: 640px) {
+    /* (across the screen, under the header: anchored to its button it ran off the left edge) */
+    .rm-menu.rm-tools { position: fixed; left: 12px; right: 12px; top: 64px; width: auto; max-width: none; grid-template-columns: 1fr; max-height: calc(100vh - 76px); }
+    .rm-tools-group + .rm-tools-group .rm-menu-heading { border-top: 1px solid var(--border-color); }
+}
 
 /* The page's own controls, under the header */
 .rm-subbar {

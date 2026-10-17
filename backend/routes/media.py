@@ -13,6 +13,7 @@ from backend.name_style import style_name
 from backend.folder_games import folder_game_name, game_folder, is_folder_game_system, launch_candidates
 from backend.media_index import strip_dot_slash
 from backend.media_sources import UPLOADED, source_of
+from backend.net_guard import NotPublic, get_public
 from backend.core import (
     media_sources,
     game_moved,
@@ -85,7 +86,10 @@ def _download_one(url, target_dir, stem, source=None):
     response = None
     for attempt in range(2):
         try:
-            response = requests.get(url, timeout=(10, 120), stream=True)
+            # (from the internet only: backend/net_guard.py)
+            response = get_public(url, timeout=(10, 120), stream=True)
+        except NotPublic as e:
+            raise ValueError(str(e))
         except requests.RequestException as e:
             if attempt == 0:
                 continue

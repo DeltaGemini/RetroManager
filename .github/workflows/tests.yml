@@ -1,6 +1,6 @@
-# The tests, on every push and pull request: the API's (tests/), and the
+# The tests, on every push and pull request: the API's (tests/), the
 # pages' in a real browser against a demo library of made-up games
-# (tests/e2e/). A release (release.yml) is only made from a tagged version.
+# (tests/e2e/), the phone app's decisions (android/test.sh), and lint. A release (release.yml) is only made from a tagged version.
 name: Tests
 
 on:
@@ -25,5 +25,14 @@ jobs:
           pip install -r backend/requirements.txt pytest playwright
           python -m playwright install --with-deps chromium
 
+      - name: Lint (ruff, with Pyflakes' checks; see ruff.toml)
+        run: |
+          pip install ruff
+          ruff check .
+
       - name: Run the tests
         run: python -m pytest tests -q
+
+      # The phone app's plain decisions (android/src/.../Decide.java), with the runner's own JDK
+      - name: The phone app's tests
+        run: android/test.sh

@@ -75,6 +75,8 @@ function MediaViewerPanel({ options, onClose }) {
     const inSystem = all.filter(g => !system || g.system === system);
     const having = inSystem.filter(g => g.picture).length;
     const chosen = all.filter(g => picked[keyOf(g)]);
+    // (the 3D boxes or spines RetroManager made, shown: they can be made again)
+    const madeHere = inSystem.filter(g => (g.made || []).includes(kind));
 
     // A click picks a game; with Shift, every game from the last one clicked
     const toggle = (g, index, shift) => {
@@ -185,6 +187,13 @@ function MediaViewerPanel({ options, onClose }) {
                     Pick all shown
                 </label>
                 {chosen.length > 0 && <button className="btn btn-secondary btn-small" onClick={() => setAsking({})}>Clear ({chosen.length})</button>}
+                {['box3d', 'boxside'].includes(kind) && madeHere.length > 0 && (
+                    <button className="btn btn-secondary btn-small"
+                        onClick={() => openFill({ games: madeHere.map(g => ({ system: g.system, path: g.path })), kinds: [kind], replace: true, start: true, remake: true })}
+                        title={`Make the ${label.toLowerCase()} pictures RetroManager made again, from each game's cover as it is now. Fill the gaps shows each beside the one there; nothing is replaced until you apply.`}>
+                        Make again {madeHere.length} made
+                    </button>
+                )}
                 {kind === 'mix' && generated > 0 && (
                     <button className="btn btn-secondary btn-small" onClick={() => setMixGames({ generated: true, ...(system ? { systems: [system] } : {}) })}
                         title="Make the Mix pictures RetroManager generated again, with the template as it is now. You review them before anything is replaced.">

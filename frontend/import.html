@@ -19,6 +19,7 @@
     <script crossorigin src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
     <link rel="stylesheet" href="/common/header.css">
     <script src="/common/header.js"></script>
+    <script src="/common/upload.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -138,7 +139,6 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, useCallback } = React;
         const API_BASE = window.location.origin;
-        const CHUNK = 8 * 1024 * 1024;
 
         const MEDIA = [
             { key: 'box2d', label: 'Box 2D' }, { key: 'screenshot', label: 'Screenshot' },
@@ -155,7 +155,6 @@
 
         const formatBytes = (n) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB`
             : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(2)} GB`;
-        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
         const api = async (path, options = {}) => {
             const res = await fetch(`${API_BASE}${path}`, options);
             const data = await res.json().catch(() => ({ success: false, error: `HTTP ${res.status}` }));
@@ -176,39 +175,19 @@
 
             const update = (key, changes) => setJobs(list => list.map(j => j.key === key ? { ...j, ...changes } : j));
 
+            // (common/upload.js: 8 MB pieces, tried again when the connection drops)
             const runOne = async (job) => {
                 const { file, key } = job;
-                let start = await post('/api/uploads', { name: file.name, size: file.size, key });
-                if (!start.success) { update(key, { state: 'failed', error: start.error }); return; }
-                let received = start.received;
-                update(key, { id: start.id, received, state: received >= file.size ? 'done' : 'uploading' });
-                let failures = 0;
-                let lastTime = performance.now(), lastBytes = received;
-                while (received < file.size) {
-                    if (cancelled.current.has(key)) return;
-                    try {
-                        const res = await fetch(`${API_BASE}/api/uploads/${start.id}?offset=${received}`, {
-                            method: 'PUT', body: file.slice(received, Math.min(received + CHUNK, file.size)),
-                            headers: { 'Content-Type': 'application/octet-stream' },
-                        });
-                        const data = await res.json();
-                        if (!data.success && res.status !== 409) throw new Error(data.error || `HTTP ${res.status}`);
-                        received = data.received;
-                        failures = 0;
-                        const now = performance.now();
-                        const speed = now - lastTime > 1000 ? (received - lastBytes) / ((now - lastTime) / 1000) : undefined;
-                        if (speed !== undefined) { lastTime = now; lastBytes = received; }
-                        update(key, { received, state: 'uploading', error: null, ...(speed !== undefined ? { speed } : {}) });
-                    } catch (err) {
-                        // Wait and pick up where the server says it got to
-                        failures++;
-                        const wait = Math.min(30, 2 ** Math.min(failures, 5));
-                        update(key, { state: 'retrying', error: `Connection lost, retrying in ${wait}s` });
-                        await sleep(wait * 1000);
-                        const status = await api(`/api/uploads/${start.id}`).catch(() => null);
-                        if (status && status.success) received = status.received;
-                    }
-                }
+                try {
+                    const id = await RMUpload.send(file, {
+                        key,
+                        onStart: (id, received) => update(key, { id, received, state: received >= file.size ? 'done' : 'uploading' }),
+                        onProgress: (received, size, speed) => update(key, { received, state: 'uploading', error: null, ...(speed !== undefined ? { speed } : {}) }),
+                        onRetry: (wait) => update(key, { state: 'retrying', error: `Connection lost, retrying in ${wait}s` }),
+                        stopped: () => cancelled.current.has(key),
+                    });
+                    if (!id) return;
+                } catch (err) { update(key, { state: 'failed', error: err.message }); return; }
                 update(key, { state: 'done', received: file.size, error: null });
                 onFinished && onFinished();
             };

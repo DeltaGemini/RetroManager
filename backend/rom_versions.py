@@ -49,22 +49,28 @@ class RomVersions:
         with self._lock:
             return {k[len(prefix):]: v.get('version', '') for k, v in self._load().items() if k.startswith(prefix) and v.get('version')}
 
-    def set_version(self, key: str, version: Optional[str]):
+    def set_version(self, key: str, version: Optional[str], patched_from: Optional[Dict] = None):
+        """(patched_from: {rom, patch}, for a game made by patching another's ROM)"""
         with self._lock:
             record = self._load().setdefault(key, {})
             record['version'] = (version or '').strip()[:60]
             record['at'] = int(time.time())
-            if not record['version'] and not record.get('history'):
+            if patched_from:
+                record['patched_from'] = patched_from
+            if not record['version'] and not record.get('history') and not record.get('patched_from'):
                 self._data.pop(key, None)
             self._save()
 
-    def replaced(self, old_key: str, new_key: str, kept_file: str, version: Optional[str]):
-        """The file was replaced by a new one (kept_file: where the old one went)."""
+    def replaced(self, old_key: str, new_key: str, kept_file: str, version: Optional[str], patch: Optional[str] = None):
+        """The file was replaced by a new one (kept_file: where the old one went; patch: the patch the
+        new one is the old one with)."""
         with self._lock:
             data = self._load()
             record = data.pop(old_key, {})
-            history = [{'version': record.get('version', ''), 'file': kept_file, 'at': int(time.time())}] + record.get('history', [])
-            data[new_key] = {'version': (version if version is not None else record.get('version', '')).strip()[:60],
+            history = [{'version': record.get('version', ''), 'file': kept_file, 'at': int(time.time()),
+                        **({'then_patched_with': patch} if patch else {})}] + record.get('history', [])
+            data[new_key] = {**{k: v for k, v in record.items() if k == 'patched_from'},
+                             'version': (version if version is not None else record.get('version', '')).strip()[:60],
                              'at': int(time.time()), 'history': history[:HISTORY]}
             self._save()
 

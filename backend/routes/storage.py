@@ -55,6 +55,8 @@ AREAS = [
      'clean-ups and save zips. Your current saves are not here.', False, ('zips',)),
     ('mix-backups', DATA_DIR / 'mix-backups', 'Mix pictures replaced by generated ones',
      'Each bundle holds the Mix pictures a generated Mix replaced.', False, ()),
+    ('box-staging', DATA_DIR / 'box-staging', 'Made and pasted pictures not applied',
+     '3D boxes and spines made, and pictures pasted, in Fill the gaps but never applied. Cleared after a day.', False, ()),
     ('mix-staging', DATA_DIR / 'mix-staging', 'Unfinished generated Mix previews',
      'Previews from Mix generation that were never approved or rejected.', False, ()),
     ('data-backups', DATA_DIR / 'backups', "Nightly copies of RetroManager's own data",

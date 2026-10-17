@@ -31,7 +31,7 @@ Media downloads one file at a time with a progress bar. If a search, lookup or d
 
 **Fill the gaps** (🧰 Tools, or a system's **Bulk ▾ › Fill the gaps...**) scrapes many games at once, from every source side by side: see [Fill the gaps](library.md#fill-the-gaps). It covers pictures, manuals, videos and text; manuals and videos come from ScreenScraper only. **Background scrape** (below) does every system unattended.
 
-How a game is matched (Fill the gaps and Background scrape alike):
+How a game is matched (Fill the gaps, the Background scrape and adding games alike):
 
 - **ScreenScraper:** by the ROM file name, which it recognises for most No-Intro/Redump-named ROMs. If that fails, the file's checksum is looked up (see [Checksum matching](#checksum-matching)), which finds renamed files and, with a RetroAchievements key, ROM hacks. If that fails or looks wrong too, it falls back to a title search, using the title the checksum gave when there is one.
 - **Another source:** by the game's title (its file name without the region and version tags), with a match from the ROM's checksum first where that source can be asked so (IGDB, RetroAchievements and SteamGridDB, through Hasheous; GameTDB by the ID inside the ROM).
@@ -45,13 +45,13 @@ Each match gets a confidence:
 | **Unsure** | A game was found but the names differ: not used unless you pick it |
 | **No match** | Nothing found |
 
-Where ScreenScraper has no box art, screenshot, title screen or wheel (or the download fails), a Background scrape uses the libretro thumbnail if there is one; choose **Before ScreenScraper** in Tools › Settings to try libretro first for those four, which saves ScreenScraper quota, or `off` to never use it. In Fill the gaps libretro is a source of its own, in the order you choose.
+Where ScreenScraper has no box art, screenshot, title screen or wheel (or the download fails), a game being added is given the libretro thumbnail if there is one (in Fill the gaps libretro is a source of its own); choose **Before ScreenScraper** in Tools › Settings to try libretro first for those four, which saves ScreenScraper quota, or `off` to never use it. 
 
 Each media file is a ScreenScraper request, so a large batch uses a noticeable part of the daily quota; a ScreenScraper user account (Tools › Settings) raises it. If the quota runs out, the batch stops and says so, and everything applied so far is kept.
 
 ## Background scrape
 
-**🧰 Tools › Background scrape** runs the same ScreenScraper matching over every system in the background, without a review step: **Exact** and **Likely** matches are applied straight away (empty fields and missing media only), and **Unsure** and **No match** games are listed under **Needs a look** for you to scrape by hand. Optionally it also covers games that have metadata but lack some media. Games it has checked are skipped for 30 days. Details are in the [README](library.md#background-scrape).
+**🧰 Tools › Background scrape** looks every chosen system's games up on all the sources, in Fill the gaps' order, on the server and without changing anything: what it finds waits to be checked and applied in Fill the gaps. Details are in the [README](library.md#background-scrape).
 
 Names from ScreenScraper and IGDB are put in the house name style (`Series: Subtitle`, see the README's Scan section) before they're shown or saved.
 
@@ -155,7 +155,7 @@ Accounts, keys and options are set in the app, in **🧰 Tools › Settings**, a
 | RetroAchievements web API key | retroachievements.org › Settings › Keys. Without it the source is off |
 | RetroAchievements user name | Whose earned achievements each game's page shows |
 | SteamGridDB API key | steamgriddb.com › Preferences › API. Without it the source is off |
-| libretro thumbnails | When they're used in a Background scrape: see [Many games at once](#many-games-at-once) |
+| libretro thumbnails | When they're used for a game being added: see [Many games at once](#many-games-at-once) |
 | Recognise ROMs by checksum | Hasheous on or off: see [Checksum matching](#checksum-matching) |
 
 Without a ScreenScraper user account, requests use the anonymous quota, and ScreenScraper blocks anonymous use when it's busy. A free account removes most of the failures listed below.

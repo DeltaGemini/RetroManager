@@ -10,7 +10,6 @@ from flask import jsonify, request
 import re
 
 from backend.maintenance import Maintenance
-from backend.routes.scraping import scrape_queue
 from backend.routes.systems import _rename_media_for_relink, move_rom_aside
 from backend.media_index import title_key
 from backend.models import Game
@@ -224,6 +223,12 @@ def _nightly():
         mix.mix_jobs.cleanup()
     except Exception:
         logger.exception("Couldn't clear old Mix previews")
+    # Boxes and spines made, and pictures pasted, in Fill the gaps but never applied
+    try:
+        from backend.routes import boxes
+        boxes.clear_old()
+    except Exception:
+        logger.exception("Couldn't clear old made pictures")
 
 
 maintenance = Maintenance(DATA_DIR, _nightly)
@@ -236,7 +241,8 @@ def start_background_work():
     try:
         if rom_index.resume_if_interrupted():
             logger.info("Resumed the ROM check a restart interrupted")
-        if scrape_queue.resume_if_interrupted():
+        from backend.routes.fill import fill_queue
+        if fill_queue.resume_if_interrupted():
             logger.info("Resumed the background scrape a restart interrupted")
         # Have the Console page's lists ready before anyone asks for them
         from backend.routes import console

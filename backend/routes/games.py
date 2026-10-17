@@ -81,7 +81,7 @@ def create_game(system_name):
                 if gamelist_mgr.save_game(system_name, game, ROMS_BASE):
                     logger.info(f"Successfully saved game via JSON: {game.name}")
                     return jsonify(success=True, game=game.to_dict())
-                logger.warning(f"Failed to save game via JSON")
+                logger.warning("Failed to save game via JSON")
                 return jsonify(success=False, error="Failed to save game"), 500
             
             # Otherwise handle as multipart/form-data (for file uploads)
@@ -210,7 +210,7 @@ def update_game(system_name, rom_path):
         if gamelist_mgr.update_game(system_name, rom_path, game, ROMS_BASE):
             logger.info(f"Successfully updated game: {game.name}")
             return jsonify(success=True, game=game.to_dict())
-        logger.warning(f"Failed to update game - gamelist_mgr returned False")
+        logger.warning("Failed to update game - gamelist_mgr returned False")
         return jsonify(success=False, error="Failed to update game"), 500
     except Exception as e:
         logger.exception("Error updating game")
@@ -313,7 +313,7 @@ def serve_media(media_path):
         
         # Ensure the resolved path is within the media directory
         media_base_resolved = Path(MEDIA_BASE).resolve()
-        if not str(full_path).startswith(str(media_base_resolved)):
+        if not full_path.is_relative_to(media_base_resolved):
             logger.warning(f"Path traversal attempt: {media_path}")
             return jsonify(error="Path traversal not allowed"), 403
         
@@ -376,7 +376,6 @@ def debug_media_list(system_name, media_type):
 def debug_gamelist_paths(system):
     """Debug endpoint to list all paths in a gamelist.xml"""
     try:
-        from lxml import etree
         gamelist_path = Path(ROMS_BASE) / system / 'gamelist.xml'
         if not gamelist_path.exists():
             return jsonify(error=f"Gamelist not found: {gamelist_path}"), 404

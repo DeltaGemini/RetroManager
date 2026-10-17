@@ -25,7 +25,7 @@ from backend.core import (
     ROMS_BASE,
     scanner,
 )
-from backend.routes.scraping import apply_scrape, BULK_MEDIA_FOLDERS
+from backend.routes.scraping import apply_scrape, SCRAPE_MEDIA_FOLDERS
 
 # -----------------------------------------------------------------------------
 # Adding games: uploads, the inbox, and filing them into roms/
@@ -212,7 +212,7 @@ def import_commit():
             entry.name = typed or _suggest_name(game)
             gamelist_mgr.add_entries(system, ROMS_BASE, [entry])
         if data.get("game_id"):
-            media = [m for m in (data.get("media") or []) if m in BULK_MEDIA_FOLDERS]
+            media = [m for m in (data.get("media") or []) if m in SCRAPE_MEDIA_FOLDERS]
             try:
                 applied = apply_scrape(system, rom_path, data["game_id"], media)
                 result.update({k: applied.get(k, []) for k in ('filled', 'downloaded', 'errors')})

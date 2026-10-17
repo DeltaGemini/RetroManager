@@ -39,6 +39,8 @@ if [ -f signing.env ]; then
     [ -f "$KEY" ] || { echo "signing.env names $KEY, which isn't here" >&2; exit 1; }
 fi
 
+# The app's decisions, tested first (test.sh): a build that gets them wrong isn't made
+./test.sh
 rm -rf build
 mkdir -p build/res/mipmap-xxxhdpi build/classes build/gen
 cp -r res/. build/res/

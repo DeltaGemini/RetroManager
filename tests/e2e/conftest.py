@@ -20,6 +20,9 @@ from pathlib import Path
 import pytest
 
 playwright_api = pytest.importorskip("playwright.sync_api")
+# The pages here aren't the built ones: each compiles its JSX in the browser as it loads,
+# which takes a few seconds, so what the tests look for is waited for as long as a page is
+playwright_api.expect.set_options(timeout=15000)
 
 ROOT = Path(__file__).resolve().parents[2]
 PORT = int(os.environ.get("RM_E2E_PORT", "5099"))

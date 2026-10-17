@@ -5,8 +5,8 @@ The routes themselves are in backend/routes/.
 """
 
 from flask import Flask, jsonify, request
-from flask_cors import CORS
 import os
+from urllib.parse import urlparse
 import logging
 from pathlib import Path
 import mimetypes
@@ -83,7 +83,29 @@ library_state = LibraryState(DATA_DIR)
 BASE_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BASE_DIR.parent / "frontend"
 app = Flask(__name__)
-CORS(app)
+# No CORS: the pages are RetroManager's own and the phone app asks it directly, so no other
+# site's page needs to reach it (and with login off, one that could would have the run of it).
+
+
+@app.before_request
+def _not_from_other_sites():
+    """A request that would change something, sent by another site's page (a form, or a
+    script) the browser was showing: refused. The browser says where a request came from
+    (Sec-Fetch-Site, else Origin); what isn't a browser (the phone app, curl) says nothing."""
+    if request.method in ('GET', 'HEAD', 'OPTIONS') or not request.path.startswith('/api/'):
+        return None
+    fetched_from = request.headers.get('Sec-Fetch-Site')
+    if fetched_from:
+        # (not 'same-site': that takes in another app on the same machine, on another port)
+        allowed = fetched_from in ('same-origin', 'none')
+    else:
+        origin = request.headers.get('Origin')
+        allowed = not origin or urlparse(origin).netloc == request.host
+    if allowed:
+        return None
+    logger.warning(f"Refused {request.method} {request.path} from another site ({request.headers.get('Origin') or fetched_from})")
+    return jsonify(success=False, error="Refused: that came from another site's page"), 403
+
 # INFO by default: at DEBUG the HTTP library logs every request's address, and
 # some sources take their key or password in the address
 logging.basicConfig(level=getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO))

@@ -47,8 +47,9 @@ const fillText = (k, v) => (k === 'releasedate' ? fillWhen(v) : k === 'rating' ?
 const fillKey = (g) => `${g._system}|${g.path}`;
 const fillRom = (path) => String(path).replace(/^\.\//, '');
 
-// `options`, from elsewhere (the Media viewer): {games: [{system, path}] (picked, from any systems),
-// kinds: [what to fill], replace, start (straight to choosing)}, or {system, kinds} for one system
+// `options`, from elsewhere (the Media viewer, the background scrape): {games: [{system, path}] (picked,
+// from any systems), kinds: [what to fill], replace, start (straight to choosing), prepared (looked up
+// by the background scrape already), remake (made again)}, or {system, kinds} for one system
 function FillGapsPanel({ initialSystem, systems, options, onClose, onChanged, showNotification }) {
     // Games handed over from elsewhere, until "Choose a system instead"
     const [handed, setHanded] = React.useState(() => (options && options.games && options.games.length ? options.games : null));
@@ -112,8 +113,42 @@ function FillGapsPanel({ initialSystem, systems, options, onClose, onChanged, sh
     const [applying, setApplying] = React.useState(null);
     const stopRef = useRef(false);
     const [reload, setReload] = React.useState(0);
-    // Another game being chosen: back to the top of it (the popup is what scrolls)
     const topRef = useRef(null);
+    // Keys while choosing: ↑↓ (or J K) a row, 1–9 a candidate in it, ←→ (or P N) another game, A apply.
+    // The rows and their candidates are the ones on the page, in order; the row is marked (fill-kb-row)
+    const [kbRow, setKbRow] = React.useState(0);
+    const keysRef = useRef(null);
+    useEffect(() => { setKbRow(0); }, [current]);
+    useEffect(() => {
+        if (step !== 2) return;
+        const rows = () => [...(topRef.current?.querySelectorAll('.fill-game [data-row]') || [])];
+        rows().forEach((row, i) => row.classList.toggle('fill-kb-row', i === kbRow));
+        const onKey = (e) => {
+            if (e.ctrlKey || e.metaKey || e.altKey || zoom || (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]'))) return;
+            const keys = keysRef.current;
+            const list = rows();
+            const key = e.key.toLowerCase();
+            if (key === 'arrowdown' || key === 'j') setKbRow(r => Math.min(r + 1, Math.max(0, list.length - 1)));
+            else if (key === 'arrowup' || key === 'k') setKbRow(r => Math.max(r - 1, 0));
+            else if (/^[1-9]$/.test(key)) {
+                const pick = list[kbRow]?.querySelectorAll('button.fill-cand:not(:disabled), button.fill-variant')[Number(key) - 1];
+                if (!pick) return;
+                pick.click();
+            } else if (key === 'arrowright' || key === 'n') keys?.next();
+            else if (key === 'arrowleft' || key === 'p') keys?.previous();
+            else if (key === 'a') keys?.apply();
+            else return;
+            e.preventDefault();
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    });
+    // (the marked row kept in sight as it moves; the first is where a game starts anyway)
+    useEffect(() => {
+        const row = kbRow > 0 && topRef.current?.querySelectorAll('.fill-game [data-row]')[kbRow];
+        if (row) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }, [kbRow]);
+    // Another game being chosen: back to the top of it (the popup is what scrolls)
     useEffect(() => {
         let box = topRef.current && topRef.current.parentElement;
         while (box && box.scrollHeight <= box.clientHeight) box = box.parentElement;
@@ -209,8 +244,10 @@ function FillGapsPanel({ initialSystem, systems, options, onClose, onChanged, sh
     };
     const offers = (g, k) => activeOrder.filter(s => candidateOf(g, k, s.id));
     // The default: keep what it has; for a gap, the first source in the order with one, unless its match is unsure
+    // Made again (the Media viewer's "Make again"): a fresh one made for what RetroManager made before, and picked
+    const remaking = (k) => !!(options && options.remake && (options.kinds || []).includes(k));
     const defaultFor = (g, k) => {
-        if (fillHas(g, k)) return 'keep';
+        if (fillHas(g, k)) return remaking(k) && madeFor(g, k)?.status === 'ready' ? 'generated' : 'keep';
         const first = offers(g, k).find(s => !['unsure', 'none'].includes(matchOf(g, s.id)?.confidence));
         if (first) return first.id;
         return FILL_MAKES[k] && madeFor(g, k)?.status === 'ready' ? 'generated' : 'skip';
@@ -233,8 +270,10 @@ function FillGapsPanel({ initialSystem, systems, options, onClose, onChanged, sh
             while (next < list.length && !stopRef.current) {
                 const g = list[next++], key = fillKey(g);
                 try {
-                    const d = await postJson('/api/fill/look', { system_name: g._system, rom_path: g.path, sources });
-                    found[key] = d.sources || {};
+                    // (from the background scrape: what it found, rather than asking the sources again)
+                    const kept = options && options.prepared
+                        ? await fetch(`${API_BASE}/api/fill/found?${new URLSearchParams({ system: g._system, rom: fillRom(g.path) })}`).then(r => r.json()).catch(() => null) : null;
+                    found[key] = kept && kept.success ? kept.sources : ((await postJson('/api/fill/look', { system_name: g._system, rom_path: g.path, sources })).sources || {});
                 } catch (e) {
                     found[key] = {};
                 }
@@ -269,8 +308,8 @@ function FillGapsPanel({ initialSystem, systems, options, onClose, onChanged, sh
     // A Mix, 3D box or spine no source has, for a game missing one: made, one at a time (the game
     // on screen first), and picked, so Apply does the same whether a game was looked at or not.
     // (a box or spine only for a game with a cover to make it from)
-    const needsMaking = (g, k) => looks[fillKey(g)] && !madeFor(g, k) && toFill(g).includes(k) && !fillHas(g, k) && !offers(g, k).length
-        && (k === 'mix' || fillHas(g, 'box2d'));
+    const needsMaking = (g, k) => looks[fillKey(g)] && !madeFor(g, k) && toFill(g).includes(k)
+        && (remaking(k) || (!fillHas(g, k) && !offers(g, k).length)) && (k === 'mix' || fillHas(g, 'box2d'));
     const firstToMake = (g) => Object.keys(FILL_MAKES).find(k => needsMaking(g, k));
     const toMake = step === 2 ? chosenGames.reduce((n, g) => n + Object.keys(FILL_MAKES).filter(k => needsMaking(g, k) || madeFor(g, k)?.status === 'working').length, 0) : 0;
     useEffect(() => {
@@ -377,7 +416,7 @@ function FillGapsPanel({ initialSystem, systems, options, onClose, onChanged, sh
                 <div className="fill-bar">
                     {handed ? (
                         <>
-                            <span>{options && options.from === 'viewer' ? 'From the Media viewer: ' : 'Picked: '}<b>{all.length || handed.length} game{(all.length || handed.length) === 1 ? '' : 's'}</b>{systemsHanded > 1 ? ` in ${systemsHanded} systems` : ''}</span>
+                            <span>{options && options.from === 'viewer' ? 'From the Media viewer: ' : options && options.from === 'background' ? 'Found by the background scrape: ' : 'Picked: '}<b>{all.length || handed.length} game{(all.length || handed.length) === 1 ? '' : 's'}</b>{systemsHanded > 1 ? ` in ${systemsHanded} systems` : ''}</span>
                             <button className="btn btn-secondary btn-small" onClick={() => { chosenSystem.current = true; setSystem(handed[0].system); setHanded(null); }}>Choose a system instead</button>
                         </>
                     ) : (
@@ -547,7 +586,7 @@ function FillGapsPanel({ initialSystem, systems, options, onClose, onChanged, sh
             const makes = FILL_MAKES[k];
             const mine = makes && madeFor(g, k);
             return (
-                <div className="fill-kind" key={k}>
+                <div className="fill-kind" key={k} data-row={k}>
                     <div className="fill-kind-head"><h4>{fillLabel(k)}</h4><span className="muted">{fillHas(g, k) ? 'it has one: ' : 'missing: '}{from.length ? `${from.length} source${from.length === 1 ? ' has' : 's have'} one` : look ? 'no source has one' : 'looking…'}</span></div>
                     <div className="fill-cands">
                         {fillHas(g, k) ? (
@@ -593,7 +632,7 @@ function FillGapsPanel({ initialSystem, systems, options, onClose, onChanged, sh
             const from = offers(g, k);
             if (fillHas(g, k) && look && !from.length) return null;
             return (
-                <div className="fill-field" key={k}>
+                <div className="fill-field" key={k} data-row={k}>
                     <div className="fl">{fillLabel(k)}{!fillHas(g, k) && <><br /><span className="muted" style={{fontSize: 11, fontWeight: 400, textTransform: 'none', letterSpacing: 0}}>missing</span></>}</div>
                     <div className="fill-variants">
                         {fillHas(g, k) && (
@@ -622,6 +661,11 @@ function FillGapsPanel({ initialSystem, systems, options, onClose, onChanged, sh
         const nothingToChoose = look && !toFill(g).some(choosable);
         const wm = w ? matchOf(g, w.source) : null;
         const searchingHere = !!(w && researching && researching.key === w.key && researching.source === w.source);
+        keysRef.current = {
+            next: () => { if (i < list.length - 1) { setCurrent(fillKey(list[i + 1])); setWrong(null); } },
+            previous: () => { if (i > 0) { setCurrent(fillKey(list[i - 1])); setWrong(null); } },
+            apply: () => { if (!looking && !applying && !toMake) apply(list); },
+        };
         body = !g ? <div className="muted">None of the picked games has anything to fill.</div> : (
             <div className="fill-review">
                 <div className="fill-list" role="list">{list.map(x => {
@@ -666,6 +710,7 @@ function FillGapsPanel({ initialSystem, systems, options, onClose, onChanged, sh
                         </div>
                     )}
                     <div className="fill-show" role="radiogroup" aria-label="Show">
+                        <span className="fill-keys muted" title="Keys while choosing">↑↓ row · 1–9 pick · ←→ game · A apply</span>
                         <span className="muted">Show</span>
                         <button role="radio" aria-checked={!replace} className={!replace ? 'on' : ''} onClick={() => showEverything(false)}>Only what's missing</button>
                         <button role="radio" aria-checked={replace} className={replace ? 'on' : ''} onClick={() => showEverything(true)}>Everything ticked</button>

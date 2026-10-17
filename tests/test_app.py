@@ -172,12 +172,13 @@ def test_phone_save_states_go_both_ways(client, root):
 
 def test_a_scrape_replaces_a_picture_only_when_asked_and_keeps_the_old_one(client, root, monkeypatch):
     from backend.routes import scraping
+    from backend.core import _invalidate_caches
     # (the media folder a system's pictures are in needn't have the ROM folder's name)
     media_system = scraping.scanner.media_index("snes").media_system
     old = root / "media" / media_system / "box2d/Game Two.png"
     old.parent.mkdir(parents=True, exist_ok=True)
     old.write_bytes(b"old picture")
-    scraping._invalidate_caches()
+    _invalidate_caches()
     monkeypatch.setattr(scraping.jeu_cache, "get", lambda game_id: {"rom": {}})
     monkeypatch.setattr(scraping.scraper, "extract_game_data", lambda jeu: {"name": "Game Two", "media": {"box2d": "http://example.invalid/box.png"}})
     monkeypatch.setattr(scraping.settings, "get", lambda key: "off" if key == "libretro_thumbnails" else None)
@@ -188,12 +189,12 @@ def test_a_scrape_replaces_a_picture_only_when_asked_and_keeps_the_old_one(clien
 
     kept = scraping.apply_scrape("snes", "Game Two.sfc", "1", ["box2d"])
     assert kept["success"] and kept["already_had"] == ["box2d"] and kept["replaced"] == [] and old.read_bytes() == b"old picture"
-    scraping._invalidate_caches()
+    _invalidate_caches()
     swapped = scraping.apply_scrape("snes", "Game Two.sfc", "1", ["box2d"], replace=True)
     assert swapped["replaced"] == ["box2d"] and old.read_bytes() == b"new picture"
     assert (root / "data" / swapped["kept"] / media_system / "box2d/Game Two.png").read_bytes() == b"old picture"
     old.unlink()
-    scraping._invalidate_caches()
+    _invalidate_caches()
 
 
 def test_emulator_files_cannot_escape_their_folder(client):
@@ -292,6 +293,7 @@ def test_a_save_never_written_to_is_marked_empty(client, root):
 
 def test_pictures_nothing_else_has_come_from_thegamesdb_then_steamgriddb(client, root, monkeypatch):
     from backend.routes import scraping
+    from backend.core import _invalidate_caches
     media_system = scraping.scanner.media_index("snes").media_system
     monkeypatch.setattr(scraping.jeu_cache, "get", lambda game_id: {"rom": {}})
     monkeypatch.setattr(scraping.scraper, "extract_game_data", lambda jeu: {"name": "Game One", "media": {}})
@@ -333,7 +335,7 @@ def test_pictures_nothing_else_has_come_from_thegamesdb_then_steamgriddb(client,
     assert scraping._thegamesdb_pictures("snes", ["Game One"]) == {} and scraping._resting_source("TheGamesDB")
     for folder in ("box2d", "fanart"):
         (root / "media" / media_system / folder / "Game One (USA).png").unlink()
-    scraping._invalidate_caches()
+    _invalidate_caches()
 
 
 def test_a_system_has_its_drawn_tile_unless_the_themes_picture_is_chosen(client):
@@ -428,6 +430,14 @@ def test_the_consoles_collections_follow_a_change_at_once(client):
     assert made["id"] not in client.put(f"/api/collections/{made['id']}/games", json={**game, "member": False}).get_json()["collections"]
     assert made["id"] not in lists()
     client.delete(f"/api/collections/{made['id']}")
+
+    # Playing and Backlog are lists of their own, following a status change at once too
+    assert client.put("/api/play-status", json={**game, "status": "playing"}).get_json()["success"]
+    assert lists()["playing"] == ["./Game One (USA).sfc"] and "backlog" not in lists()
+    client.put("/api/play-status", json={**game, "status": "backlog"})
+    assert lists()["backlog"] == ["./Game One (USA).sfc"] and "playing" not in lists()
+    client.put("/api/play-status", json={**game, "status": None})
+    assert "backlog" not in lists()
 
 
 def test_save_states_beyond_the_newest_few_move_to_the_backups(client, root):

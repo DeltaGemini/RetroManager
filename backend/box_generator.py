@@ -67,10 +67,16 @@ def case_for(system: str) -> dict:
     return _CASES.get(_PRIMARY.get(normalize_system_name(system), ''), _CARD)
 
 
+# The systems whose boxes lie down (the spine along the bottom), when the cover is wider than tall
+LANDSCAPE_SYSTEMS = {'snes', 'n64'}
+
+
 def _shape(cover: Image.Image, system: str) -> str:
-    """A cardboard box lies down when its cover is wider than tall (SNES, N64); a plastic case
-    always stands (a PS1 cover is a little wider than tall, its spine still on the left)"""
-    return 'landscape' if case_for(system)['case'] == 'card' and cover.width > cover.height * 1.05 else 'portrait'
+    """An SNES or N64 box lies down when its cover is wider than tall; every other box stands, its
+    spine on the left, whatever its cover's shape (a GBA hack's wide cover art, a PS1 jewel case's
+    cover, a little wider than tall)"""
+    primary = _PRIMARY.get(normalize_system_name(system), '')
+    return 'landscape' if primary in LANDSCAPE_SYSTEMS and cover.width > cover.height * 1.05 else 'portrait'
 
 
 # ---- Drawing helpers ----
@@ -248,9 +254,10 @@ def make_box3d(cover: Image.Image, spine: Image.Image, system: str, size: int = 
     ss = 2
     W, H = front.size
     D = spine.width * H / spine.height if shape == 'portrait' else spine.height * W / spine.width
-    yaw, pitch = (math.radians(-40), math.radians(3)) if shape == 'portrait' else (math.radians(-10), math.radians(-38))
+    yaw, pitch = (math.radians(-40), math.radians(3)) if shape == 'portrait' else (math.radians(-6), math.radians(-36))
     centre = (W / 2, H / 2, D / 2)
-    distance = max(W, H) * 3.2
+    # (seen from far off, so its edges stay nearly parallel, as a box shot does; closer, they splay)
+    distance = max(W, H) * 6
 
     def project(p):
         x, y, z = _turn((p[0] - centre[0], p[1] - centre[1], p[2] - centre[2]), yaw, pitch)

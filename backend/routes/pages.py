@@ -205,7 +205,7 @@ def serve_frontend(path):
     # Security: prevent directory traversal
     try:
         file_path = file_path.resolve()
-        if not str(file_path).startswith(str(FRONTEND_DIR.resolve())):
+        if not file_path.is_relative_to(FRONTEND_DIR.resolve()):
             return "Forbidden", 403
     except:
         return "Forbidden", 403

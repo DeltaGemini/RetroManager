@@ -79,13 +79,22 @@ def _build(who):
     return {'recent': recent, 'added': added, 'favourites': favourites, '_games': games}
 
 
-def _lists(value):
-    """Favourites and each collection that has games. The collections are read
-    afresh each time (they're quick to put together), so a game taken out of
-    one, or put in, shows at once and not when the rest is next worked out."""
+# The play statuses with a list of their own on the Console, in its order
+STATUS_LISTS = (('playing', 'Playing'), ('backlog', 'Backlog'))
+
+
+def _lists(value, who=None):
+    """The person's Playing and Backlog, Favourites, and each collection that has games.
+    Statuses and collections are read afresh each time (they're quick to put together),
+    so a game marked or taken out shows at once and not when the rest is next worked out."""
     games = value['_games']
-    lists = [{'id': 'favourites', 'name': 'Favourites', 'kind': 'favourites', 'games': value['favourites']}]
-    for collection in library_state.snapshot()['collections']:
+    state = library_state.snapshot(who)
+    lists = [{'id': status, 'name': name, 'kind': 'status', 'status': status,
+              'games': sorted(({**games[key], 'play_status': status} for key, s in state['status'].items() if s == status and key in games),
+                              key=lambda g: (g.get('name') or g.get('path') or '').lower())}
+             for status, name in STATUS_LISTS]
+    lists.append({'id': 'favourites', 'name': 'Favourites', 'kind': 'favourites', 'games': value['favourites']})
+    for collection in state['collections']:
         lists.append({'id': collection['id'], 'name': collection['name'], 'kind': 'collection',
                       'games': [{**games[key], 'collections': library_state.for_game(key)['collections']} for key in collection['games'] if key in games]})
     return [entry for entry in lists if entry['games']]
@@ -115,8 +124,8 @@ def refresh_in_background(who=None):
 @app.route("/api/console/home", methods=["GET"])
 def console_home():
     """{recent: [games], added: [games], lists: [{id, name, kind, games}]}: the
-    games saved most recently, the newest files, then Favourites and each
-    collection that has games. {pending: true}
+    games saved most recently, the newest files, then the person's Playing and
+    Backlog, Favourites and each collection that has games. {pending: true}
     while they're being worked out for the first time: ask again shortly."""
     who = person()
     _cache = _cache_for(who)
@@ -126,4 +135,4 @@ def console_home():
         refresh_in_background(who)
     if value is None:
         return jsonify(success=True, pending=True, recent=[], added=[], lists=[])
-    return jsonify(success=True, pending=False, recent=value['recent'], added=value['added'], lists=_lists(value))
+    return jsonify(success=True, pending=False, recent=value['recent'], added=value['added'], lists=_lists(value, who))

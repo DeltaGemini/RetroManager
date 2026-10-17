@@ -17,7 +17,7 @@ settings.json
 *.code-workspace
 
 # Old script with credentials written in it (use test_igdb.py)
-test.sh
+/test.sh
 
 # Built by the Dockerfile
 frontend/js/

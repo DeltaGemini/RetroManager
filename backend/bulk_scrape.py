@@ -16,7 +16,7 @@ import re
 from collections import OrderedDict
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, Optional
 
 from backend.media_index import title_key
 from backend.models import Game

@@ -105,5 +105,8 @@ python -m pytest tests
 - `tests/` exercise the API against a small library made in a temporary folder.
 - `tests/e2e/` drive the pages in a real browser (Playwright) against a demo library of made-up games (`tools/make_demo_library.py`): the Console's rows and Back, collections, its settings, the game lists, the Library and the first-run page. They need a Chromium-family browser: `RM_BROWSER=/path/to/it`, or Playwright's own (`python -m playwright install chromium`). Without one they're skipped.
 
-GitHub runs both on every push and pull request (`.github/workflows/tests.yml`).
+- `android/test.sh` checks the phone app's plain decisions (`Decide.java`: whether a game on the phone is an older copy, and what plays a game) with `android/tests/DecideTest.java`, needing only a JDK. `android/build.sh` runs it first.
+- `ruff check .` lints the Python (Pyflakes' checks: unused imports and names, undefined names; `ruff.toml`).
+
+GitHub runs them all on every push and pull request (`.github/workflows/tests.yml`).
 
