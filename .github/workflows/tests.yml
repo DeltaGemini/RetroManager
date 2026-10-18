@@ -1,6 +1,7 @@
 # The tests, on every push and pull request: the API's (tests/), the
 # pages' in a real browser against a demo library of made-up games
-# (tests/e2e/), the phone app's decisions (android/test.sh), and lint. A release (release.yml) is only made from a tagged version.
+# (tests/e2e/), again on the pages as the image builds them, the phone app's
+# decisions (android/test.sh), and lint. A release (release.yml) is only made from a tagged version.
 name: Tests
 
 on:
@@ -32,6 +33,20 @@ jobs:
 
       - name: Run the tests
         run: python -m pytest tests -q
+
+      # The pages as the image has them (tools/build_frontend.js, as the Dockerfile runs it: each page's
+      # code compiled into one file), in a copy, and the browser tests again on those
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: The pages built as the image builds them, and tested
+        run: |
+          build=$(mktemp -d) && copy=$(mktemp -d)
+          cp tools/build_frontend.js "$build/"
+          (cd "$build" && npm install --no-save --no-audit --no-fund $(cat "$GITHUB_WORKSPACE/tools/frontend-build-packages.txt"))
+          cp -r backend frontend tests tools ruff.toml "$copy/"
+          node "$build/build_frontend.js" "$copy/frontend"
+          cd "$copy" && python -m pytest tests/e2e -q
 
       # The phone app's plain decisions (android/src/.../Decide.java), with the runner's own JDK
       - name: The phone app's tests

@@ -6,6 +6,11 @@ Each version's big changes, then the bugs found and fixed since the version befo
 
 (Renamed to the version, with its date, when it's released.)
 
+### Big changes
+
+1. **Up-to-date foundations**: Flask 3.1, Werkzeug 3.1, lxml 6.1, Requests 2.34, Pillow 12.3 and Gunicorn 26 (the versions before were from early 2024; Werkzeug, Requests and Gunicorn have had security fixes since, Gunicorn's against request smuggling), and the pages compiled with Node 24 (Node 20 is no longer kept up). Flask-CORS is gone: nothing has used it since other sites were shut out in 2.4.0.
+2. **The pages tested as the image builds them**: GitHub runs the browser tests a second time on the compiled pages, so one that only breaks once compiled is caught on every push, not at a release.
+
 ### Bugs fixed
 
 - Fill the gaps: a number key pressed while a game was still being looked up was lost, or picked another tile (✨ Generate in place of the first source's picture); it's now held and picked when the sources answer, and a picture being made keeps its number, so the ones after it don't move.

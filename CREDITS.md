@@ -39,7 +39,7 @@ them.
 
 ## Built on
 
-Python with Flask, Flask-CORS and Werkzeug (BSD), lxml (BSD), Requests (Apache
+Python with Flask and Werkzeug (BSD), lxml (BSD), Requests (Apache
 2.0), Pillow (MIT-CMU) and Gunicorn (MIT). The Android app uses only Android's
 own libraries.
 

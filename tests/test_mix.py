@@ -173,8 +173,9 @@ def test_sharp_scaling_keeps_pixels_square():
     tiny.putpixel((0, 0), (255, 255, 255, 255))
     tiny.putpixel((1, 1), (255, 255, 255, 255))
     sharp = mg.scale_image(tiny, (8, 8), "sharp")
-    assert sharp.size == (8, 8) and {p[:3] for p in sharp.getdata()} == {(0, 0, 0), (255, 255, 255)}
-    assert len({p[:3] for p in mg.scale_image(tiny, (8, 8), "smooth").getdata()}) > 2
+    colours = lambda image: {image.getpixel((x, y))[:3] for x in range(image.width) for y in range(image.height)}
+    assert sharp.size == (8, 8) and colours(sharp) == {(0, 0, 0), (255, 255, 255)}
+    assert len(colours(mg.scale_image(tiny, (8, 8), "smooth"))) > 2
     # Not a whole number of times: still the size asked for
     assert mg.scale_image(tiny, (7, 7), "sharp").size == (7, 7)
 

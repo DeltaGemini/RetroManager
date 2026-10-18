@@ -54,6 +54,7 @@ RetroManager/
 ├── android/                 # The phone app: the Console page as a launcher for the phone's RetroArch (./build.sh)
 ├── homepage-widget/         # Dashboard widget experiments (see its README)
 ├── tools/build_frontend.js  # Run by the Dockerfile: compiles each page's JSX into one file, bundles React, stamps and gzips the files
+├── tools/frontend-build-packages.txt  # What it needs from npm, with versions (the Dockerfile and the tests both use it)
 ├── tools/make_system_tiles.py  # Draws frontend/tiles/
 ├── tools/make_logo.py       # Draws frontend/open/retromanager-logo.svg
 ├── tools/make_icon.py       # Draws the app's icon and the tab's (frontend/icons/, favicon.ico)
@@ -91,7 +92,7 @@ First add the version's section to `CHANGELOG.md`: a numbered list of its big ch
 
 ## Notes
 
-- **Local network only**: there's no authentication, CORS is open, and debug routes are exposed, so anyone on the network can use the app, including changing (but not reading) the keys in Settings. Don't publish the port to the internet.
+- **Local network only**: with login off (see [Profiles](profiles.md)) anyone on the network can use the app, including changing (but not reading) the keys in Settings, and debug routes are exposed. Another site's page can't use it from your browser (no CORS, and changes from other sites are refused). Don't publish the port to the internet.
 - **`/api/stats` is cached**: it's recounted after any change made through RetroManager, and at least every 10 minutes (`STATS_MAX_AGE` in `backend/app.py`) to catch changes made directly on the NAS.
 - **Logging**: set to `DEBUG`, so `docker compose logs` is verbose.
 
@@ -108,5 +109,5 @@ python -m pytest tests
 - `android/test.sh` checks the phone app's plain decisions (`Decide.java`: whether a game on the phone is an older copy, what plays a game, what RetroArch's history says, whether a game started from the app began, and which way a controller's stick points) with `android/tests/DecideTest.java`, needing only a JDK. `android/build.sh` runs it first.
 - `ruff check .` lints the Python (Pyflakes' checks: unused imports and names, undefined names; `ruff.toml`).
 
-GitHub runs them all on every push and pull request (`.github/workflows/tests.yml`).
+GitHub runs them all on every push and pull request (`.github/workflows/tests.yml`), and the browser tests a second time on the pages built as the image builds them (`tools/build_frontend.js`, with the packages in `tools/frontend-build-packages.txt`), so a page that only breaks once compiled is caught before a release.
 

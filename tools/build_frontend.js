@@ -38,7 +38,8 @@ const INLINE_JSX = /<script type="text\/babel">([\s\S]*?)<\/script>/g;
 const JSX_FILE = /<script type="text\/babel" src="\/src\/([^"]+)\.jsx"><\/script>/g;
 
 const compile = (jsx, filename) => babel.transformSync(jsx, {
-    presets: [['@babel/preset-react', { runtime: 'classic' }]],
+    // (the preset found beside this script, wherever the pages being built are)
+    presets: [[require.resolve('@babel/preset-react'), { runtime: 'classic' }]],
     filename, babelrc: false, configFile: false, compact: false, comments: false,
 }).code;
 

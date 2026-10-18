@@ -1,8 +1,10 @@
 # Compile the pages' JSX and bundle React, so the app needs no CDN and no
 # in-browser compiler (see tools/build_frontend.js)
-FROM node:20-slim AS frontend
+# (the packages it needs, with their versions: tools/frontend-build-packages.txt, which the tests use too)
+FROM node:24-slim AS frontend
 WORKDIR /build
-RUN npm install --no-save --no-audit --no-fund react@18.3.1 react-dom@18.3.1 @babel/core@7.25.2 @babel/preset-react@7.24.7
+COPY tools/frontend-build-packages.txt .
+RUN npm install --no-save --no-audit --no-fund $(cat frontend-build-packages.txt)
 COPY tools/build_frontend.js .
 COPY frontend/ ./frontend/
 RUN node build_frontend.js frontend

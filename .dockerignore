@@ -24,6 +24,7 @@ homepage-widget
 .env.example
 tools/
 !tools/build_frontend.js
+!tools/frontend-build-packages.txt
 tests
 android
 # The library made beside docker-compose.yml, which the image has no business with
