@@ -1063,10 +1063,13 @@ button.fill-chip { cursor: pointer; }
 .fill-web .fill-error { font-size: 11px; }
 /* Fill the gaps' keys: the row they work on, and its candidates numbered */
 .fill-kb-row { counter-reset: fill-kb; outline: 1px dashed var(--accent-pink); outline-offset: 4px; border-radius: 6px; }
-.fill-kb-row button.fill-cand:not(:disabled), .fill-kb-row button.fill-variant { counter-increment: fill-kb; }
-.fill-kb-row button.fill-cand:not(:disabled)::after, .fill-kb-row button.fill-variant::after {
+.fill-kb-row button.fill-cand, .fill-kb-row button.fill-variant { counter-increment: fill-kb; }
+.fill-kb-row button.fill-cand::after, .fill-kb-row button.fill-variant::after {
     content: counter(fill-kb); position: absolute; right: 4px; bottom: 4px; min-width: 16px; padding: 0 4px; border-radius: 8px;
     background: var(--bg-primary); color: var(--text-secondary); font-size: 11px; line-height: 16px; text-align: center; }
 .fill-kb-row button.fill-variant { position: relative; }
+/* (one being made keeps its number, faint; none are shown till the game's sources have answered) */
+.fill-kb-row button.fill-cand:disabled::after { opacity: 0.5; }
+.fill-waiting .fill-kb-row button.fill-cand::after, .fill-waiting .fill-kb-row button.fill-variant::after { visibility: hidden; }
 .fill-keys { margin-left: auto; font-size: 11px; }
 @media (hover: none) { .fill-keys { display: none; } }

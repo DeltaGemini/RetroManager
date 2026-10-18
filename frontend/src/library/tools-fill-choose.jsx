@@ -143,12 +143,13 @@ function FillChooseStep({ fx }) {
     const wm = w ? matchOf(g, w.source) : null;
     const searchingHere = !!(w && researching && researching.key === w.key && researching.source === w.source);
     keysRef.current = {
+        game: g && fillKey(g), ready: !!look,   // (ready: its sources have answered)
         next: () => { if (i < list.length - 1) { setCurrent(fillKey(list[i + 1])); setWrong(null); } },
         previous: () => { if (i > 0) { setCurrent(fillKey(list[i - 1])); setWrong(null); } },
         apply: () => { if (!looking && !applying && !toMake) apply(list); },
     };
     return !g ? <div className="muted">None of the picked games has anything to fill.</div> : (
-        <div className="fill-review">
+        <div className={`fill-review ${look ? '' : 'fill-waiting'}`}>
             <div className="fill-list" role="list">{list.map(x => {
                 const looked = !!looks[fillKey(x)];
                 return (

@@ -55,6 +55,26 @@ def test_fill_the_gaps_chooses_with_the_keys_and_applies(page, server):
     assert saved["desc"] == "Told by TheGamesDB." and saved["developer"] == "IGDB Studio"
 
 
+def test_a_number_pressed_before_the_sources_answer_is_picked_when_they_do(page, server):
+    game = _games(server, "nes")[1]
+    _stand_in_sources(page)
+    held = []
+    page.route("**/api/fill/look", lambda route: held.append(route))   # (answered below, when the test says)
+    page.goto("/")
+    _open_tool(page, "fill", {"games": [{"system": "nes", "path": game["path"]}], "kinds": ["desc"], "replace": True, "start": True})
+    expect(page.locator(".fill-kb-row")).to_have_attribute("data-row", "desc")
+    page.keyboard.press("3")                      # before any source has answered: only "Now" is there
+    told = page.get_by_role("button", name=re.compile(r"TheGamesDB.*Told by TheGamesDB"))
+    expect(told).to_have_count(0)
+    for _ in range(100):                          # (the look-up, asked for and held)
+        if held:
+            break
+        page.wait_for_timeout(100)
+    assert len(held) == 1
+    held[0].fulfill(json={"success": True, "sources": STAND_IN})
+    expect(told).to_have_attribute("aria-pressed", "true")    # Now, IGDB, TheGamesDB: the third, as pressed
+
+
 def test_what_the_background_scrape_found_opens_in_fill_the_gaps(page, server):
     # (a game with no details: what the background scrape looks for, and what Review shows, are gaps)
     game = next(g for g in api(server, "/api/systems/psx/games")["games"] if not g.get("has_metadata"))

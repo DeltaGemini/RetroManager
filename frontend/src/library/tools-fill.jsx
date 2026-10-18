@@ -75,13 +75,27 @@ function FillGapsPanel({ initialSystem, systems, options, onClose, onChanged, sh
     const [reload, setReload] = React.useState(0);
     const topRef = useRef(null);
     // Keys while choosing: ↑↓ (or J K) a row, 1–9 a candidate in it, ←→ (or P N) another game, A apply.
-    // The rows and their candidates are the ones on the page, in order; the row is marked (fill-kb-row)
+    // The rows and their candidates are the ones on the page, in order; the row is marked (fill-kb-row).
+    // Every candidate keeps its number, one being made too (it can't be picked till it's made), so
+    // the ones after it don't move. A number pressed before the game's sources have answered is
+    // held, by its row's kind, and picked once they have (they add candidates, and can take a row away)
     const [kbRow, setKbRow] = React.useState(0);
     const keysRef = useRef(null);
+    const heldPick = useRef(null); // {game, row, n}
     useEffect(() => { setKbRow(0); }, [current]);
     useEffect(() => {
         if (step !== 2) return;
         const rows = () => [...(topRef.current?.querySelectorAll('.fill-game [data-row]') || [])];
+        const pickIn = (row, n) => {
+            const pick = row?.querySelectorAll('button.fill-cand, button.fill-variant')[n - 1];
+            if (pick && !pick.disabled) pick.click();
+        };
+        const held = heldPick.current, keys = keysRef.current;
+        if (held && (!keys || held.game !== keys.game)) heldPick.current = null;
+        else if (held && keys.ready) {
+            heldPick.current = null;
+            pickIn(rows().find(row => row.dataset.row === held.row), held.n);
+        }
         rows().forEach((row, i) => row.classList.toggle('fill-kb-row', i === kbRow));
         const onKey = (e) => {
             if (e.ctrlKey || e.metaKey || e.altKey || zoom || (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]'))) return;
@@ -91,9 +105,8 @@ function FillGapsPanel({ initialSystem, systems, options, onClose, onChanged, sh
             if (key === 'arrowdown' || key === 'j') setKbRow(r => Math.min(r + 1, Math.max(0, list.length - 1)));
             else if (key === 'arrowup' || key === 'k') setKbRow(r => Math.max(r - 1, 0));
             else if (/^[1-9]$/.test(key)) {
-                const pick = list[kbRow]?.querySelectorAll('button.fill-cand:not(:disabled), button.fill-variant')[Number(key) - 1];
-                if (!pick) return;
-                pick.click();
+                if (keys && !keys.ready) heldPick.current = { game: keys.game, row: list[kbRow]?.dataset.row, n: Number(key) };
+                else pickIn(list[kbRow], Number(key));
             } else if (key === 'arrowright' || key === 'n') keys?.next();
             else if (key === 'arrowleft' || key === 'p') keys?.previous();
             else if (key === 'a') keys?.apply();
