@@ -3,6 +3,7 @@
 import json
 import re
 import urllib.request
+from urllib.parse import urlparse
 
 from playwright.sync_api import expect
 
@@ -128,3 +129,25 @@ def test_cockney_changes_the_words_but_not_the_games(page):
     page.evaluate("localStorage.setItem('retromanager.language', 'en')")
     page.reload()
     expect(page.locator(".rm-label", has_text="Library")).to_be_visible()
+
+
+def test_the_sign_in_page_asks_an_admin_for_their_pin_then_goes_on(page, server):
+    """login.js, with login on as the server would say (stood in for: the server's own is left as it is)."""
+    me = {"success": True, "enabled": True, "profile": None, "role": None, "admin": False, "prefs": {}, "prefs_at": 0,
+          "profiles": [{"name": "family", "role": "admin", "pin": True}, {"name": "guest", "role": "player"}]}
+    page.route("**/api/accounts/me", lambda route: route.fulfill(json=me))
+    tried = []
+
+    def login(route):
+        tried.append(json.loads(route.request.post_data))
+        me.update(profile="family", role="admin", admin=True)          # (signed in, from now on)
+        route.fulfill(json={"success": True})
+    page.route("**/api/accounts/login", login)
+    page.goto("/login?next=/stats")
+    page.get_by_role("listitem").filter(has_text="family").click()
+    expect(page.locator("#pin-form")).to_be_visible()
+    expect(page.get_by_role("listitem").filter(has_text="guest")).to_be_hidden()
+    page.fill("#pin", "1234")
+    page.keyboard.press("Enter")
+    page.wait_for_url(lambda url: urlparse(url).path == "/stats")   # (its own address ends in "next=/stats")
+    assert tried == [{"profile": "family", "pin": "1234"}]

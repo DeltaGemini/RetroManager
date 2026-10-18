@@ -78,11 +78,14 @@ function FillGapsPanel({ initialSystem, systems, options, onClose, onChanged, sh
     // The rows and their candidates are the ones on the page, in order; the row is marked (fill-kb-row).
     // Every candidate keeps its number, one being made too (it can't be picked till it's made), so
     // the ones after it don't move. A number pressed before the game's sources have answered is
-    // held, by its row's kind, and picked once they have (they add candidates, and can take a row away)
-    const [kbRow, setKbRow] = React.useState(0);
+    // held, by its row's kind, and picked once they have (they add candidates, and can take a row away).
+    // The marked row is known by its kind too ('desc', 'box2d'...; null: the first), so a row above it
+    // that goes doesn't move the mark; if its own row goes, the mark stays where it was, on the next
+    const [kbKind, setKbKind] = React.useState(null);
+    const kbAt = useRef(0);   // (where the marked row was)
     const keysRef = useRef(null);
     const heldPick = useRef(null); // {game, row, n}
-    useEffect(() => { setKbRow(0); }, [current]);
+    useEffect(() => { setKbKind(null); kbAt.current = 0; }, [current]);
     useEffect(() => {
         if (step !== 2) return;
         const rows = () => [...(topRef.current?.querySelectorAll('.fill-game [data-row]') || [])];
@@ -96,17 +99,22 @@ function FillGapsPanel({ initialSystem, systems, options, onClose, onChanged, sh
             heldPick.current = null;
             pickIn(rows().find(row => row.dataset.row === held.row), held.n);
         }
-        rows().forEach((row, i) => row.classList.toggle('fill-kb-row', i === kbRow));
+        const marked = rows();
+        let at = kbKind === null ? 0 : marked.findIndex(row => row.dataset.row === kbKind);
+        if (at < 0) at = Math.min(kbAt.current, Math.max(0, marked.length - 1));
+        kbAt.current = at;
+        marked.forEach((row, i) => row.classList.toggle('fill-kb-row', i === at));
         const onKey = (e) => {
             if (e.ctrlKey || e.metaKey || e.altKey || zoom || (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]'))) return;
             const keys = keysRef.current;
             const list = rows();
             const key = e.key.toLowerCase();
-            if (key === 'arrowdown' || key === 'j') setKbRow(r => Math.min(r + 1, Math.max(0, list.length - 1)));
-            else if (key === 'arrowup' || key === 'k') setKbRow(r => Math.max(r - 1, 0));
+            const to = (row) => { if (row) setKbKind(row.dataset.row); };
+            if (key === 'arrowdown' || key === 'j') to(list[Math.min(at + 1, list.length - 1)]);
+            else if (key === 'arrowup' || key === 'k') to(list[Math.max(at - 1, 0)]);
             else if (/^[1-9]$/.test(key)) {
-                if (keys && !keys.ready) heldPick.current = { game: keys.game, row: list[kbRow]?.dataset.row, n: Number(key) };
-                else pickIn(list[kbRow], Number(key));
+                if (keys && !keys.ready) heldPick.current = { game: keys.game, row: list[at]?.dataset.row, n: Number(key) };
+                else pickIn(list[at], Number(key));
             } else if (key === 'arrowright' || key === 'n') keys?.next();
             else if (key === 'arrowleft' || key === 'p') keys?.previous();
             else if (key === 'a') keys?.apply();
@@ -118,9 +126,9 @@ function FillGapsPanel({ initialSystem, systems, options, onClose, onChanged, sh
     });
     // (the marked row kept in sight as it moves; the first is where a game starts anyway)
     useEffect(() => {
-        const row = kbRow > 0 && topRef.current?.querySelectorAll('.fill-game [data-row]')[kbRow];
+        const row = kbAt.current > 0 && topRef.current?.querySelectorAll('.fill-game [data-row]')[kbAt.current];
         if (row) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }, [kbRow]);
+    }, [kbKind]);
     // Another game being chosen: back to the top of it (the popup is what scrolls)
     useEffect(() => {
         let box = topRef.current && topRef.current.parentElement;

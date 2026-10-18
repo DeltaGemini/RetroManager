@@ -75,6 +75,26 @@ def test_a_number_pressed_before_the_sources_answer_is_picked_when_they_do(page,
     expect(told).to_have_attribute("aria-pressed", "true")    # Now, IGDB, TheGamesDB: the third, as pressed
 
 
+def test_the_marked_row_stays_on_its_kind_when_a_row_above_it_goes(page, server):
+    game = _games(server, "nes")[2]
+    _stand_in_sources(page)
+    held = []
+    page.route("**/api/fill/look", lambda route: held.append(route))
+    page.goto("/")
+    _open_tool(page, "fill", {"games": [{"system": "nes", "path": game["path"]}], "kinds": ["desc", "developer"], "replace": True, "start": True})
+    expect(page.locator(".fill-kb-row")).to_have_attribute("data-row", "desc")
+    page.keyboard.press("ArrowDown")
+    expect(page.locator(".fill-kb-row")).to_have_attribute("data-row", "developer")
+    for _ in range(100):
+        if held:
+            break
+        page.wait_for_timeout(100)
+    # Nobody offers another description: that row goes, the one above the marked one
+    held[0].fulfill(json={"success": True, "sources": {"igdb": {**STAND_IN["igdb"], "candidates": {"media": {}, "fields": {"developer": "IGDB Studio"}}}}})
+    expect(page.locator('.fill-game [data-row="desc"]')).to_have_count(0)
+    expect(page.locator(".fill-kb-row")).to_have_attribute("data-row", "developer")
+
+
 def test_what_the_background_scrape_found_opens_in_fill_the_gaps(page, server):
     # (a game with no details: what the background scrape looks for, and what Review shows, are gaps)
     game = next(g for g in api(server, "/api/systems/psx/games")["games"] if not g.get("has_metadata"))

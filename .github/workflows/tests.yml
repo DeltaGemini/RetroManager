@@ -1,7 +1,7 @@
 # The tests, on every push and pull request: the API's (tests/), the
 # pages' in a real browser against a demo library of made-up games
 # (tests/e2e/), again on the pages as the image builds them, the phone app's
-# decisions (android/test.sh), and lint. A release (release.yml) is only made from a tagged version.
+# decisions (android/test.sh), lint, and that the plain JavaScript parses. A release (release.yml) is only made from a tagged version.
 name: Tests
 
 on:
@@ -39,6 +39,9 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
+      # The pages' plain JavaScript (their own scripts, common/, the service worker) parses
+      - name: The plain JavaScript parses
+        run: for f in frontend/*.js frontend/common/*.js; do node --check "$f" || exit 1; done
       - name: The pages built as the image builds them, and tested
         run: |
           build=$(mktemp -d) && copy=$(mktemp -d)

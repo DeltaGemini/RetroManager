@@ -109,5 +109,5 @@ python -m pytest tests
 - `android/test.sh` checks the phone app's plain decisions (`Decide.java`: whether a game on the phone is an older copy, what plays a game, what RetroArch's history says, whether a game started from the app began, and which way a controller's stick points) with `android/tests/DecideTest.java`, needing only a JDK. `android/build.sh` runs it first.
 - `ruff check .` lints the Python (Pyflakes' checks: unused imports and names, undefined names; `ruff.toml`).
 
-GitHub runs them all on every push and pull request (`.github/workflows/tests.yml`), and the browser tests a second time on the pages built as the image builds them (`tools/build_frontend.js`, with the packages in `tools/frontend-build-packages.txt`), so a page that only breaks once compiled is caught before a release.
+GitHub runs them all on every push and pull request (`.github/workflows/tests.yml`), and the browser tests a second time on the pages built as the image builds them (`tools/build_frontend.js`, with the packages in `tools/frontend-build-packages.txt`), so a page that only breaks once compiled is caught before a release. The pages' plain JavaScript (`frontend/*.js`, among them `play.js`, `setup.js` and `login.js`, which the play, setup and sign-in pages load, and `frontend/common/*.js`) is checked to parse (`node --check`).
 
