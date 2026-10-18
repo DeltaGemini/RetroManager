@@ -34,7 +34,7 @@ def test_a_game_opened_on_the_first_screen_goes_back_there(phone):
     expect(phone.get_by_role("button", name="‹ Home")).to_be_visible()
     phone.keyboard.press("Escape")
     expect(phone.locator(".console-group-name").first).to_be_visible()
-    assert "system=" not in phone.url
+    expect(phone).not_to_have_url(re.compile(r"system="))   # (the address follows just after the screen)
 
 
 def test_a_game_opened_from_its_system_goes_back_to_the_list(phone):
@@ -43,7 +43,7 @@ def test_a_game_opened_from_its_system_goes_back_to_the_list(phone):
     expect(phone.get_by_role("button", name="‹ Games")).to_be_visible()
     phone.keyboard.press("Escape")
     expect(phone.locator(".game-card-content").first).to_be_visible()
-    assert "system=snes" in phone.url
+    expect(phone).to_have_url(re.compile(r"system=snes"))
 
 
 def test_a_game_taken_out_of_a_collection_leaves_it_at_once(page, server):
