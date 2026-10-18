@@ -146,3 +146,17 @@ def test_the_console_has_playing_and_backlog_lists(page, server):
         expect(page.locator(".console-tile", has_text="Playing")).to_contain_text("1 game")
     finally:
         api(server, "/api/play-status", {"system": "megadrive", "rom_path": game["path"].lstrip("./"), "status": None}, method="PUT")
+
+
+def test_the_console_moves_on_to_a_game_made_by_a_patch(page, server):
+    game = _games(server, "gba")[4]
+    page.goto(f"/console?system=gba&at={game['path'].lstrip('./')}")
+    head = page.locator(".gd-section-head", has_text="ROM file")
+    expect(head).to_be_visible()
+    if head.get_attribute("aria-expanded") != "true":
+        head.click()
+    page.get_by_role("button", name="Apply a patch…").click()
+    page.locator(".gd-replace input[type=file]").set_input_files({"name": "Console Made Hack.ips", "mimeType": "application/octet-stream", "buffer": _ips([(1, b"Z")])})
+    page.get_by_role("button", name="Apply the patch").click()
+    expect(page.locator(".gd-title")).to_have_text("Console Made Hack")
+    expect(page).to_have_url(re.compile(r"Console\+Made\+Hack|Console%20Made%20Hack"))

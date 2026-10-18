@@ -39,8 +39,7 @@ function SettingsPanel({ onClose, showNotification }) {
         setSaving(true);
         setError(null);
         try {
-            const res = await fetch(`${API_BASE}/api/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ values: edits }) });
-            const d = await res.json();
+            const d = await RM.sendJson('/api/settings', 'PUT', { values: edits });
             if (!d.success) { setError(d.error || 'Could not save settings'); return; }
             setGroups(d.groups);
             setEdits({});

@@ -5,7 +5,7 @@ The pages themselves: the library, Bookcase, Timeline and Add games, and the fil
 import os
 import re
 
-from flask import jsonify, redirect, request, send_from_directory
+from flask import jsonify, redirect, request, send_file, send_from_directory
 import mimetypes
 from backend import logo_tiles
 from backend.systems import _PRIMARY, normalize_system_name
@@ -179,6 +179,22 @@ def serve_frontend_root():
     return "index.html not found", 404
 
 
+def _send_static(file_path):
+    """One of the pages' files. With ?v= (its contents' stamp, added by tools/build_frontend.js) the
+    browser keeps it for a year, since a change gets a new address; otherwise it checks each time
+    whether it has changed (a quick "not modified" if not). The gzipped copy the build writes
+    beside it is sent to a browser that takes it."""
+    mime_type, _ = mimetypes.guess_type(str(file_path))
+    zipped = file_path.with_name(file_path.name + '.gz')
+    gzip = 'gzip' in request.headers.get('Accept-Encoding', '') and zipped.is_file()
+    response = send_file(zipped if gzip else file_path, mimetype=mime_type or 'application/octet-stream', conditional=True, etag=True)
+    if gzip:
+        response.headers['Content-Encoding'] = 'gzip'
+    response.headers['Vary'] = 'Accept-Encoding'
+    response.headers['Cache-Control'] = 'public, max-age=31536000, immutable' if request.args.get('v') else 'no-cache'
+    return response
+
+
 @app.route("/<path:path>")
 def serve_frontend(path):
     # Block API routes - they should be handled by API endpoints
@@ -210,12 +226,8 @@ def serve_frontend(path):
     except:
         return "Forbidden", 403
     
-    # If it's a file that exists, serve it
     if file_path.exists() and file_path.is_file():
-        with open(file_path, 'rb') as f:
-            content = f.read()
-        mime_type, _ = mimetypes.guess_type(str(file_path))
-        return content, 200, {'Content-Type': mime_type or 'application/octet-stream'}
+        return _send_static(file_path)
     
     # Otherwise serve index.html for SPA routing
     index_path = FRONTEND_DIR / "index.html"

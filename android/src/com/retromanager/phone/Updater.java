@@ -1,5 +1,7 @@
 package com.retromanager.phone;
 
+import org.json.JSONObject;
+
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -137,5 +139,61 @@ class Updater {
     @SuppressWarnings("deprecation")
     private static Intent legacyIntent(Intent intent) {
         return intent.getParcelableExtra(Intent.EXTRA_INTENT);
+    }
+
+    private long version() {
+        try {
+            return activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0).getLongVersionCode();
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    /** Whether RetroManager has a newer build of activity app (android/build.sh puts
+     *  it there, with its number in /app/version.json): says so once for each,
+     *  or every time when asked (`asked`). */
+    void checkUpdate(boolean asked) {
+        String server = activity.prefs.server();
+        if (server == null) return;
+        new Thread(() -> {
+            long newest = 0;
+            String name = "";
+            try {
+                HttpURLConnection connection = (HttpURLConnection) new URL(server + "/app/version.json").openConnection();
+                connection.setConnectTimeout(4000);
+                connection.setReadTimeout(4000);
+                if (connection.getResponseCode() == 200) {
+                    try (java.io.InputStream in = connection.getInputStream()) {
+                        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                        OfflineCache.copy(in, out);
+                        JSONObject described = new JSONObject(out.toString("UTF-8"));
+                        newest = described.optLong("code");
+                        name = described.optString("name");
+                    }
+                }
+                connection.disconnect();
+            } catch (Exception e) {
+                if (asked) activity.say("RetroManager couldn't be asked.");
+                return;
+            }
+            long found = newest;
+            String called = name;
+            if (found <= version()) {
+                if (asked) activity.say("This is the newest version.");
+                return;
+            }
+            if (!asked && found == activity.prefs.toldOf()) return;
+            activity.runOnUiThread(() -> {
+                if (activity.isFinishing() || activity.isDestroyed()) return;
+                try {
+                    activity.ask(activity.spec("confirm", "A newer version of this app is ready", "Version " + called + ". It's fetched and installed over this one: Android asks you to confirm it. Your games, saves and settings stay.").put("yes", "Update"), (index, text) -> {
+                        if (index == 0) install(server);
+                        else activity.prefs.toldOf(found);
+                    });
+                } catch (org.json.JSONException e) {
+                    // nothing to ask with
+                }
+            });
+        }).start();
     }
 }

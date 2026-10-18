@@ -44,3 +44,10 @@ def root():
 def client():
     from backend.app import app
     return app.test_client()
+
+
+@pytest.fixture(autouse=True)
+def _no_source_resting():
+    """A source one test made fail isn't left out of the next test's look-ups."""
+    from backend.routes import fill
+    fill._resting.clear()

@@ -13,6 +13,19 @@ const GD_ROM_STATUS = {
     skipped: ['Not checked', 'var(--text-secondary)', 'A folder, a disc list, or a file too large to hash'],
 };
 const GD_ROM_SOURCES = { NoIntros: 'No-Intro', NoIntro: 'No-Intro', MAMEArcade: 'MAME', MAMEMess: 'MAME' };
+// What RetroAchievements made of a replaced or patched ROM (the server's {before, now}: the game it
+// knew the old file as, and knows the new one as), said in a sentence; '' when it wasn't asked
+const gdAchievementsSaid = (ra) => {
+    if (!ra) return '';
+    const { before, now } = ra;
+    const game = (g) => `${g.title}${g.achievements ? ` (${g.achievements} achievements)` : ''}`;
+    if (before && now && before.id === now.id) return `RetroAchievements still recognises it: ${game(now)}.`;
+    if (before && now) return `RetroAchievements now knows it as ${game(now)}, not ${before.title}.`;
+    if (before) return `RetroAchievements doesn't recognise the new file, so it won't earn ${before.title}'s achievements (a patched or updated ROM often isn't one it lists).`;
+    if (now) return `RetroAchievements recognises it: ${game(now)}.`;
+    return "RetroAchievements doesn't recognise it (nor did it the file before).";
+};
+
 // The ROM's version, as noted (backend/rom_versions.py), and an updated ROM put in its place: it
 // takes the old one's name, so saves, states and pictures still go with it; the old file is kept
 // (Tools > Storage)
@@ -22,21 +35,25 @@ function GDRomVersion({ system, game, notify, onReplaced }) {
     const [replacing, setReplacing] = React.useState(null); // {file, version, progress, busy, error}
     // A patch being applied (IPS, UPS, BPS): {file, as: new | replace, name, version, busy, error}
     const [patching, setPatching] = React.useState(null);
+    // What RetroAchievements made of the file just put in (gdAchievementsSaid), shown until the game changes
+    const [raSaid, setRaSaid] = React.useState('');
+    React.useEffect(() => { setRaSaid(''); }, [system, game.path]);
     const patch = async () => {
         const { file } = patching;
         setPatching(p => ({ ...p, busy: true, error: null }));
         try {
             const upload = await RMUpload.send(file, { key: `patch|${file.name}|${file.size}|${file.lastModified}`, giveUpAfter: 6 });
-            const d = await fetch(`${GD_API}/api/systems/${encodeURIComponent(system)}/patch-rom`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ rom, upload, as: patching.as, name: patching.name, version: patching.version }) }).then(r => r.json());
+            const d = await RM.sendJson(`/api/systems/${encodeURIComponent(system)}/patch-rom`, 'POST',
+                { rom, upload, as: patching.as, name: patching.name, version: patching.version });
             if (!d.success) throw new Error(d.error);
             setPatching(null);
             if (patching.as === 'new') {
-                notify && notify(`Patched: ${d.rom.split('/').pop()} added as a new game (${(d.notes || []).join('; ')}).`, 'success');
+                notify && notify(`Patched: ${d.rom.split('/').pop()} added as a new game (${(d.notes || []).join('; ')}). ${gdAchievementsSaid(d.achievements)}`.trim(), 'success');
                 onReplaced && onReplaced(`./${d.rom}`, d.version || '');
             } else {
                 setRecord(d);
-                notify && notify(`Patched in place (${(d.notes || []).join('; ')}). The ROM it had is kept in Tools › Storage.`, 'success');
+                setRaSaid(gdAchievementsSaid(d.achievements));
+                notify && notify(`Patched in place (${(d.notes || []).join('; ')}). The ROM it had is kept in Tools › Storage. ${gdAchievementsSaid(d.achievements)}`.trim(), 'success');
                 onReplaced && onReplaced(null, d.version || '');
             }
         } catch (e) { setPatching(p => ({ ...p, busy: false, error: e.message })); }
@@ -64,11 +81,11 @@ function GDRomVersion({ system, game, notify, onReplaced }) {
                 onProgress: (got, size) => setReplacing(r => ({ ...r, error: null, progress: size ? got / size : 1 })),
                 onRetry: (wait) => setReplacing(r => ({ ...r, error: `Connection lost, trying again in ${wait}s` })) });
             setReplacing(r => ({ ...r, progress: 1, placing: true }));
-            const d = await fetch(`${GD_API}/api/systems/${encodeURIComponent(system)}/replace-rom`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ rom, upload, version }) }).then(r => r.json());
+            const d = await RM.sendJson(`/api/systems/${encodeURIComponent(system)}/replace-rom`, 'POST', { rom, upload, version });
             if (!d.success) throw new Error(d.error);
             setRecord(d); setReplacing(null);
-            notify && notify(`Replaced with ${file.name}${d.rom !== rom ? `, now ${d.rom.split('/').pop()}` : ''}. The old file is kept in Tools › Storage.`, 'success');
+            setRaSaid(gdAchievementsSaid(d.achievements));
+            notify && notify(`Replaced with ${file.name}${d.rom !== rom ? `, now ${d.rom.split('/').pop()}` : ''}. The old file is kept in Tools › Storage. ${gdAchievementsSaid(d.achievements)}`.trim(), 'success');
             onReplaced && onReplaced(d.rom !== rom ? `./${d.rom}` : null, d.version || '');
         } catch (e) { setReplacing(r => ({ ...r, busy: false, placing: false, error: e.message })); }
     };
@@ -91,6 +108,7 @@ function GDRomVersion({ system, game, notify, onReplaced }) {
                     <>{record.version || <span className="gd-note">not noted</span>}{' '}
                         <button className="gd-linkbutton admin-only" onClick={() => setEditing(record.version || '')}>{record.version ? 'Change' : 'Note it'}</button></>
                 )}</dd>
+                {raSaid && <><dt>Achievements</dt><dd className="gd-note">{raSaid}</dd></>}
                 {record.patched_from && <><dt>Made from</dt><dd className="gd-note">{record.patched_from.rom}, patched with {record.patched_from.patch}</dd></>}
                 {(record.history || []).length > 0 && <><dt>Before</dt><dd className="gd-note">
                     {record.history.map((h, i) => <div key={i}>{h.version || 'no version noted'}, {h.then_patched_with ? `patched with ${h.then_patched_with}` : 'replaced'} {new Date(h.at * 1000).toLocaleDateString()} (kept in Tools › Storage)</div>)}
@@ -188,7 +206,7 @@ function GDRomFile({ system, game, notify, onMoved, onVersion }) {
         <div className="gd-romfile">
             <dl className="gd-facts">
                 <dt>File</dt><dd className="gd-mono">{file}</dd>
-                {info.size > 0 && <><dt>Size</dt><dd>{gdBytes(info.size)}</dd></>}
+                {info.size > 0 && <><dt>Size</dt><dd>{RM.bytes(info.size)}</dd></>}
                 {status && <><dt>ROM check</dt><dd>
                     <span title={status[2]} style={{color: status[1]}}>{status[0]}</span>
                     {sources && <span className="gd-note"> · listed by {sources}</span>}
@@ -206,7 +224,7 @@ function GDRomFile({ system, game, notify, onMoved, onVersion }) {
                 <div className="gd-romfiles">
                     {files.map(f => (
                         <div key={f.name} className="gd-romfiles-file">
-                            <div><span className="gd-mono">{f.name}</span> <span className="gd-note">{gdBytes(f.size)}</span></div>
+                            <div><span className="gd-mono">{f.name}</span> <span className="gd-note">{RM.bytes(f.size)}</span></div>
                             {f.sha1 && (
                                 <dl className="gd-facts">
                                     {[['SHA-1', f.sha1], ['MD5', f.md5], ['CRC32', f.crc32]].map(([label, value]) => (
@@ -222,7 +240,7 @@ function GDRomFile({ system, game, notify, onMoved, onVersion }) {
                     {files.some(f => !f.sha1) && (
                         <div className="gd-row" style={{marginTop: 8}}>
                             <button className="gd-btn small" disabled={hashing} onClick={() => loadFiles(true)}>{hashing ? 'Working them out...' : 'Work out the checksums'}</button>
-                            <span className="gd-note">{hashing ? 'Each file is read whole: a disc takes a while.' : `${gdBytes(files.filter(f => !f.sha1).reduce((n, f) => n + f.size, 0))} to read. They're kept once worked out.`}</span>
+                            <span className="gd-note">{hashing ? 'Each file is read whole: a disc takes a while.' : `${RM.bytes(files.filter(f => !f.sha1).reduce((n, f) => n + f.size, 0))} to read. They're kept once worked out.`}</span>
                         </div>
                     )}
                 </div>

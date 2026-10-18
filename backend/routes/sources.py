@@ -13,13 +13,11 @@ from backend.media_index import strip_dot_slash
 from backend.core import (
     _hasheous_lookup,
     _ra_identify,
-    _request_json,
     _request_rom_file,
     app,
     hasheous,
     igdb_scraper,
     libretro_thumbs,
-    logger,
     ra_scraper,
     scraper,
     settings,
@@ -32,9 +30,9 @@ from backend.core import (
 from backend.routes.scraping import _hash_match_first
 
 # -----------------------------------------------------------------------------
-# Other sources: RetroAchievements, Steam, SteamGridDB, libretro thumbnails.
-# Each has a search and a game-info route shaped like ScreenScraper's and IGDB's;
-# media is downloaded through /api/scraper/download-media.
+# Other sources: RetroAchievements, Steam, SteamGridDB, TheGamesDB, LaunchBox, GameTDB,
+# libretro thumbnails. Each has a search and a game's details (_OTHER_SOURCES), which
+# Fill the gaps uses to match and look up a game.
 # -----------------------------------------------------------------------------
 def available_sources():
     """Every source, with whether it can be used here: [{id, label, available, hint}]."""
@@ -156,46 +154,3 @@ _OTHER_SOURCES = {
         lambda data: {'media': libretro_thumbs.find(data.get("system_name"), [str(data.get("game_id") or '')])},
     ),
 }
-
-
-@app.route("/api/sources/<source>/search", methods=["POST"])
-def source_search(source):
-    """Body: {name, system_name?, rom_path?}. With rom_path, a game recognised
-    from the ROM's checksum is listed first (hash_match: true)."""
-    if source not in _OTHER_SOURCES:
-        return jsonify(success=False, error="Unknown source"), 404
-    label, errors, search, _ = _OTHER_SOURCES[source]
-    data = _request_json()
-    game_name = (data.get("name") or '').strip()
-    if not game_name:
-        return jsonify(success=False, error="Missing game name"), 400
-    try:
-        results = search(data, game_name)
-    except errors as e:
-        return jsonify(success=False, error=str(e), results=[])
-    except Exception as e:
-        logger.exception(f"Error searching {label}")
-        return jsonify(success=False, error=str(e), results=[]), 500
-    if not results:
-        return jsonify(success=False, error=f'{label} found nothing for "{game_name}". Try a shorter name.', results=[])
-    return jsonify(success=True, results=results, source=source)
-
-
-@app.route("/api/sources/<source>/game-info", methods=["POST"])
-def source_game_info(source):
-    """Body: {game_id, system_name?}. Returns `metadata` with gamelist field names
-    and a `media` dict, like the ScreenScraper and IGDB routes."""
-    if source not in _OTHER_SOURCES:
-        return jsonify(success=False, error="Unknown source"), 404
-    label, errors, _, game_info = _OTHER_SOURCES[source]
-    data = _request_json()
-    if not data.get("game_id"):
-        return jsonify(success=False, error="Missing game_id"), 400
-    try:
-        metadata = game_info(data)
-    except errors as e:
-        return jsonify(success=False, error=str(e))
-    except Exception as e:
-        logger.exception(f"Error loading {label} game")
-        return jsonify(success=False, error=str(e)), 500
-    return jsonify(success=True, metadata=metadata)

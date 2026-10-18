@@ -127,7 +127,7 @@ function DuplicatesPanel({ initialSystem, onClose, onChanged, showNotification }
                                             <span style={{flex: 1, minWidth: 0, wordBreak: 'break-word'}}>
                                                 {!g.system && <span style={{color: 'var(--text-secondary)'}}>{c.system}/</span>}{c.path}
                                                 <span style={{color: 'var(--text-secondary)', fontSize: 11, marginLeft: 6}}>
-                                                    {[c.size != null ? formatBytes(c.size) : null, c.name ? 'in gamelist' : 'no entry',
+                                                    {[c.size != null ? RM.bytes(c.size) : null, c.name ? 'in gamelist' : 'no entry',
                                                       c.media != null ? (c.media ? `${c.media} media` : 'no media') : null,
                                                       c.playcount ? `played ${c.playcount}×` : null].filter(Boolean).join(' · ')}
                                                 </span>

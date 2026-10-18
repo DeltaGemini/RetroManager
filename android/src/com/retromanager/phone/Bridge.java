@@ -95,7 +95,7 @@ final class Bridge {
                 mine = "?";
             }
             return new JSONObject().put("server", app.prefs.server()).put("folder", app.folder == null ? JSONObject.NULL : app.folder.path())
-                    .put("retroArch", app.player.retroArch() == null ? JSONObject.NULL : app.player.retroArch()).put("retroArchs", new JSONArray(app.player.installed()))
+                    .put("retroArch", app.player.launcher.retroArch() == null ? JSONObject.NULL : app.player.launcher.retroArch()).put("retroArchs", new JSONArray(app.player.launcher.installed()))
                     .put("profile", app.prefs.profile() == null ? JSONObject.NULL : app.prefs.profile()).put("profiles", app.prefs.profiles())
                     .put("kept", Player.size(app.cache.size())).put("version", mine).put("pinSaves", app.prefs.pinSaves()).put("updateGames", app.prefs.updateGames()).put("failedCores", app.failedCores())
                     .put("unclaimed", app.prefs.unclaimed() == null ? JSONObject.NULL : app.prefs.unclaimed())
@@ -115,7 +115,7 @@ final class Bridge {
             switch (what) {
                 case "server": app.askServer(null, null); break;
                 case "folder": app.askFolder(); break;
-                case "retroarch": if (app.player.installed().contains(value)) app.prefs.retroArch(value); break;
+                case "retroarch": if (app.player.launcher.installed().contains(value)) app.prefs.retroArch(value); break;
                 case "profile": app.prefs.profile(value == null ? "" : value); break;
                 case "unclaimed":
                     // (choosing the one already chosen does nothing; another asks first)
@@ -162,7 +162,7 @@ final class Bridge {
                         // nothing to ask with
                     }
                     break;
-                case "update": app.checkUpdate(true); break;
+                case "update": app.updater.checkUpdate(true); break;
                 // RetroArch's setup (Setup.java): "save" this phone's, "apply" the kept one, "check", and "pin" (value: on or off)
                 case "setup-save": app.setup.save(); break;
                 case "setup-apply": app.setup.apply(); break;
@@ -237,7 +237,7 @@ final class Bridge {
                 for (Folder.Entry system : folder.list("roms")) {
                     if (!system.folder || system.name.startsWith(".")) continue;
                     List<Object[]> files = new ArrayList<>();
-                    app.sizes(folder, "roms/" + system.name, "", 0, files);
+                    PhoneSettings.sizes(folder, "roms/" + system.name, "", 0, files);
                     if (files.isEmpty()) continue;
                     files.sort((a, b) -> Long.compare((Long) b[1], (Long) a[1]));
                     long size = 0;
@@ -285,7 +285,7 @@ final class Bridge {
     /** Asks what this one game is played with (over what its system is). */
     @JavascriptInterface public void chooseEmulator(String system, String rom, String name) {
         if (system == null || rom == null || system.contains("/") || system.startsWith(".")) return;
-        app.emulators(system, rom.startsWith("./") ? rom.substring(2) : rom, name);
+        app.phone.emulators(system, rom.startsWith("./") ? rom.substring(2) : rom, name);
     }
 
     /** Takes a game off the phone (its files in the roms folder), after asking. The server's copy isn't touched. */
@@ -368,7 +368,7 @@ final class Bridge {
         new Thread(() -> {
             String label = name == null || name.isEmpty() ? rom : name;
             // Straight into RetroArch where that can be; otherwise through the app, which fetches the game or hands it to its emulator
-            Intent play = app.player.direct(system, rom);
+            Intent play = app.player.launcher.direct(system, rom);
             if (play == null) play = new Intent(app, MainActivity.class).setAction(app.PLAY).putExtra("system", system).putExtra("rom", rom);
             ShortcutInfo shortcut = new ShortcutInfo.Builder(app, "game:" + system + "/" + rom)
                     .setShortLabel(label).setLongLabel(label).setIcon(app.icon(picture)).setIntent(play).build();
@@ -444,6 +444,6 @@ final class Bridge {
     }
 
     @JavascriptInterface public void openSettings() {
-        app.runOnUiThread(app::settings);
+        app.runOnUiThread(app.phone::settings);
     }
 }

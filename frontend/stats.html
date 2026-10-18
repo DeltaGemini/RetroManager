@@ -8,10 +8,11 @@
     <script src="/common/language-packs.js"></script>
     <script src="/common/language.js"></script>
     <script src="/common/accounts.js"></script>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script crossorigin src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.6/babel.min.js"></script>
     <link rel="stylesheet" href="/common/header.css">
+    <script src="/common/helpers.js"></script>
     <script src="/common/header.js"></script>
     <script src="/common/systems.js"></script>
     <script src="/common/series.js"></script>
@@ -93,7 +94,6 @@
         const { useState, useEffect, useMemo } = React;
         const API_BASE = window.location.origin;
         const cleanTitle = (name) => (name || '').replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/\s+/g, ' ').trim() || name;
-        const getJson = (url) => fetch(`${API_BASE}${url}`).then(r => r.json()).catch(() => null);
         const percent = (part, whole) => (whole ? Math.round((100 * part) / whole) : 0);
         const COLORS = ['var(--accent-pink)', 'var(--accent-orange)', 'var(--success)', '#6ab7ff', '#c792ea'];
 
@@ -145,11 +145,11 @@
             const [showAll, setShowAll] = useState(false);
 
             useEffect(() => {
-                getJson('/api/shelf').then(d => (d && d.success ? setShelves(d.shelves) : setError((d && d.error) || 'Could not load the library')));
-                getJson('/api/library-state').then(d => { if (d && d.success) setState(d); });
-                getJson('/api/rom-index').then(d => { if (d && d.success && d.report && d.report.checked) setRoms(d.report); });
-                getJson('/api/achievements/overview').then(d => { if (d && d.success && d.configured && d.games.length) setAchievements(d); });
-                getJson('/api/achievements/unlocks').then(d => { if (d && d.success && d.configured && d.months.length > 1) setUnlocks(d); });
+                RM.getJson('/api/shelf').then(d => (d && d.success ? setShelves(d.shelves) : setError((d && d.error) || 'Could not load the library')));
+                RM.getJson('/api/library-state').then(d => { if (d && d.success) setState(d); });
+                RM.getJson('/api/rom-index').then(d => { if (d && d.success && d.report && d.report.checked) setRoms(d.report); });
+                RM.getJson('/api/achievements/overview').then(d => { if (d && d.success && d.configured && d.games.length) setAchievements(d); });
+                RM.getJson('/api/achievements/unlocks').then(d => { if (d && d.success && d.configured && d.months.length > 1) setUnlocks(d); });
             }, []);
 
             const games = useMemo(() => {

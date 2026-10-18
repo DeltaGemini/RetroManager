@@ -27,8 +27,9 @@ from flask import jsonify, request
 
 from backend.core import (
     _game_moved_hooks, _request_json, _saveable_fields, _system_path_or_none, app, bulk_matcher, DATA_DIR,
-    gamelist_mgr, jeu_cache, launchbox_index, logger, MEDIA_BASE, media_sources, mix_provenance, ROMS_BASE, scanner, scraper,
+    gamelist_mgr, jeu_cache, launchbox_index, logger, MEDIA_BASE, media_sources, mix_provenance, ROMS_BASE, scanner, scraper, settings,
 )
+from backend.retroachievements import ID_PREFIX as RA_ID_PREFIX
 from backend.fill_queue import FillQueue
 from backend.folder_games import folder_game_name
 from backend.match_memory import MatchMemory
@@ -81,8 +82,17 @@ def _candidates(source, match_id, system):
             'fields': {k: data.get(k) for k in FILL_FIELDS if data.get(k) not in (None, '')}}
 
 
+# Sources with a small allowance (TheGamesDB's is by the month): one that fails is left alone
+# this long rather than asked for every game, unless you ask it again yourself (a rematch)
+_RESTING_SOURCES = ('thegamesdb', 'steamgriddb')
+_SOURCE_REST = 15 * 60
+_resting = {}
+
+
 def _look_one(source, system, rom_path, remembered, rematch):
     """One source's part of /api/fill/look (run beside the others)."""
+    if rematch is None and _resting.get(source, 0) > time.time():
+        return {'match': {'confidence': 'none', 'id': None, 'alternatives': [], 'error': "It failed a moment ago, so it's left out for a while."}, 'candidates': None}
     try:
         if rematch is not None:
             match = _match(source, system, rom_path, rematch.get('query'))
@@ -99,6 +109,8 @@ def _look_one(source, system, rom_path, remembered, rematch):
         return result
     except Exception as e:
         logger.info(f"Fill the gaps: {source} couldn't be asked about {system}/{rom_path}: {e}")
+        if source in _RESTING_SOURCES:
+            _resting[source] = time.time() + _SOURCE_REST
         return {'match': {'confidence': 'none', 'id': None, 'alternatives': [], 'error': str(e)}, 'candidates': None}
 
 
@@ -252,18 +264,30 @@ def fill_apply():
     rom_path = strip_dot_slash(data.get("rom_path"))
     if not _system_path_or_none(system) or not rom_path:
         return jsonify(success=False, error="Missing or unknown system_name / rom_path"), 400
+    result, status = apply_choices(system, rom_path, data.get("pictures") or {}, data.get("fields") or {}, data.get("remember") or {})
+    return jsonify(**result), status
+
+
+def apply_choices(system, rom_path, pictures, fields, remember):
+    """What was chosen for a game, put in: each picture downloaded (or a made or pasted one put in
+    place: "made:<token>"; or the first of a list of addresses that downloads), the one it had kept
+    in replaced-media first; the details written; EmulationStation's links filled; the matches
+    remembered. Shared by Fill the gaps and a game being added (fill_from_match).
+    -> ({success, downloaded, replaced, filled, errors, kept}, HTTP status)"""
     game = scanner.get_game_details(system, rom_path)
     if game is None:
-        return jsonify(success=False, error="Game not found"), 404
+        return {'success': False, 'error': "Game not found"}, 404
 
     stem = Path(rom_path).stem
     index = scanner.media_index(system)
     downloaded, replaced, errors = [], [], []
     kept_at = REPLACED_MEDIA / time.strftime('%Y%m%d-%H%M%S')
-    for folder, url in (data.get("pictures") or {}).items():
+    for folder, urls in pictures.items():
+        urls = [u for u in (urls if isinstance(urls, list) else [urls]) if isinstance(u, str)]
         # A spine or 3D box made here (backend/routes/boxes.py), or a picture pasted in: "made:<token>"
-        made = made_file(url[5:]) if folder in FILL_PICTURES and isinstance(url, str) and url.startswith('made:') else None
-        if folder not in FILL_MEDIA or not (made or _web_address(url)):
+        made = made_file(urls[0][5:]) if folder in FILL_PICTURES and len(urls) == 1 and urls[0].startswith('made:') else None
+        urls = [u for u in urls if _web_address(u)]
+        if folder not in FILL_MEDIA or not (made or urls):
             errors.append(f"{folder}: not something RetroManager can fetch")
             continue
         had = index.find(folder, stem)
@@ -275,17 +299,27 @@ def fill_apply():
             except OSError as e:
                 errors.append(f"{folder}: couldn't keep the old one, so it wasn't replaced ({e})")
                 continue
-        try:
-            if made:
+        problem = None
+        if made:
+            try:
                 target = Path(MEDIA_BASE) / index.media_system / folder / f"{stem}{made.suffix}"
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(made, target)
                 _remove_other_formats(target)
                 media_sources.record(target, UPLOADED if '.pasted.' in made.name else MADE)
-            else:
-                _download_one(url, Path(MEDIA_BASE) / index.media_system / folder, stem)
-        except (ValueError, OSError) as e:
-            errors.append(f"{folder}: {e}")
+            except OSError as e:
+                problem = f"{folder}: {e}"
+        else:
+            # (the first address that gives a picture: a source's that fails, the next one's)
+            for url in urls:
+                try:
+                    _download_one(url, Path(MEDIA_BASE) / index.media_system / folder, stem)
+                    problem = None
+                    break
+                except (ValueError, OSError) as e:
+                    problem = problem or f"{folder}: {e}"
+        if problem:
+            errors.append(problem)
             continue
         downloaded.append(folder)
         if had:
@@ -295,7 +329,7 @@ def fill_apply():
 
     merged = game.to_dict()
     filled = []
-    for field, value in (data.get("fields") or {}).items():
+    for field, value in fields.items():
         if field in FILL_FIELDS and value not in (None, '') and str(value) != str(merged.get(field) or ''):
             merged[field] = str(value)
             filled.append(field)
@@ -310,12 +344,64 @@ def fill_apply():
     new_game = Game.from_dict(_saveable_fields(merged))
     ok = gamelist_mgr.update_game(system, rom_path, new_game, ROMS_BASE) if game.has_metadata else gamelist_mgr.save_game(system, new_game, ROMS_BASE)
     if not ok:
-        return jsonify(success=False, error="Couldn't write gamelist.xml", downloaded=downloaded, errors=errors)
+        return {'success': False, 'error': "Couldn't write gamelist.xml", 'downloaded': downloaded, 'errors': errors}, 200
 
     key = _key(system, rom_path)
     fill_queue.forget([key])   # (what the background scrape found for it, now dealt with)
-    for source, match in (data.get("remember") or {}).items():
+    for source, match in remember.items():
         if source in FILL_SOURCES and match and match.get('id') and match.get('confidence') in ('exact', 'likely', 'chosen'):
             match_memory.remember(key, source, match['id'], match.get('name'), match['confidence'])
-    return jsonify(success=True, downloaded=downloaded, replaced=replaced, filled=filled, errors=errors,
-                   kept=str(kept_at.relative_to(DATA_DIR)) if replaced else None)
+    return {'success': True, 'downloaded': downloaded, 'replaced': replaced, 'filled': filled, 'errors': errors,
+            'kept': str(kept_at.relative_to(DATA_DIR)) if replaced else None}, 200
+
+
+# --- A game being added (backend/routes/importing.py): filled as Fill the gaps would, from the order ---
+
+def fill_from_match(system, rom_path, game_id, media, keep_name=False):
+    """A game being added, filled from the game picked for it (ScreenScraper's id, a RetroAchievements
+    "ra:<id>", or "<source>:<id>"), then, for what that hasn't, from the other sources in Fill the gaps'
+    order (a confident match only, as Fill the gaps does): the details it hasn't got (its name too,
+    unless keep_name), and the kinds of picture in `media` it hasn't got, another source's copy of each
+    tried when one won't download. With libretro "before ScreenScraper" in Settings, libretro's pictures
+    are tried first; with it off, libretro isn't asked. -> apply_choices's answer. Raises what the picked game's source raises."""
+    game_id = str(game_id)
+    if game_id.startswith(RA_ID_PREFIX):
+        source, match_id = 'retroachievements', f"retroachievements:{game_id[len(RA_ID_PREFIX):]}"
+    elif game_id.partition(':')[0] in BULK_SOURCES and game_id.partition(':')[2]:
+        source, match_id = game_id.partition(':')[0], game_id
+    else:
+        source, match_id = 'screenscraper', game_id
+    game = scanner.get_game_details(system, rom_path)
+    if game is None:
+        return {'success': False, 'error': "Game not found"}, 404
+    have, stem, index = game.to_dict(), Path(rom_path).stem, scanner.media_index(system)
+    want_fields = [f for f in FILL_FIELDS if not (keep_name and f == 'name') and (_missing(have, f) or (f == 'name' and not game.has_metadata))]
+    want_media = [k for k in media if k in FILL_MEDIA and not index.find(k, stem)]
+
+    picked = _candidates(source, match_id, system)
+    fields = {f: picked['fields'][f] for f in want_fields if picked['fields'].get(f) not in (None, '')}
+    pictures = {k: [picked['media'][k]] for k in want_media if picked['media'].get(k)}
+    remember = {source: {'id': match_id, 'name': picked['fields'].get('name'), 'confidence': 'chosen'}}
+
+    libretro_first = settings.get('libretro_thumbnails') == 'first'
+    if [f for f in want_fields if f not in fields] or [k for k in want_media if k not in pictures] or (libretro_first and want_media):
+        others = [s for s in FILL_SOURCES if s != source and not (s == 'libretro' and settings.get('libretro_thumbnails') == 'off')]
+        looked = look_game(system, rom_path, others)
+        for other in others:
+            found = looked.get(other) or {}
+            match, offered = found.get('match') or {}, found.get('candidates')
+            if match.get('confidence') not in ('exact', 'likely') or not offered:
+                continue
+            used = False
+            for f in want_fields:
+                if f not in fields and offered['fields'].get(f) not in (None, ''):
+                    fields[f], used = offered['fields'][f], True
+            for k in want_media:
+                url = offered['media'].get(k)
+                if url:
+                    # (libretro's first when Settings says so; otherwise each source's after the pick's, in the order)
+                    pictures.setdefault(k, []).insert(0 if other == 'libretro' and libretro_first else len(pictures.get(k, [])), url)
+                    used = True
+            if used and not match.get('remembered'):
+                remember[other] = match
+    return apply_choices(system, rom_path, pictures, fields, remember)

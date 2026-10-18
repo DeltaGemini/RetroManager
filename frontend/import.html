@@ -14,10 +14,11 @@
     <script>
         if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('/sw.js').catch(() => {});
     </script>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script crossorigin src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.6/babel.min.js"></script>
     <link rel="stylesheet" href="/common/header.css">
+    <script src="/common/helpers.js"></script>
     <script src="/common/header.js"></script>
     <script src="/common/upload.js"></script>
     <style>
@@ -153,14 +154,12 @@
             none: { label: 'No match', color: 'var(--text-secondary)' },
         };
 
-        const formatBytes = (n) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB`
-            : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(2)} GB`;
         const api = async (path, options = {}) => {
             const res = await fetch(`${API_BASE}${path}`, options);
             const data = await res.json().catch(() => ({ success: false, error: `HTTP ${res.status}` }));
             return { status: res.status, ...data };
         };
-        const post = (path, body) => api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const post = (path, body) => RM.sendJson(path, 'POST', body);
         const gameLink = (system, romPath) => `/?${new URLSearchParams({ system, game: `./${romPath}` })}`;
 
 
@@ -274,11 +273,11 @@
                                         <div className="grow">
                                             <div className="name">{job.name}</div>
                                             <div className="muted small">
-                                                {formatBytes(job.size)} · {done ? <span className="ok">Uploaded</span>
+                                                {RM.bytes(job.size)} · {done ? <span className="ok">Uploaded</span>
                                                     : job.state === 'waiting' ? 'Waiting'
                                                     : job.state === 'failed' ? <span className="error">{job.error}</span>
                                                     : job.error ? <span style={{ color: 'var(--accent-orange)' }}>{pct}% · {job.error}</span>
-                                                    : `${pct}%${job.speed ? ` · ${formatBytes(job.speed)}/s` : ''}`}
+                                                    : `${pct}%${job.speed ? ` · ${RM.bytes(job.speed)}/s` : ''}`}
                                             </div>
                                             {!done && <div className="bar"><div style={{ width: `${pct}%` }} /></div>}
                                         </div>
@@ -293,7 +292,7 @@
                                     <div className="grow">
                                         <div className="name">{u.name}</div>
                                         <div className="muted small">
-                                            {formatBytes(u.size)} · {u.complete ? 'Uploaded earlier' : `Stopped at ${Math.floor((u.received / u.size) * 100)}%. Choose the same file again to finish it.`}
+                                            {RM.bytes(u.size)} · {u.complete ? 'Uploaded earlier' : `Stopped at ${Math.floor((u.received / u.size) * 100)}%. Choose the same file again to finish it.`}
                                         </div>
                                     </div>
                                     <button className="btn small" onClick={async () => { await api(`/api/uploads/${u.id}`, { method: 'DELETE' }); reload(); }}>Remove</button>
@@ -325,7 +324,7 @@
                                         <input type="checkbox" checked={selected.has(i.ref)} onChange={() => toggle(i.ref)} />
                                         <div className="grow">
                                             <div className="name">{i.name}</div>
-                                            <div className="muted small">{formatBytes(i.size)}{i.folder ? ` · inbox/${i.folder}` : ''}</div>
+                                            <div className="muted small">{RM.bytes(i.size)}{i.folder ? ` · inbox/${i.folder}` : ''}</div>
                                         </div>
                                     </label>
                                 ))}
@@ -358,7 +357,7 @@
                         </label>
                         <div className="muted small" style={{ marginBottom: 8 }}>
                             {game.discs ? `${game.discs.length} discs, one .m3u playlist will be made`
-                                : game.files.length > 1 ? `${game.files.length} files (a .cue and its tracks)` : '1 file'} · {formatBytes(game.size)}
+                                : game.files.length > 1 ? `${game.files.length} files (a .cue and its tracks)` : '1 file'} · {RM.bytes(game.size)}
                         </div>
                         {game.missing.length > 0 && <div className="warn">The .cue names files you didn't pick: {game.missing.join(', ')}</div>}
 

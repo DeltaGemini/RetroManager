@@ -114,12 +114,6 @@ Older routes, taking a JSON body with `system`:
 
 | Method | Route | Purpose |
 |---|---|---|
-| POST | `/api/scraper/search` | ScreenScraper search |
-| POST | `/api/scraper/game-info` | Normalised metadata for one ScreenScraper result |
-| POST | `/api/scraper/download-media` | Download ScreenScraper media into the media folder |
-| POST | `/api/igdb/search` | IGDB search |
-| POST | `/api/igdb/game-info` | Normalised metadata for one IGDB game |
-| POST | `/api/igdb/download-media` | Download IGDB media into the media folder |
 | GET | `/api/systems/<system>/achievements?rom=<path>` | The game's RetroAchievements list and what the RetroAchievements user has earned (`refresh=1` skips the 5-minute cache) |
 | GET | `/api/achievements/overview` | Every game the RetroAchievements user has progress in, most complete first, with its library game |
 | GET | `/api/library-state` | Every game's play status, and the collections |
@@ -163,9 +157,7 @@ Older routes, taking a JSON body with `system`:
 | GET, PUT | `/api/play/save?system=&rom=&profile=` | Read or write a person's battery save for browser play |
 | GET | `/api/settings` | The settings in groups; passwords and keys only say whether they're set |
 | PUT | `/api/settings` | `{values: {key: value}}`: save and apply settings (`""` clears one) |
-| GET | `/api/scrape-sources` | Which sources the Scrape popup can use, and which need a key |
-| POST | `/api/sources/<source>/search` | Search `retroachievements`, `steam`, `steamgriddb` or `libretro` |
-| POST | `/api/sources/<source>/game-info` | Normalised metadata and media for one result from that source |
+| GET | `/api/scrape-sources` | Which sources can be used, and which need a key |
 
 Request and response shapes are in [SCRAPING.md](scraping.md).
 

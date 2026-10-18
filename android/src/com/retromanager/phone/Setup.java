@@ -138,7 +138,7 @@ final class Setup {
                     }
                 }
                 byte[] body = new JSONObject().put("device", Build.MODEL).put("base", folder.path())
-                        .put("package", String.valueOf(player.retroArch())).put("files", sent).toString().getBytes(StandardCharsets.UTF_8);
+                        .put("package", String.valueOf(player.launcher.retroArch())).put("files", sent).toString().getBytes(StandardCharsets.UTF_8);
                 HttpURLConnection connection = player.open("/api/phone/setup", "POST");
                 try {
                     connection.setDoOutput(true);
@@ -179,7 +179,7 @@ final class Setup {
                         + " files go into this phone's RetroArch folder (each core's overrides, options and shader presets, and their overlays). "
                         + "A file of this phone's that differs is kept in RetroArch/RetroManager backups first.\n\nClose RetroArch before applying.", "Apply")) return;
                 String base = folder.path(), theirs = kept.optString("base");
-                String mine = String.valueOf(player.retroArch()), other = kept.optString("package");
+                String mine = String.valueOf(player.launcher.retroArch()), other = kept.optString("package");
                 String backups = "RetroManager backups/setup-" + new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
                 int written = 0, same = 0, backed = 0;
                 for (int i = 0; i < files.length(); i++) {
@@ -296,7 +296,7 @@ final class Setup {
         new Thread(() -> {
             Folder folder = app.folder();
             StringBuilder said = new StringBuilder();
-            String retroArch = player.retroArch();
+            String retroArch = player.launcher.retroArch();
             said.append(retroArch == null ? "✗ RetroArch isn't installed.\n" : "✓ RetroArch: " + retroArch + "\n");
             if (folder == null) {
                 said.append("✗ RetroArch's folder hasn't been chosen.\n");

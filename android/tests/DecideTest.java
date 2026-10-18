@@ -73,9 +73,54 @@ public final class DecideTest {
         check("chosen but not installed: the next best", choose(threeDs, "app:azahar", null, none, true, none, none), "1");
     }
 
+    private static String[] entry(String path, String core) { return new String[]{path, core}; }
+
+    private static void history() {
+        String roms = "/storage/emulated/0/RetroArch/roms/";
+        List<String[]> played = Arrays.asList(   // newest first
+            entry(roms + "gb/Tetris (World).gb", "mgba"),
+            entry(roms + "GBA/Golden Sun.zip#Golden Sun (USA).gba", "mgba"),
+            entry("content://com.android.externalstorage.documents/tree/primary%3ARetroArch/roms/snes/Earthbound.sfc", "snes9x"),
+            entry(roms + "gba/Advance Wars.gba", "vba_next"));
+        check("a core's file", Decide.coreOf("/data/user/0/com.retroarch.aarch64/cores/mgba_libretro_android.so"), "mgba");
+        check("not a core's file", Decide.coreOf("/data/user/0/com.retroarch/cores/readme.txt"), null);
+        check("no core", Decide.coreOf(""), null);
+        check("the last core for a system, its folder in another case", Decide.coreFor(played, roms, "gba"), "mgba");
+        check("no game of the system", Decide.coreFor(played, roms, "n64"), null);
+        check("cores, newest first, once each", Decide.cores(played), Arrays.asList("mgba", "snes9x", "vba_next"));
+        check("a core used for another system", Decide.used(played, "mgba"), true);
+        check("a core never used", Decide.used(played, "gpsp"), false);
+        check("began: a zip, its entry naming the file inside", Decide.began(played, roms + "gba/Golden Sun.zip", "mgba"), true);
+        check("began: in the history with another core", Decide.began(played, roms + "gba/Advance Wars.gba", "mgba"), false);
+        check("began: not in the history", Decide.began(played, roms + "gba/Mother 3.gba", "mgba"), false);
+        check("recorded: the same file under another folder name",
+            Decide.recorded(played, "/storage/emulated/0/RetroArch/roms/snes/Earthbound.sfc", "snes9x"), played.get(2)[0]);
+        check("recorded: otherwise the newest with the core", Decide.recorded(played, roms + "gba/Mother 3.gba", "vba_next"), played.get(3)[0]);
+        check("recorded: neither", Decide.recorded(played, roms + "gba/Mother 3.gba", "gpsp"), null);
+    }
+
+    private static void launching() {
+        check("in the history: started", Decide.launch(true, true, true), Decide.Launch.STARTED);
+        // The GBA case: not in the history in time, but mGBA has played Game Boy games, so it's installed
+        check("not in it, but the core plays other games: started", Decide.launch(true, false, true), Decide.Launch.STARTED);
+        check("not in it, the core never seen: failed", Decide.launch(true, false, false), Decide.Launch.FAILED);
+        check("the history isn't trusted: not judged", Decide.launch(false, false, false), Decide.Launch.UNKNOWN);
+    }
+
+    private static void stick() {
+        check("the hat pressed left", Decide.stickKey(-1f, 0f, 0f, 0f), "ArrowLeft");
+        check("the hat pressed down", Decide.stickKey(0f, 1f, 0.9f, 0f), "ArrowDown");   // (the hat over the stick)
+        check("the stick pushed up, the hat at rest", Decide.stickKey(0f, 0f, 0.1f, -0.8f), "ArrowUp");
+        check("the stick mostly sideways", Decide.stickKey(0f, 0f, 0.8f, 0.7f), "ArrowRight");
+        check("the stick nudged, not pushed", Decide.stickKey(0f, 0f, 0.4f, 0.5f), null);
+    }
+
     public static void main(String[] args) {
         freshness();
         choosing();
+        history();
+        launching();
+        stick();
         System.out.println(failed == 0 ? "Decide: " + run + " checks passed" : "Decide: " + failed + " of " + run + " checks failed");
         System.exit(failed == 0 ? 0 : 1);
     }

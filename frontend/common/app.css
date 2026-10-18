@@ -930,7 +930,7 @@ body {
    the box changes size) */
 .game-list-toolbar.phone .filter-input { flex-basis: 100%; }
 
-/* Fill the gaps (src/library/tools-fill.jsx) */
+/* Fill the gaps (src/library/tools-fill*.jsx) */
 .fill { width: min(1300px, calc(100vw - 80px)); max-width: 100%; }
 .fill .muted, .fill-lb .muted { color: var(--text-secondary); }
 .fill-lede { color: var(--text-secondary); font-size: 13px; line-height: 1.55; margin: 0 0 16px; max-width: 75ch; }

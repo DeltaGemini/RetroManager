@@ -73,7 +73,7 @@ function App() {
         // (Scrape, pressed on another page: Fill the gaps for the game, as the game's own Scrape does here)
         if (params.get('game') && params.get('scrape')) {
             window.dispatchEvent(new CustomEvent('retromanager:open-tool', { detail: { tool: 'fill',
-                options: { games: [{ system: target.name, path: params.get('game') }], replace: true, start: true, single: true } } }));
+                options: { games: [{ system: target.name, path: params.get('game') }], replace: true, start: true } } }));
         }
         setSelectedSystem(target);
         loadGames(target.name, params.get('game') || null);

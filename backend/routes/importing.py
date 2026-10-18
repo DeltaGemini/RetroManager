@@ -9,7 +9,6 @@ from backend.models import Game
 from backend.name_style import style_name
 from backend.importer import Importer, md5_of
 from backend.scraper import ScreenscraperError
-from backend.retroachievements import RetroAchievementsError
 from backend.media_index import strip_dot_slash
 from backend.media_index import title_key
 from backend.core import (
@@ -25,7 +24,7 @@ from backend.core import (
     ROMS_BASE,
     scanner,
 )
-from backend.routes.scraping import apply_scrape, SCRAPE_MEDIA_FOLDERS
+from backend.routes.fill import FILL_MEDIA, fill_from_match
 
 # -----------------------------------------------------------------------------
 # Adding games: uploads, the inbox, and filing them into roms/
@@ -212,13 +211,15 @@ def import_commit():
             entry.name = typed or _suggest_name(game)
             gamelist_mgr.add_entries(system, ROMS_BASE, [entry])
         if data.get("game_id"):
-            media = [m for m in (data.get("media") or []) if m in SCRAPE_MEDIA_FOLDERS]
+            media = [m for m in (data.get("media") or []) if m in FILL_MEDIA]
             try:
-                applied = apply_scrape(system, rom_path, data["game_id"], media)
-                result.update({k: applied.get(k, []) for k in ('filled', 'downloaded', 'errors')})
+                # (as Fill the gaps would: the game picked, then the other sources in its order)
+                applied, _ = fill_from_match(system, rom_path, data["game_id"], media, keep_name=bool(typed))
+                result.update({k: applied.get(k, []) or [] for k in ('filled', 'downloaded', 'errors')})
                 if not applied.get('success'):
                     result['errors'].append(applied.get('error') or 'Scraping failed')
-            except (ScreenscraperError, RetroAchievementsError) as e:
+            except Exception as e:
+                logger.warning(f"Adding {system}/{rom_path}: scraping failed: {e}")
                 result['errors'].append(f"Added, but scraping failed: {e}")
             added = scanner.get_game_details(system, rom_path)
             if not typed and not (added and added.has_metadata):

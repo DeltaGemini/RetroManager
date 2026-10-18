@@ -45,3 +45,30 @@ def test_a_version_noted_comes_with_the_game(client, root):
     listed = {g["path"].lstrip("./"): g for g in client.get("/api/systems/gba/games").get_json()["games"]}
     assert listed["Indie Game.gba"]["rom_version"] == "2024-06-01" and listed["Pocket Game.gba"]["rom_version"] == ""
     assert client.get("/api/systems/gba/games/Indie%20Game.gba").get_json()["game"]["rom_version"] == "2024-06-01"
+
+
+def test_replacing_or_patching_says_whether_retroachievements_still_knows_the_game(client, root, monkeypatch):
+    from backend.routes import rom_replace
+    # RetroAchievements stood in for: it knows the original dump, and a known hack of it
+    known = {b"ORIGINAL" * 64: {'id': 10, 'title': 'Achieved Quest', 'achievements': 42},
+             b"KNOWNHAK" * 64: {'id': 11, 'title': 'Achieved Quest Hack', 'achievements': 7}}
+    monkeypatch.setattr(rom_replace, '_ra_checked', lambda system: True)
+    monkeypatch.setattr(rom_replace, '_ra_game', lambda system, path: known.get(path.read_bytes()))
+    rom = root / "roms" / "gba" / "Achieved Quest.gba"
+    rom.write_bytes(b"ORIGINAL" * 64)
+
+    changed = client.post("/api/systems/gba/replace-rom", json={"rom": "Achieved Quest.gba", "upload": _upload(client, "aq-fixed.gba", b"0RIGINAL" * 64)}).get_json()
+    assert changed["achievements"] == {"before": known[b"ORIGINAL" * 64], "now": None}          # no longer recognised
+    back = client.post("/api/systems/gba/replace-rom", json={"rom": "Achieved Quest.gba", "upload": _upload(client, "aq-original.gba", b"ORIGINAL" * 64)}).get_json()
+    assert back["achievements"]["now"]["title"] == "Achieved Quest"                              # recognised again
+
+    hack = b"PATCH" + (0).to_bytes(3, "big") + (512).to_bytes(2, "big") + b"KNOWNHAK" * 64 + b"EOF"
+    made = client.post("/api/systems/gba/patch-rom", json={"rom": "Achieved Quest.gba", "upload": _upload(client, "Known Hack.ips", hack), "as": "new", "name": "Known Hack"}).get_json()
+    assert made["achievements"] == {"before": known[b"ORIGINAL" * 64], "now": known[b"KNOWNHAK" * 64]}
+    # ...and the game's Achievements section goes by it
+    from backend.core import ra_game_ids
+    assert ra_game_ids.get("gba/Known Hack.gba", root / "roms" / "gba" / "Known Hack.gba") == (True, 11)
+
+    monkeypatch.setattr(rom_replace, '_ra_checked', lambda system: False)
+    plain = client.post("/api/systems/gba/replace-rom", json={"rom": "Achieved Quest.gba", "upload": _upload(client, "aq3.gba", b"x" * 512)}).get_json()
+    assert plain["success"] and plain["achievements"] is None                                    # no key: not asked

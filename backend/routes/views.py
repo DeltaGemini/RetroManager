@@ -18,8 +18,8 @@ STATS_MAX_AGE = 600
 
 @app.after_request
 def _invalidate_stats_on_change(response):
-    if request.method != "GET" and request.path.startswith("/api/") and not request.path.startswith(
-            ("/api/scraper/search", "/api/scraper/game-info", "/api/igdb/search", "/api/igdb/game-info")):
+    # (Fill the gaps looking a game up changes nothing)
+    if request.method != "GET" and request.path.startswith("/api/") and request.path != "/api/fill/look":
         _stats_cache["value"] = None
         _shelf_cache["value"] = None
         _viewer_cache["value"] = None

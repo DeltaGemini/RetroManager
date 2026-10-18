@@ -1,12 +1,15 @@
 package com.retromanager.phone;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
 
 /** The app's decisions that are plain logic, apart from Android, so they can be tested on
  *  any computer (android/test.sh, android/tests/DecideTest.java): whether a game's file on
- *  the phone is an older copy of RetroManager's, and what to start a game with. */
+ *  the phone is an older copy of RetroManager's, what to start a game with, what RetroArch's
+ *  history says (History.java reads it), whether a game started from the app began, and which
+ *  way a controller's stick points. */
 final class Decide {
     private Decide() {}
 
@@ -79,5 +82,76 @@ final class Decide {
             if (untried < 0) untried = i;
         }
         return untried < 0 ? null : String.valueOf(untried);
+    }
+
+    // --- RetroArch's history: {game's path, core} for each game in it, newest first (History.java) ---
+
+    private static final String CORE_FILE = "_libretro_android.so";
+
+    /** The core a core's file is ("…/cores/mgba_libretro_android.so" is "mgba"), or null for another file. */
+    static String coreOf(String corePath) {
+        String file = corePath == null ? "" : corePath.substring(corePath.lastIndexOf('/') + 1);
+        return file.endsWith(CORE_FILE) && file.length() > CORE_FILE.length() ? file.substring(0, file.length() - CORE_FILE.length()) : null;
+    }
+
+    /** The core a system's games (in romsFolder/<system>/, any case) were last played with, or null. */
+    static String coreFor(List<String[]> played, String romsFolder, String system) {
+        String folder = romsFolder + system + "/";
+        for (String[] game : played) if (game[0].regionMatches(true, 0, folder, 0, folder.length())) return game[1];
+        return null;
+    }
+
+    /** Every core it names, most recent first. */
+    static List<String> cores(List<String[]> played) {
+        List<String> cores = new ArrayList<>();
+        for (String[] game : played) if (!cores.contains(game[1])) cores.add(game[1]);
+        return cores;
+    }
+
+    /** Whether RetroArch has played anything with the core: then it's installed. */
+    static boolean used(List<String[]> played, String core) {
+        for (String[] game : played) if (game[1].equals(core)) return true;
+        return false;
+    }
+
+    /** The path the history has for a game started at this path with this core: the entry with the
+     *  same file name (RetroArch may name the folder another way), else the newest with that core;
+     *  null if there's neither. */
+    static String recorded(List<String[]> played, String path, String core) {
+        String name = path.substring(path.lastIndexOf('/') + 1);
+        for (String[] game : played) {
+            String file = game[0].replaceAll("#.*$", "");
+            if (file.substring(file.lastIndexOf('/') + 1).equalsIgnoreCase(name)) return game[0];
+        }
+        for (String[] game : played) if (game[1].equals(core)) return game[0];
+        return null;
+    }
+
+    /** Whether a game started at this path is in the history with that core (a zip's entry is
+     *  "<zip>#<file in it>"): it began. */
+    static boolean began(List<String[]> played, String path, String core) {
+        for (String[] game : played) if (game[1].equals(core) && game[0].regionMatches(true, 0, path, 0, path.length())) return true;
+        return false;
+    }
+
+    /** What's known, back from RetroArch, about a game the app started with a core. */
+    enum Launch { UNKNOWN, STARTED, FAILED }
+
+    /** UNKNOWN when the history isn't trusted (someone said it's wrong on their phone); STARTED when
+     *  the game is in it with the core, or RetroArch has played anything else with the core (so it's
+     *  installed, and whatever kept the game out wasn't that); FAILED otherwise: the core most likely
+     *  isn't installed. */
+    static Launch launch(boolean trustHistory, boolean began, boolean coreUsed) {
+        if (!trustHistory) return Launch.UNKNOWN;
+        return began || coreUsed ? Launch.STARTED : Launch.FAILED;
+    }
+
+    /** The arrow key a controller's D-pad (a "hat": hatX, hatY) or, where that's at rest, its left
+     *  stick (x, y) points to, each from -1 to 1 (down is +y); null in the middle. Mostly sideways
+     *  is left or right. */
+    static String stickKey(float hatX, float hatY, float x, float y) {
+        if (Math.abs(hatX) >= 0.5f || Math.abs(hatY) >= 0.5f) { x = hatX; y = hatY; }
+        return Math.abs(x) > 0.6f && Math.abs(x) >= Math.abs(y) ? (x < 0 ? "ArrowLeft" : "ArrowRight")
+                : Math.abs(y) > 0.6f ? (y < 0 ? "ArrowUp" : "ArrowDown") : null;
     }
 }

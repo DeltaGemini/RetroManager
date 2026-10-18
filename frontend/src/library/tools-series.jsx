@@ -37,14 +37,14 @@ function SeriesPanel({ onClose, showNotification }) {
     };
     const run = async (redo) => {
         try {
-            const d = await (await fetch(`${API_BASE}/api/series/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ redo }) })).json();
+            const d = await RM.sendJson('/api/series/run', 'POST', { redo });
             if (!d.success && showNotification) showNotification(d.error || 'Could not start', 'error');
         } catch (e) { if (showNotification) showNotification(e.message, 'error'); }
         load();
         RM.tasksChanged();
     };
     const unwant = async (game) => {
-        await fetch(`${API_BASE}/api/series/mark`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: game.id, mark: null }) }).catch(() => {});
+        await RM.sendJson('/api/series/mark', 'PUT', { id: game.id, mark: null }).catch(() => {});
         load();
     };
 

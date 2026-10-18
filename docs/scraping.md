@@ -18,14 +18,7 @@ Behind these, **Hasheous** (hasheous.org, no account) turns a ROM's checksum int
 
 ## In the UI
 
-1. Select a game and click **Scrape**.
-2. Adjust the search text if needed, then click a source. A source that needs a key you haven't set is greyed out, and its tooltip names the variable. Searches are filtered to the game's system when RetroManager recognises the ROM folder name (see [System matching](#system-matching)).
-3. Click a result. Results show the release year and regions, and ROM hacks and mods are marked **Hack / mod** and listed after the originals. A result marked **ROM match** was found from the file's checksum rather than its name, and is listed first (see [Checksum matching](#checksum-matching)). The **Compare Metadata** view shows each field, current against scraped. Tick the fields to import.
-4. Under **Assign Media**, each image the game doesn't have yet is already set to its matching folder (IGDB: cover → Box 2D, first screenshot → Screenshot, first artwork → Fanart; SteamGridDB: first grid → Box 2D, first hero → Fanart, first logo → Wheel; TheGamesDB: front box → Box 2D, first fan art → Fanart, first screenshot → Screenshot, title screen → Title screen, clear logo → Wheel). Where the game already has that image, the card starts on **Skip** and shows **Current** and **New** side by side (**Compare** shows both full size); choose the folder to replace it. Videos start on **Skip** because they're large. Each folder holds one file per game, so if two images go to the same folder the first one wins.
-5. Click **Apply Selected Changes**. Assigned media is downloaded straight away and the form is filled in, including any empty Image, Thumbnail and Video fields (what EmulationStation displays).
-6. Click **Save** to write the metadata to `gamelist.xml`. Downloaded media is already on disk whether or not you save.
-
-Media downloads one file at a time with a progress bar. If a search, lookup or download fails, a message at the top of the popup says why (see [Troubleshooting](#troubleshooting)); if some downloads fail, everything else is still applied and the popup stays open to list the failures.
+**Scrape** on a game's page opens [Fill the gaps](library.md#fill-the-gaps) for that game, straight to choosing: every source's version of each picture and detail beside what the game has, the first in your order picked already. A source that needs a key you haven't set shows as not set up, its tooltip saying what to add. If a source found the wrong game, tap it under **Matched on** to pick another of its results or search it by another name; a result found from the file's checksum rather than its name is listed first (see [Checksum matching](#checksum-matching)). **Apply** puts the chosen ones in and writes `gamelist.xml` (backed up first). Scrape on another page (the Console's, say) opens the game in the Library and does the same.
 
 ## Many games at once
 
@@ -45,7 +38,7 @@ Each match gets a confidence:
 | **Unsure** | A game was found but the names differ: not used unless you pick it |
 | **No match** | Nothing found |
 
-Where ScreenScraper has no box art, screenshot, title screen or wheel (or the download fails), a game being added is given the libretro thumbnail if there is one (in Fill the gaps libretro is a source of its own); choose **Before ScreenScraper** in Tools › Settings to try libretro first for those four, which saves ScreenScraper quota, or `off` to never use it. 
+**A game being added** (Add games) is filled as Fill the gaps fills one: first from the game picked or matched for it, then, for whatever that leaves missing, from each other source in Fill the gaps' order, using only an **Exact** or **Likely** match (nobody reviews these), and a picture that won't download is taken from the next source that has it. The matches used are remembered, as Fill the gaps remembers them. **Before ScreenScraper** in Tools › Settings tries libretro thumbnails' pictures first, which saves ScreenScraper quota; `off` leaves libretro out of games being added.
 
 Each media file is a ScreenScraper request, so a large batch uses a noticeable part of the daily quota; a ScreenScraper user account (Tools › Settings) raises it. If the quota runs out, the batch stops and says so, and everything applied so far is kept.
 
@@ -59,15 +52,13 @@ PC games (DOS and similar) are matched by their folder name rather than the prog
 
 A match from RetroAchievements (a ROM hack ScreenScraper doesn't list, say) fills name, genre, developer, publisher and release date, and offers box art, a screenshot and a title screen.
 
-**Filling the gaps.** Whatever the match leaves empty (a RetroAchievements match has no description) is filled from IGDB, when the ROM's checksum identifies the game there. The same goes for box art, a screenshot and fanart that neither the match nor libretro has. Only a checksum match is used, never a name search, since nobody reviews these.
+**GameTDB** gives a disc or cartridge picture only, on GameCube, Wii, DS, 3DS and PS3. The game's own ID is read from the ROM (`.iso`, `.gcm`, `.ciso`, `.wbfs`, `.rvz`, `.wia`, `.nds`, `.3ds`, `.cci`, a `.cia` that isn't encrypted or has its code in its name, a PS3 `.iso` or game folder), so the picture is that game's and no other's. No account and no quota; **Tools › Settings › Matching and media** turns it off.
 
-**Then GameTDB**, for a disc or cartridge picture only, on GameCube, Wii, DS, 3DS and PS3. The game's own ID is read from the ROM (`.iso`, `.gcm`, `.ciso`, `.wbfs`, `.rvz`, `.wia`, `.nds`, `.3ds`, `.cci`, a `.cia` that isn't encrypted or has its code in its name, a PS3 `.iso` or game folder), so the picture is that game's and no other's. No account and no quota; **Tools › Settings › Matching and media** turns it off.
+**The LaunchBox Games Database** is asked when it's turned on in the same place (it's off to begin with). It has pictures of every kind, cartridges and discs among them, and fan-made ones for many ROM hacks. It has no search to ask: RetroManager fetches its list of every game (about 110 MB) once a month and keeps an index of the platforms it knows in `launchbox.db` in `DATA_PATH` (about 120 MB); the strip under the header shows it being fetched, and a background scrape won't start until the first one is done. A game is found by title on the system's own platform (ignoring tags and punctuation), by any of the names LaunchBox knows it by. A real cartridge or disc is preferred to a fan-made one, and a North American or worldwide picture to another region's.
 
-**Then the LaunchBox Games Database**, when it's turned on in the same place (it's off to begin with). It has pictures of every kind, cartridges and discs among them, and fan-made ones for many ROM hacks. It has no search to ask: RetroManager fetches its list of every game (about 110 MB) once a month and keeps an index of the platforms it knows in `launchbox.db` in `DATA_PATH` (about 120 MB); the strip under the header shows it being fetched, and a background scrape won't start until the first one is done. A game is found by title on the system's own platform (ignoring tags and punctuation), by any of the names LaunchBox knows it by. A real cartridge or disc is preferred to a fan-made one, and a North American or worldwide picture to another region's.
+In Fill the gaps, **LaunchBox** is searched by the words of the name; **GameTDB** has no search, so it shows the one game the ROM's ID is, or says why it can't tell.
 
-Both are sources in the **Scrape** popup as well: **LaunchBox** searches its list by the words of the name and offers every picture it has of the game to choose between; **GameTDB** has no search, so it shows the one game the ROM's ID is, or says why it can't tell.
-
-**Then TheGamesDB and SteamGridDB**, where their API keys are set (Tools › Settings), for a picture none of the above has. TheGamesDB can give box art, the back of the box, fanart, a screenshot, a title screen, a wheel logo and a banner; SteamGridDB a cover (as box art), a hero (as fanart) and a logo (as the wheel). Neither can look a ROM up by its checksum, so only a game with the same title is used (ignoring tags and punctuation): on TheGamesDB it must also be on the system's own platform, and on SteamGridDB the game Hasheous identifies from the checksum is preferred when there is one. TheGamesDB is asked once per game and its allowance is by the month; a source that fails is left out for 15 minutes rather than asked for every game.
+**TheGamesDB and SteamGridDB** are asked where their API keys are set (Tools › Settings). TheGamesDB can give box art, the back of the box, fanart, a screenshot, a title screen, a wheel logo and a banner; SteamGridDB a cover (as box art), a hero (as fanart) and a logo (as the wheel). Neither can look a ROM up by its own checksum, so they're matched by title (TheGamesDB on the system's own platform), and on SteamGridDB the game Hasheous identifies from the checksum is preferred when there is one. TheGamesDB is asked once per game and its allowance is by the month; either, failing, is left out for 15 minutes rather than asked for every game (unless you search it again yourself).
 
 **Where a picture came from** is noted when it's downloaded (in `media-sources.db` in `DATA_PATH`), by any of these routes, and shown under it in a game's **Media** section ("from LaunchBox"), so a wrong one can be traced to its source. A picture you add yourself is "a file of yours"; one changed by other means since is no longer said to be from anywhere. Pictures downloaded before this was kept say nothing.
 
@@ -187,59 +178,11 @@ The container log (`docker compose logs -f retromanager`) has the full response 
 
 - **IGDB ranking**: IGDB's search ranking can put ROM hacks and fan games above the original. A result marked **ROM match** is the file itself; otherwise check the release year and platform before picking a result.
 - **Steam endpoints are unofficial**: the store search and details routes aren't a documented API, so Valve could change them.
-- **Previews use quota**: ScreenScraper media URLs go through its API, so opening previews in the popup (and pictures, manuals and videos in Fill the gaps) counts against the quota.
+- **Previews use quota**: ScreenScraper media URLs go through its API, so the pictures, manuals and videos Fill the gaps shows count against the quota.
 
 ## API
 
-Every route takes JSON and returns `{"success": bool, ...}`. On failure `error` holds the message shown in the UI.
-
-### `POST /api/scraper/search` · `POST /api/igdb/search` · `POST /api/sources/<source>/search`
-
-`<source>` is `retroachievements`, `steam`, `steamgriddb` or `libretro`.
-
-```json
-{ "name": "Super Mario World", "system_name": "snes", "rom_path": "Super Mario World (USA).sfc" }
-```
-
-`rom_path` is optional. With it, the game recognised from the file's checksum comes first with `"hash_match": true`.
-
-ScreenScraper also accepts `system_id` (a ScreenScraper `systemeid`) in place of `system_name`.
-
-ScreenScraper results:
-
-```json
-{ "id": "2144", "nom": "Super Mario World", "systemeid": "4", "systemenom": "Super Nintendo",
-  "image": "<box art url>", "releasedate": "1991-08-13", "jeu": { "...": "full ScreenScraper object" } }
-```
-
-IGDB results:
-
-```json
-{ "id": 1070, "name": "Super Mario World", "cover_url": "https://images.igdb.com/...",
-  "platform_names": "Super Nintendo Entertainment System", "releasedate": "19901121T000000" }
-```
-
-### `POST /api/scraper/game-info` · `POST /api/igdb/game-info` · `POST /api/sources/<source>/game-info`
-
-ScreenScraper: `{ "game_data": <a search result> }` (no API call), or `{ "game_id": 2144, "system_id": 4 }`.
-
-IGDB and the other sources: `{ "game_id": 1070 }` (libretro also needs `system_name`).
-
-All return `metadata` with gamelist field names:
-
-```json
-{
-  "name": "Super Mario World",
-  "desc": "...",
-  "genre": "Platform / Run & Jump",
-  "developer": "Nintendo",
-  "publisher": "Nintendo",
-  "releasedate": "19910813T000000",
-  "players": "1-2",
-  "rating": 0.85,
-  "media": { "box2d": "<url>", "wheel": "<url>", "screenshot": "<url>" }
-}
-```
+Looking games up and applying what's chosen go through Fill the gaps' routes, `POST /api/fill/look` and `POST /api/fill/apply` (see [API.md](api.md)). Each takes JSON and returns `{"success": bool, ...}`; on failure `error` holds the message shown.
 
 ### `GET /api/scrape-sources`
 
@@ -249,34 +192,8 @@ All return `metadata` with gamelist field names:
   "hasheous": true, "libretro_mode": "fallback" }
 ```
 
-### `POST /api/scraper/download-media` · `POST /api/igdb/download-media`
-
-The two routes behave identically, and download media from any source.
-
-```json
-{
-  "system_name": "snes",
-  "rom_path": "./Super Mario World (USA).sfc",
-  "game_name": "Super Mario World",
-  "media_types": { "box2d": "<url>", "wheel": "<url>" }
-}
-```
-
-- `media_types` keys must be media folders: `box2d`, `box3d`, `boxside`, `support`, `wheel`, `screenshot`, `screenshottitle`, `fanart`, `posters`, `images`, `mix`, `thumbnail`, `manuals`, `videos`.
-- `game_name` is only used to name files when `rom_path` is missing.
-
-```json
-{
-  "success": true,
-  "saved_media": { "box2d": "Super Nintendo/box2d/Super Mario World (USA).png" },
-  "errors": ["wheel: the source has no file for this media type"]
-}
-```
-
-`saved_media` paths are relative to the media mount, the same form the rest of the app uses.
-
 ## TheGamesDB
 
-Set the key in **Tools › Settings › TheGamesDB** (or `THEGAMESDB_API_KEY`). It's a source in the **Scrape** popup, searched by name and kept to the game's system where RetroManager knows TheGamesDB's number for it (`_TGDB_PLATFORMS` in `backend/systems.py`; a system that isn't there is searched on every platform). It's a source in Fill the gaps too; the Background scrape doesn't use it.
+Set the key in **Tools › Settings › TheGamesDB** (or `THEGAMESDB_API_KEY`). It's searched by name and kept to the game's system where RetroManager knows TheGamesDB's number for it (`_TGDB_PLATFORMS` in `backend/systems.py`; a system that isn't there is searched on every platform). It's one of Fill the gaps' sources, and so of the Background scrape's.
 
 Every request counts against the key's monthly allowance: a search is one, and opening a result is two (the game, then its pictures). The lists that turn its genre, developer and publisher numbers into names are fetched once and kept in the data folder (`thegamesdb-names.json`) for a month. Its age rating (an ESRB letter) isn't a score, so Rating is left alone. A back cover and a banner are offered but start on **Skip**, having no folder of their own.

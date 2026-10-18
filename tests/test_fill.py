@@ -112,3 +112,99 @@ def test_the_background_scrape_finds_but_applies_nothing(client, root, monkeypat
         if not client.get("/api/fill/background").get_json()["running"]:
             break
         time.sleep(0.05)
+
+
+def _picked(fields=None, media=None):
+    return {'fields': fields or {}, 'media': media or {}}
+
+
+def test_a_game_being_added_is_filled_from_the_pick_then_the_order(client, root, monkeypatch):
+    """The game picked when adding it, then the other sources in Fill the gaps' order for what it hasn't:
+    a confident match only, another source's copy of a picture tried when one won't download."""
+    from backend.core import _invalidate_caches, scanner
+    from backend.routes import fill
+    rom = "Added Later (USA).sfc"
+    (root / "roms" / "snes" / rom).write_bytes(b"\x0e" * 4096)
+    _invalidate_caches()
+    monkeypatch.setattr(fill, "_candidates", lambda source, match_id, system: _picked(
+        {'name': 'Added Later', 'desc': 'From the pick.'}, {'box2d': 'http://pick.invalid/box.png'}))
+    monkeypatch.setattr(fill, "look_game", lambda system, rom_path, sources: {
+        'thegamesdb': {'match': {'confidence': 'likely', 'id': 'thegamesdb:5', 'name': 'Added Later'},
+                       'candidates': _picked({'developer': 'TGDB Dev', 'desc': 'Not used: the pick has one'}, {'box2d': 'http://tgdb.invalid/box.png', 'fanart': 'http://tgdb.invalid/fan.png'})},
+        'steamgriddb': {'match': {'confidence': 'unsure', 'id': 'steamgriddb:9'},
+                        'candidates': _picked({'publisher': 'Never'}, {'wheel': 'http://grid.invalid/logo.png'})},
+    })
+    fetched = []
+
+    def download(url, target_dir, stem):
+        fetched.append(url)
+        if 'pick.invalid' in url:
+            raise ValueError("the source returned HTTP 404")       # the pick's box won't download...
+        target_dir.mkdir(parents=True, exist_ok=True)
+        (target_dir / f"{stem}.png").write_bytes(b"picture")
+    monkeypatch.setattr(fill, "_download_one", download)
+
+    done, status = fill.fill_from_match("snes", rom, "123", ["box2d", "fanart", "wheel"])
+    assert status == 200 and done["success"], done
+    assert sorted(done["downloaded"]) == ["box2d", "fanart"]                       # ...so TheGamesDB's is used
+    assert fetched == ["http://pick.invalid/box.png", "http://tgdb.invalid/box.png", "http://tgdb.invalid/fan.png"]
+    game = scanner.get_game_details("snes", rom)
+    assert game.desc == "From the pick." and game.developer == "TGDB Dev" and not game.publisher   # an unsure match isn't used
+    remembered = client.get("/api/fill/remembered?system=snes").get_json()["games"][rom]
+    assert remembered == ["screenscraper", "thegamesdb"]
+
+
+def test_a_name_typed_when_adding_is_kept_and_a_picture_it_has_is_left(client, root, monkeypatch):
+    from backend.core import _invalidate_caches, gamelist_mgr, ROMS_BASE, scanner
+    from backend.models import Game
+    from backend.routes import fill
+    rom = "Typed Name.sfc"
+    (root / "roms" / "snes" / rom).write_bytes(b"\x0f" * 4096)
+    gamelist_mgr.add_entries("snes", ROMS_BASE, [Game(path=f"./{rom}", name="My Own Name")])
+    folder = root / "media" / scanner.media_index("snes").media_system / "box2d"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "Typed Name.png").write_bytes(b"mine")
+    _invalidate_caches()
+    monkeypatch.setattr(fill, "_candidates", lambda source, match_id, system: _picked(
+        {'name': 'Their Name', 'desc': 'Theirs.', 'developer': 'Dev'}, {'box2d': 'http://pick.invalid/box.png'}))
+    monkeypatch.setattr(fill, "look_game", lambda *a: {})
+    monkeypatch.setattr(fill, "_download_one", lambda *a: (_ for _ in ()).throw(AssertionError("it has one: not downloaded")))
+    done, _ = fill.fill_from_match("snes", rom, "77", ["box2d"], keep_name=True)
+    game = scanner.get_game_details("snes", rom)
+    assert done["success"] and game.name == "My Own Name" and game.desc == "Theirs." and (folder / "Typed Name.png").read_bytes() == b"mine"
+
+
+def test_a_source_with_a_small_allowance_that_fails_is_left_alone_for_a_while(monkeypatch):
+    from backend.routes import fill
+    asked = []
+
+    def failing(source, *a):
+        asked.append(source)
+        raise OSError("allowance used up")
+    monkeypatch.setattr(fill, "_match", failing)
+    monkeypatch.setattr(fill, "_resting", {})
+    for _ in range(3):
+        assert fill._look_one('thegamesdb', 'snes', 'A.sfc', None, None)['match']['error']
+        fill._look_one('screenscraper', 'snes', 'A.sfc', None, None)
+    assert asked == ['thegamesdb'] + ['screenscraper'] * 3
+    fill._look_one('thegamesdb', 'snes', 'A.sfc', None, {'source': 'thegamesdb', 'query': 'A'})   # asked again yourself
+    assert asked[-1] == 'thegamesdb'
+
+
+def test_add_games_fills_a_new_game_through_fill_the_gaps(client, root, monkeypatch):
+    from backend.routes import fill
+    data = b"\x10" * 4096
+    started = client.post("/api/uploads", json={"name": "Brand New (USA).sfc", "size": len(data), "key": f"add|{len(data)}"}).get_json()
+    client.put(f"/api/uploads/{started['id']}?offset=0", data=data, headers={"Content-Type": "application/octet-stream"})
+    asked = []
+    monkeypatch.setattr(fill, "_candidates", lambda source, match_id, system: asked.append((source, match_id)) or _picked(
+        {'name': 'Brand New', 'desc': 'Added and filled.'}, {'box2d': 'http://pick.invalid/box.png'}))
+    monkeypatch.setattr(fill, "look_game", lambda *a: {})
+    monkeypatch.setattr(fill, "_download_one", lambda url, target_dir, stem: (target_dir.mkdir(parents=True, exist_ok=True), (target_dir / f"{stem}.png").write_bytes(b"box")))
+    done = client.post("/api/import/commit", json={"refs": [f"upload:{started['id']}"], "system": "snes", "game_id": "ra:4242",
+                                                   "media": ["box2d", "not-a-kind"]}).get_json()
+    assert done["success"] and done["rom_path"] == "Brand New (USA).sfc" and done["downloaded"] == ["box2d"], done
+    assert asked == [("retroachievements", "retroachievements:4242")]
+    game = client.get("/api/systems/snes/games").get_json()
+    entry = next(g for g in (game.get("games") or game) if g["path"].endswith("Brand New (USA).sfc"))
+    assert entry["name"] == "Brand New" and entry["desc"] == "Added and filled."

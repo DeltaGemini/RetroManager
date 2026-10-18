@@ -23,7 +23,7 @@ function SavesToolPanel({ systems, onClose, showNotification }) {
     const lookThin = () => fetch(`${API_BASE}/api/save-states/thin?keep=${keepStates}`).then(r => r.json())
         .then(d => { if (d.success) setThinPlan(d); else setError(d.error); }).catch(e => setError(e.message));
     const thin = async () => {
-        if (!thinPlan || !window.confirm(`Move ${thinPlan.files} older save state${thinPlan.files === 1 ? '' : 's'} (${formatBytes(thinPlan.bytes)}) to save-backups/thinned-states/? Each person keeps the ${thinPlan.keep} newest of each game, and every auto state.`)) return;
+        if (!thinPlan || !window.confirm(`Move ${thinPlan.files} older save state${thinPlan.files === 1 ? '' : 's'} (${RM.bytes(thinPlan.bytes)}) to save-backups/thinned-states/? Each person keeps the ${thinPlan.keep} newest of each game, and every auto state.`)) return;
         setThinning(true);
         const d = await postJson('/api/save-states/thin', { keep: thinPlan.keep, renumber });
         setThinning(false);
@@ -106,7 +106,7 @@ function SavesToolPanel({ systems, onClose, showNotification }) {
                                                 {i === 0 && <span style={{color: 'var(--success)', fontSize: 11, marginLeft: 8}}>newest</span>}
                                             </div>
                                             <div style={{color: 'var(--text-secondary)', fontSize: 12}}>
-                                                {new Date(v.modified).toLocaleString()} · {formatBytes(v.size)}
+                                                {new Date(v.modified).toLocaleString()} · {RM.bytes(v.size)}
                                             </div>
                                         </div>
                                         <button className="btn btn-secondary btn-small" disabled={!writable || busy === group.id} onClick={() => keep(group, v)}>Keep this</button>
@@ -134,7 +134,7 @@ function SavesToolPanel({ systems, onClose, showNotification }) {
                         <button className="btn btn-secondary btn-small" onClick={lookThin}>Show what would move</button>
                         {thinPlan && thinPlan.files > 0 && (
                             <button className="btn btn-primary btn-small" disabled={thinning || !writable} onClick={thin}>
-                                {thinning ? 'Moving…' : `Move ${thinPlan.files} older state${thinPlan.files === 1 ? '' : 's'} (${formatBytes(thinPlan.bytes)})`}
+                                {thinning ? 'Moving…' : `Move ${thinPlan.files} older state${thinPlan.files === 1 ? '' : 's'} (${RM.bytes(thinPlan.bytes)})`}
                             </button>
                         )}
                     </div>
@@ -144,7 +144,7 @@ function SavesToolPanel({ systems, onClose, showNotification }) {
                             <div style={{flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}} title={g.game}>
                                 {g.game}<span style={{color: 'var(--text-secondary)'}}> · {g.folder || 'loose'} · {g.profile === 'shared' ? 'everyone' : g.profile}</span>
                             </div>
-                            <div style={{color: 'var(--text-secondary)', whiteSpace: 'nowrap'}}>{g.total} → {g.total - g.move.length} · {formatBytes(g.move.reduce((n, r) => n + r.size, 0))}</div>
+                            <div style={{color: 'var(--text-secondary)', whiteSpace: 'nowrap'}}>{g.total} → {g.total - g.move.length} · {RM.bytes(g.move.reduce((n, r) => n + r.size, 0))}</div>
                         </div>
                     ))}
                 </>
@@ -174,7 +174,7 @@ function SavesToolPanel({ systems, onClose, showNotification }) {
                         <div key={b.name} style={{display: 'flex', gap: 10, alignItems: 'center', padding: '6px 8px', background: 'var(--bg-tertiary)', borderRadius: 4, fontSize: 13, marginBottom: 4}}>
                             <div style={{flex: 1, minWidth: 0}}>
                                 <div style={{overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{b.name}</div>
-                                <div style={{color: 'var(--text-secondary)', fontSize: 12}}>{new Date(b.modified).toLocaleString()} · {formatBytes(b.size)}</div>
+                                <div style={{color: 'var(--text-secondary)', fontSize: 12}}>{new Date(b.modified).toLocaleString()} · {RM.bytes(b.size)}</div>
                             </div>
                             <a className="btn btn-secondary btn-small" href={`${API_BASE}/api/save-backups/${encodeURIComponent(b.name)}`} style={{textDecoration: 'none'}}>Download</a>
                             <button className="btn btn-secondary btn-small" onClick={() => removeBackup(b.name)} aria-label={`Delete ${b.name}`}>Delete</button>

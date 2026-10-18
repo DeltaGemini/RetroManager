@@ -63,7 +63,7 @@ function StorageCompare({ area, item, onClose, onDelete, onRestored }) {
         return () => window.removeEventListener('keydown', key, true);
     }, []);
     const fileUrl = (rel, side) => `${API_BASE}/api/storage/file?${storageQuery({ area: area.id, item: item.id, rel, side })}`;
-    const describe = (f) => f ? `${formatBytes(f.size)} · ${new Date(f.date).toLocaleString()}` : '';
+    const describe = (f) => f ? `${RM.bytes(f.size)} · ${new Date(f.date).toLocaleString()}` : '';
     const side = (f, which) => {
         const info = which === 'aside' ? f.aside : f.now;
         return (
@@ -98,7 +98,7 @@ function StorageCompare({ area, item, onClose, onDelete, onRestored }) {
                 <div style={{display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap'}}>
                     <div style={{flex: 1, minWidth: 200}}>
                         <div style={{fontWeight: 700, fontSize: 16, wordBreak: 'break-word'}}>{item.name}</div>
-                        <div style={{fontSize: 12, color: 'var(--text-secondary)'}}>{area.name} · {item.date ? new Date(item.date).toLocaleString() : ''} · {formatBytes(item.size)}</div>
+                        <div style={{fontSize: 12, color: 'var(--text-secondary)'}}>{area.name} · {item.date ? new Date(item.date).toLocaleString() : ''} · {RM.bytes(item.size)}</div>
                     </div>
                     {data?.restorable && <button className="btn btn-primary btn-small" onClick={restore}>Put this copy back</button>}
                     <button className="btn btn-secondary btn-small" onClick={onDelete}>Delete it</button>
@@ -159,11 +159,11 @@ function StoragePanel({ initialSystem, onClose, showNotification }) {
 
     const remove = async (area, body, what, items) => {
         const files = items.reduce((n, i) => n + i.files, 0);
-        if (!window.confirm(`Delete ${what} from “${area.name}” for good?\n\n${files} file${files === 1 ? '' : 's'}, ${formatBytes(sum(items))}. This can't be undone.`)) return;
+        if (!window.confirm(`Delete ${what} from “${area.name}” for good?\n\n${files} file${files === 1 ? '' : 's'}, ${RM.bytes(sum(items))}. This can't be undone.`)) return;
         setBusy(area.id);
         try {
             const d = await postJson('/api/storage/delete', { area: area.id, ...body });
-            if (d.deleted && d.deleted.length) showNotification(`Deleted ${d.files} file${d.files === 1 ? '' : 's'}, freeing ${formatBytes(d.freed)}`, 'success');
+            if (d.deleted && d.deleted.length) showNotification(`Deleted ${d.files} file${d.files === 1 ? '' : 's'}, freeing ${RM.bytes(d.freed)}`, 'success');
             if (d.errors && d.errors.length) showNotification(`Couldn't delete some: ${d.errors.slice(0, 2).join('; ')}`, 'error');
             if (!d.success && d.error) showNotification(d.error, 'error');
         } catch (e) {
@@ -192,7 +192,7 @@ function StoragePanel({ initialSystem, onClose, showNotification }) {
                                 style={{background: 'none', border: 'none', padding: 0, color: 'var(--text-primary)', cursor: empty ? 'default' : 'pointer', fontSize: 15, fontWeight: 600, textAlign: 'left'}}>
                                 {!empty && <span style={{color: 'var(--text-secondary)', marginRight: 6}}>{isOpen ? '▾' : '▸'}</span>}{area.name}
                             </button>
-                            <span style={{marginLeft: 'auto', fontWeight: 600, whiteSpace: 'nowrap'}}>{empty ? 'Empty' : formatBytes(area.size)}</span>
+                            <span style={{marginLeft: 'auto', fontWeight: 600, whiteSpace: 'nowrap'}}>{empty ? 'Empty' : RM.bytes(area.size)}</span>
                         </div>
                         <div style={{fontSize: 12, color: 'var(--text-secondary)', margin: '4px 0 0'}}>
                             {area.help}{!empty && ` ${area.files} file${area.files === 1 ? '' : 's'} in ${area.items.length} item${area.items.length === 1 ? '' : 's'}.`}
@@ -201,7 +201,7 @@ function StoragePanel({ initialSystem, onClose, showNotification }) {
                             <div style={{display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 10, fontSize: 13}}>
                                 {area.cache ? (
                                     <button className="btn btn-secondary btn-small" disabled={busy === area.id}
-                                        onClick={() => remove(area, { all: true }, 'everything', area.items)}>Empty it ({formatBytes(area.size)})</button>
+                                        onClick={() => remove(area, { all: true }, 'everything', area.items)}>Empty it ({RM.bytes(area.size)})</button>
                                 ) : (
                                     <>
                                         <span>Older than</span>
@@ -210,14 +210,14 @@ function StoragePanel({ initialSystem, onClose, showNotification }) {
                                         </select>
                                         <button className="btn btn-secondary btn-small" disabled={!old.length || busy === area.id}
                                             onClick={() => remove(area, { older_than_days: daysOf(area) }, `everything older than ${STORAGE_AGES.find(a => a[0] === daysOf(area))[1]}`, old)}>
-                                            Delete {old.length ? `${old.length} (${formatBytes(sum(old))})` : 'none'}
+                                            Delete {old.length ? `${old.length} (${RM.bytes(sum(old))})` : 'none'}
                                         </button>
                                         <button className="btn btn-secondary btn-small" disabled={busy === area.id}
                                             onClick={() => remove(area, { all: true }, 'everything', area.items)}>Delete all</button>
                                         {picked.length > 0 && (
                                             <button className="btn btn-primary btn-small" disabled={busy === area.id}
                                                 onClick={() => remove(area, { items: picked.map(i => i.id) }, `${picked.length} ticked item${picked.length === 1 ? '' : 's'}`, picked)}>
-                                                Delete ticked ({formatBytes(sum(picked))})
+                                                Delete ticked ({RM.bytes(sum(picked))})
                                             </button>
                                         )}
                                     </>
@@ -239,7 +239,7 @@ function StoragePanel({ initialSystem, onClose, showNotification }) {
                                             onChange={e => setTicked(prev => ({ ...prev, [area.id]: { ...(prev[area.id] || {}), [item.id]: e.target.checked } }))} />}
                                         <span style={{flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}} title={item.name}>{item.name}</span>
                                         <span style={{color: 'var(--text-secondary)', whiteSpace: 'nowrap'}}>{item.date ? new Date(item.date).toLocaleDateString() : ''}</span>
-                                        <span style={{color: 'var(--text-secondary)', whiteSpace: 'nowrap', minWidth: 64, textAlign: 'right'}}>{formatBytes(item.size)}</span>
+                                        <span style={{color: 'var(--text-secondary)', whiteSpace: 'nowrap', minWidth: 64, textAlign: 'right'}}>{RM.bytes(item.size)}</span>
                                         {!area.cache && (
                                             <button className="btn btn-secondary btn-small" style={{padding: '2px 8px'}} title="Compare with what's in the library now"
                                                 onClick={e => { e.preventDefault(); setComparing({ area, item }); }}>Compare</button>
@@ -258,7 +258,7 @@ function StoragePanel({ initialSystem, onClose, showNotification }) {
         <Modal open={true} onClose={onClose}>
             <h2 style={{marginBottom: 4}}>Storage</h2>
             <div style={{color: 'var(--text-secondary)', fontSize: 13, marginBottom: 14, maxWidth: 720}}>
-                RetroManager sets things aside rather than deleting them. Here's what it's keeping{report ? `: ${formatBytes(report.total)} in all` : ''}.
+                RetroManager sets things aside rather than deleting them. Here's what it's keeping{report ? `: ${RM.bytes(report.total)} in all` : ''}.
                 Deleting here is for good. Open an area to see what's in it, compare an item with what's in the library now, and tick items to delete just those.
             </div>
             {body}

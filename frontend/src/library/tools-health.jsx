@@ -39,10 +39,7 @@ function HealthPanel({ onClose, onReview, onChanged, showNotification }) {
             const job = jobs[i];
             setFixing(`${i + 1} of ${jobs.length}: ${job.system.full_name || job.system.system}, ${job.label}`);
             try {
-                const res = await fetch(`${API_BASE}/api/systems/${encodeURIComponent(job.system.system)}/${job.url}`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
-                });
-                const d = await res.json();
+                const d = await RM.sendJson(`/api/systems/${encodeURIComponent(job.system.system)}/${job.url}`, 'POST', {});
                 if (d.success) changed += d.changed || 0; else failed++;
             } catch (err) {
                 failed++;

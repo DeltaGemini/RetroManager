@@ -2,6 +2,32 @@
 
 Each version's big changes, then the bugs found and fixed since the version before. A release's page on GitHub shows its section of this file (`.github/workflows/release.yml`), so a version is tagged only once its section is here.
 
+## Unreleased
+
+(Renamed to the version, with its date, when it's released.)
+
+## 2.5.0 (18 October 2026)
+
+With the phone app 1.418213.
+
+### Big changes
+
+1. **Achievements after a replace or a patch**: Replace with an updated ROM and Apply a patch say whether RetroAchievements still recognises the game (still, no longer, or now: a known hack's file), and the game's Achievements section goes by it.
+2. **Adding a game fills it as Fill the gaps does**: from the game picked, then every other source in Fill the gaps' order for what that hasn't (a confident match only), another source's copy of a picture tried when one won't download, and the matches remembered for Fill the gaps. (Before, it had a shorter chain of its own: IGDB by checksum, then GameTDB, LaunchBox, TheGamesDB and SteamGridDB for pictures only.)
+3. **TheGamesDB and SteamGridDB, failing, are left out for 15 minutes** in Fill the gaps and the Background scrape too (their allowances are small), unless you search them again yourself.
+4. **Pages load lighter**: each page's code is one file (the library's was 31), the browser keeps the pages' files until they change rather than fetching them every time, and they're sent compressed. The library page's first load fetches 13 files and about 200 KB instead of over 40 and about 800 KB; after that, none.
+5. **The Scrape popup is retired**: Fill the gaps is the one way to scrape, from a game's page as from Tools. (Its **Search one source by hand** link, and Scrape while a game's details were being edited, opened the old popup, which filled the edit form to check before saving; Fill the gaps applies what you choose, and lets you search any one source again under **Matched on**.) The server routes only it used are gone too: ScreenScraper's and IGDB's search, game-info and download-media, and `/api/sources/<source>/search` and `game-info` (see [API.md](docs/api.md) for what's there).
+6. **More of the phone app's decisions tested** (`android/test.sh`, 47 checks from 24): what RetroArch's history says (a game started from a zip, a folder named in another case, a core used for another system), whether a game started from the app began, and which way a controller's stick points. Inside, the app is in smaller parts; it works as before.
+
+### Bugs fixed
+
+- Every Fill the gaps look-up cleared the Stats, Bookcase and Media viewer caches, so they were worked out again after any scraping; a look-up changes nothing, and now leaves them.
+- Opening a game on the Timeline blanked the page: the Timeline didn't load the panel's ROM file section (since 2.3.0).
+- A refused patch (for another ROM, damaged, or changing nothing), or a ROM Replace refused, stayed among the Add games page's uploads; the uploaded file now goes once it's been tried.
+- A patch that changes nothing (an IPS patch writing bytes the ROM already has) made a duplicate game; it's now refused, saying so.
+- The Console stayed on a game after **Apply a patch** made a new one from it; it now moves on to the new game, added to the list.
+- Tests on GitHub: the phone app's tests didn't run (`android/test.sh` wasn't marked executable).
+
 ## 2.4.0 (17 October 2026)
 
 With the phone app 1.417436.

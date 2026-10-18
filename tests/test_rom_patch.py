@@ -146,3 +146,20 @@ def test_bps_copies_from_the_rom_and_from_its_own_result():
             + _number(((8 - 1) << 2) | 3) + _number(10 << 1))              # TargetCopy 8 from result offset 10
     patch = b'BPS1' + _number(len(ROM)) + _number(len(target)) + _number(0) + body + _crc(ROM) + _crc(target)
     assert apply_patch(ROM, patch + _crc(patch))[0] == target
+
+
+def test_a_patch_that_changes_nothing_is_refused(client, root):
+    (root / "roms" / "gba" / "Same Game.gba").write_bytes(ROM)
+    same = client.post("/api/systems/gba/patch-rom", json={"rom": "Same Game.gba", "upload": _upload(client, "Nothing.ips", ips([(1, ROM[1:2])])),
+                                                          "as": "new", "name": "Same Again"}).get_json()
+    assert not same["success"] and "changes nothing" in same["error"]
+    assert not (root / "roms" / "gba" / "Same Again.gba").exists()
+
+
+def test_the_uploaded_patch_is_gone_once_tried(client, root):
+    (root / "roms" / "gba" / "Tidy Game.gba").write_bytes(ROM)
+    pending = lambda: [u["name"] for u in client.get("/api/import/pending").get_json()["uploads"]]
+    refused = client.post("/api/systems/gba/patch-rom", json={"rom": "Tidy Game.gba", "upload": _upload(client, "Wrong.bps", bps(b"x" * 2048, b"y" * 2048)), "as": "new", "name": "Tidy Hack"}).get_json()
+    assert not refused["success"] and "Wrong.bps" not in pending()                  # refused: not left among the uploads
+    done = client.post("/api/systems/gba/patch-rom", json={"rom": "Tidy Game.gba", "upload": _upload(client, "Right.ips", ips([(0, b"T")])), "as": "new", "name": "Tidy Hack"}).get_json()
+    assert done["success"] and "Right.ips" not in pending()

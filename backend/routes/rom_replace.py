@@ -22,8 +22,10 @@ from pathlib import Path
 from flask import jsonify, request
 
 from backend.core import (
-    _game_moved_hooks, _invalidate_caches, _request_json, _system_path_or_none, app, DATA_DIR, game_moved, gamelist_mgr, logger, ROMS_BASE,
+    _game_moved_hooks, _hasheous_lookup, _invalidate_caches, _ra_identify, _request_json, _system_path_or_none, app, DATA_DIR,
+    game_moved, gamelist_mgr, logger, ra_game_ids, ra_scraper, ROMS_BASE,
 )
+from backend.systems import retroachievements_console_id
 from backend.importer import safe_name
 from backend.models import Game
 from backend.rom_patch import PatchError, apply_patch
@@ -68,6 +70,31 @@ def set_rom_version(system_name):
     return jsonify(success=True, **rom_versions.get(f"{system_name}/{rom}"))
 
 
+# --- RetroAchievements: whether the new file still earns achievements ---
+# RetroAchievements knows a game by its ROM's checksum, so a file replaced or patched may not be
+# the game it was to it any more (or, a known hack's, may be one it lists).
+
+def _ra_game(system_name, path):
+    """{id, title, achievements} of the game RetroAchievements knows this file as, else None."""
+    game = _ra_identify(system_name, path, _hasheous_lookup(system_name, path))
+    return {'id': game['id'], 'title': game.get('title') or '', 'achievements': game.get('achievements') or 0} if game else None
+
+
+def _ra_checked(system_name):
+    return ra_scraper.configured and bool(retroachievements_console_id(system_name))
+
+
+def _achievements(system_name, before, rom):
+    """{before, now}: the game RetroAchievements knew the old file as, and knows the new one as
+    (noted for the game's Achievements section); None where it isn't asked (no key, no console)."""
+    if not _ra_checked(system_name):
+        return None
+    path = Path(ROMS_BASE) / system_name / rom
+    now = _ra_game(system_name, path)
+    ra_game_ids.put(f"{system_name}/{rom}", path, now['id'] if now else None)
+    return {'before': before, 'now': now}
+
+
 @app.route("/api/systems/<system_name>/replace-rom", methods=["POST"])
 def replace_rom(system_name):
     data = _request_json()
@@ -81,10 +108,16 @@ def replace_rom(system_name):
         return jsonify(success=False, error="The new file hasn't finished uploading"), 400
     new_ext = Path(upload['name']).suffix.lower() or path.suffix
     if new_ext in _SEVERAL_FILES:
-        return jsonify(success=False, error="That's a disc list: it needs its track files too, so add it on the Add games page"), 400
-    result, status = _swap(system_name, rom, path, Path(upload['path']), new_ext, upload['name'], data.get("version"))
-    if result.get('success'):
         importer.discard_upload(data.get('upload'))
+        return jsonify(success=False, error="That's a disc list: it needs its track files too, so add it on the Add games page"), 400
+    before = _ra_game(system_name, path) if _ra_checked(system_name) else None
+    result, status = _swap(system_name, rom, path, Path(upload['path']), new_ext, upload['name'], data.get("version"))
+    # (the uploaded file goes once it's in place, or refused; kept only when the server failed
+    # partway, so a large ROM needn't be uploaded again to try once more)
+    if result.get('success') or status < 500:
+        importer.discard_upload(data.get('upload'))
+    if result.get('success'):
+        result['achievements'] = _achievements(system_name, before, result['rom'])
     return jsonify(**result), status
 
 
@@ -137,10 +170,20 @@ PATCH_ROM_LIMIT = 512 * 1024 * 1024
 
 @app.route("/api/systems/<system_name>/patch-rom", methods=["POST"])
 def patch_rom(system_name):
+    data = _request_json()
+    try:
+        return _patch_rom(system_name, data)
+    finally:
+        # The uploaded patch is no use once it's been tried, applied or refused (only its name is kept,
+        # in the game's version record): it doesn't wait among the Add games page's uploads
+        if importer.resolve(f"upload:{data.get('upload') or ''}"):
+            importer.discard_upload(data.get('upload'))
+
+
+def _patch_rom(system_name, data):
     """Body: {rom, upload (the patch, an /api/uploads id), as: "replace" | "new", name? (the new
     game's, for "new"), version?}. The patch applied to the game's ROM: in its place (as Replace,
     the old one kept), or as a new game beside it. -> {success, rom, notes, crc32, sha1, ...}"""
-    data = _request_json()
     path, rom = _rom(system_name, data.get("rom"))
     if not path:
         return jsonify(success=False, error="Unknown system or ROM"), 404
@@ -152,12 +195,17 @@ def patch_rom(system_name):
     if upload['size'] > PATCH_LIMIT or path.stat().st_size > PATCH_ROM_LIMIT:
         return jsonify(success=False, error="Too large to patch here"), 400
     try:
-        patched, notes = apply_patch(path.read_bytes(), Path(upload['path']).read_bytes())
+        original = path.read_bytes()
+        patched, notes = apply_patch(original, Path(upload['path']).read_bytes())
+        if patched == original:
+            # (an IPS patch writes bytes as they are, so one may write what's there already)
+            raise PatchError("The patch changes nothing in this ROM: the patched file would be the same as it")
     except PatchError as e:
         return jsonify(success=False, error=str(e)), 400
     except OSError as e:
         return jsonify(success=False, error=f"The ROM or the patch couldn't be read ({e})"), 500
     patch_name = upload['name']
+    before = _ra_game(system_name, path) if _ra_checked(system_name) else None
     sums = {'crc32': f"{zlib.crc32(patched) & 0xFFFFFFFF:08x}", 'sha1': hashlib.sha1(patched).hexdigest()}
     version = data.get("version")
 
@@ -175,7 +223,6 @@ def patch_rom(system_name):
             part.replace(target)
         except OSError as e:
             return jsonify(success=False, error=f"The patched game couldn't be written ({e})"), 500
-        importer.discard_upload(data.get('upload'))
         try:
             gamelist_mgr.save_game(system_name, Game(path=f"./{new_rom}", name=name), ROMS_BASE)
         except Exception:
@@ -183,7 +230,8 @@ def patch_rom(system_name):
         rom_versions.set_version(f"{system_name}/{new_rom}", version, patched_from={'rom': rom, 'patch': patch_name})
         _invalidate_caches()
         logger.info(f"Patched {system_name}/{rom} with {patch_name} as a new game, {target.name}")
-        return jsonify(success=True, rom=new_rom, notes=notes, **sums, **rom_versions.get(f"{system_name}/{new_rom}"))
+        return jsonify(success=True, rom=new_rom, notes=notes, achievements=_achievements(system_name, before, new_rom),
+                       **sums, **rom_versions.get(f"{system_name}/{new_rom}"))
 
     try:
         tmp = REPLACED_ROMS / f".patched-{os.getpid()}-{time.time_ns()}"
@@ -193,8 +241,8 @@ def patch_rom(system_name):
         return jsonify(success=False, error=f"The patched ROM couldn't be written ({e})"), 500
     result, status = _swap(system_name, rom, path, tmp, path.suffix.lower(), f"itself patched with {patch_name}", version, patch=patch_name)
     if result.get('success'):
-        importer.discard_upload(data.get('upload'))
         _invalidate_caches()
+        result['achievements'] = _achievements(system_name, before, result['rom'])
     else:
         tmp.unlink(missing_ok=True)
     return jsonify(**result, notes=notes, **sums), status

@@ -188,9 +188,7 @@ function GDLaunchFile({ system, game, notify, onChanged }) {
     const apply = async () => {
         setBusy(true);
         try {
-            const res = await fetch(`${GD_API}/api/systems/${encodeURIComponent(system)}/launch-file`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from: current, to: choice }) });
-            const d = await res.json();
+            const d = await RM.sendJson(`/api/systems/${encodeURIComponent(system)}/launch-file`, 'POST', { from: current, to: choice });
             if (d.success) { notify(`Now launches ${choice.split('/').pop()}. Gamelist backed up first.`, 'success'); onChanged(`./${choice}`); }
             else notify(d.error || 'Could not change the launch file', 'error');
         } catch (e) { notify(e.message, 'error'); }

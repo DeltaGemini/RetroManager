@@ -3,11 +3,6 @@
 // Part of the library page (index.html), which loads these files in order;
 // they share one global scope, so each can use what the ones before it define.
 
-const sendJson = async (url, method, body) => {
-    const res = await fetch(`${API_BASE}${url}`, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
-    return res.json();
-};
-
 // Tools > Collections
 function CollectionsPanel({ onClose }) {
     const [collections, setCollections] = React.useState(null);
@@ -32,10 +27,10 @@ function CollectionsPanel({ onClose }) {
             return true;
         } catch (e) { setError(e.message); return false; }
     };
-    const create = async () => { if (newName.trim() && await run(sendJson('/api/collections', 'POST', { name: newName.trim() }))) setNewName(''); };
-    const rename = async () => { if (await run(sendJson(`/api/collections/${renaming.id}`, 'PUT', { name: renaming.name }))) setRenaming(null); };
-    const remove = async (id) => { if (await run(sendJson(`/api/collections/${id}`, 'DELETE'))) setDeleting(null); };
-    const takeOut = (id, g) => run(sendJson(`/api/collections/${id}/games`, 'PUT', { games: [{ system: g.system, rom_path: g.rom_path }], member: false }));
+    const create = async () => { if (newName.trim() && await run(RM.sendJson('/api/collections', 'POST', { name: newName.trim() }))) setNewName(''); };
+    const rename = async () => { if (await run(RM.sendJson(`/api/collections/${renaming.id}`, 'PUT', { name: renaming.name }))) setRenaming(null); };
+    const remove = async (id) => { if (await run(RM.sendJson(`/api/collections/${id}`, 'DELETE'))) setDeleting(null); };
+    const takeOut = (id, g) => run(RM.sendJson(`/api/collections/${id}/games`, 'PUT', { games: [{ system: g.system, rom_path: g.rom_path }], member: false }));
 
     const inputStyle = { padding: '6px 8px', borderRadius: 4, border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: 13 };
     return (
@@ -138,14 +133,14 @@ function BulkCollectPanel({ system, games, onClose }) {
         try {
             let id = target;
             if (target === 'new') {
-                const made = await sendJson('/api/collections', 'POST', { name: newName.trim() });
+                const made = await RM.sendJson('/api/collections', 'POST', { name: newName.trim() });
                 if (!made.success) { setMessage({ error: true, text: made.error }); return; }
                 id = made.collection.id;
                 setCollections(prev => [...(prev || []), made.collection]);
                 setTarget(id);
                 setNewName('');
             }
-            const d = await sendJson(`/api/collections/${id}/games`, 'PUT', { games: chosen.map(g => ({ system: system.name, rom_path: g.path })), member: true });
+            const d = await RM.sendJson(`/api/collections/${id}/games`, 'PUT', { games: chosen.map(g => ({ system: system.name, rom_path: g.path })), member: true });
             if (!d.success) { setMessage({ error: true, text: d.error }); return; }
             chosen.forEach(g => { g.collections = [...new Set([...(g.collections || []), id])]; });
             announceGameChange();

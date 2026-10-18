@@ -31,7 +31,7 @@ def test_a_system_without_a_picture_is_given_its_drawn_tile(client):
     try:
         assert client.get("/imgs/snes.jpg").headers["Content-Type"] == "image/svg+xml"
         logo = client.get("/themes/switch/retromanager-logo.svg")
-        assert b"SEGA" not in logo.data and b"make_logo" in logo.data and logo.headers["Content-Type"] == "image/svg+xml"
+        assert b"SEGA" not in logo.data and b"make_logo" in logo.data and logo.mimetype == "image/svg+xml"
         assert client.get("/imgs/favicon.png").data == client.get("/icons/icon-512.png").data
     finally:
         pages.SYSTEM_TILES = False
@@ -85,7 +85,7 @@ def test_settings_never_return_a_secret(client):
     assert "very-secret" not in client.get("/api/settings").get_data(as_text=True)
     sources = {s["id"]: s for s in client.get("/api/scrape-sources").get_json()["sources"]}
     assert sources["steamgriddb"]["available"] and not sources["screenscraper"]["available"]
-    assert "Tools > Settings" in client.post("/api/scraper/search", json={"name": "Mario"}).get_json()["error"]
+    assert "Tools > Settings" in sources["screenscraper"]["hint"]
     client.put("/api/settings", json={"values": {"steamgriddb_api_key": "", "retroachievements_user": ""}})
 
 
@@ -168,33 +168,6 @@ def test_phone_save_states_go_both_ways(client, root):
     for name in ("Other Game.state", "Game Two.srm", "Game Two.state/../x", "Game Two.state.png"):
         assert client.put("/api/play/phone-state", query_string={**who, "name": name}, data=state).status_code == 400
     assert client.put("/api/play/phone-state", query_string={**who, "profile": "stranger", "name": "Game Two.state"}, data=state).status_code == 404
-
-
-def test_a_scrape_replaces_a_picture_only_when_asked_and_keeps_the_old_one(client, root, monkeypatch):
-    from backend.routes import scraping
-    from backend.core import _invalidate_caches
-    # (the media folder a system's pictures are in needn't have the ROM folder's name)
-    media_system = scraping.scanner.media_index("snes").media_system
-    old = root / "media" / media_system / "box2d/Game Two.png"
-    old.parent.mkdir(parents=True, exist_ok=True)
-    old.write_bytes(b"old picture")
-    _invalidate_caches()
-    monkeypatch.setattr(scraping.jeu_cache, "get", lambda game_id: {"rom": {}})
-    monkeypatch.setattr(scraping.scraper, "extract_game_data", lambda jeu: {"name": "Game Two", "media": {"box2d": "http://example.invalid/box.png"}})
-    monkeypatch.setattr(scraping.settings, "get", lambda key: "off" if key == "libretro_thumbnails" else None)
-
-    def download(url, target_dir, stem):
-        (target_dir / f"{stem}.png").write_bytes(b"new picture")
-    monkeypatch.setattr(scraping, "_download_one", download)
-
-    kept = scraping.apply_scrape("snes", "Game Two.sfc", "1", ["box2d"])
-    assert kept["success"] and kept["already_had"] == ["box2d"] and kept["replaced"] == [] and old.read_bytes() == b"old picture"
-    _invalidate_caches()
-    swapped = scraping.apply_scrape("snes", "Game Two.sfc", "1", ["box2d"], replace=True)
-    assert swapped["replaced"] == ["box2d"] and old.read_bytes() == b"new picture"
-    assert (root / "data" / swapped["kept"] / media_system / "box2d/Game Two.png").read_bytes() == b"old picture"
-    old.unlink()
-    _invalidate_caches()
 
 
 def test_emulator_files_cannot_escape_their_folder(client):
@@ -289,53 +262,6 @@ def test_a_save_never_written_to_is_marked_empty(client, root):
     (root / "saves/family/snes/Game Two.srm").write_bytes(b"\xff" * 2047 + b"a")
     assert empty() == [False]
     (root / "saves/family/snes/Game Two.srm").unlink()
-
-
-def test_pictures_nothing_else_has_come_from_thegamesdb_then_steamgriddb(client, root, monkeypatch):
-    from backend.routes import scraping
-    from backend.core import _invalidate_caches
-    media_system = scraping.scanner.media_index("snes").media_system
-    monkeypatch.setattr(scraping.jeu_cache, "get", lambda game_id: {"rom": {}})
-    monkeypatch.setattr(scraping.scraper, "extract_game_data", lambda jeu: {"name": "Game One", "media": {}})
-    monkeypatch.setattr(scraping.settings, "get", lambda key: "off" if key == "libretro_thumbnails" else None)
-    monkeypatch.setattr(scraping, "_hasheous_lookup", lambda system, rom: None)
-    monkeypatch.setattr(scraping, "_resting", {})
-    fetched = {}
-
-    def download(url, target_dir, stem):
-        fetched[target_dir.name] = url
-        target_dir.mkdir(parents=True, exist_ok=True)
-        (target_dir / f"{stem}.png").write_bytes(b"picture")
-    monkeypatch.setattr(scraping, "_download_one", download)
-
-    tgdb, grid = scraping.thegamesdb_scraper, scraping.steamgriddb_scraper
-    monkeypatch.setattr(tgdb, "api_key", "key")
-    monkeypatch.setattr(grid, "api_key", "key")
-    # A game of another title is never used; the one of the same title is
-    monkeypatch.setattr(tgdb, "search_game", lambda name, system=None: [{"id": 1, "game_title": "Game One Turbo"}, {"id": 2, "game_title": "Game One"}])
-    monkeypatch.setattr(tgdb, "get_images", lambda game_id: {"boxart": [f"http://tgdb.invalid/{game_id}/box.png"]})
-    monkeypatch.setattr(grid, "search_game", lambda name: [{"id": 9, "name": "Game One!"}])
-    monkeypatch.setattr(grid, "get_game_info", lambda game_id: {"name": "Game One", "grids": ["http://grid.invalid/grid.png"], "heroes": ["http://grid.invalid/hero.png"], "logos": []})
-
-    done = scraping.apply_scrape("snes", "Game One (USA).sfc", "1", ["box2d", "fanart", "wheel"])
-    assert done["success"] and done["downloaded"] == ["box2d", "fanart"], done
-    assert done["from_thegamesdb"] == ["box2d"] and done["from_steamgriddb"] == ["fanart"]
-
-    assert fetched == {"box2d": "http://tgdb.invalid/2/box.png", "fanart": "http://grid.invalid/hero.png"}
-    # A cartridge comes from LaunchBox's list when it's in use (GameTDB has nothing for this system)
-    monkeypatch.setattr(scraping.launchbox_index, "pictures", lambda system, names: {"support": "http://launchbox.invalid/cart.png", "box2d": "http://launchbox.invalid/box.png"})
-    cart = scraping.apply_scrape("snes", "Game One (USA).sfc", "1", ["support", "box2d"])
-    assert cart["downloaded"] == ["support"] and cart["from_launchbox"] == ["support"] and cart["from_gametdb"] == []
-    (root / "media" / media_system / "support" / "Game One (USA).png").unlink()
-
-    # One that can't be asked is left alone for a while, not asked for every game
-    def fails(name, system=None):
-        raise scraping.TheGamesDBError("allowance used up")
-    monkeypatch.setattr(tgdb, "search_game", fails)
-    assert scraping._thegamesdb_pictures("snes", ["Game One"]) == {} and scraping._resting_source("TheGamesDB")
-    for folder in ("box2d", "fanart"):
-        (root / "media" / media_system / folder / "Game One (USA).png").unlink()
-    _invalidate_caches()
 
 
 def test_a_system_has_its_drawn_tile_unless_the_themes_picture_is_chosen(client):
@@ -494,3 +420,18 @@ def test_save_states_can_be_numbered_again_oldest_first(client, root):
     finally:
         for p in folder.glob("Renumber Test.*"):
             p.unlink()
+
+
+def test_the_pages_files_are_kept_by_the_browser_until_they_change_and_sent_gzipped(client, tmp_path, monkeypatch):
+    import gzip
+    from backend.routes import pages
+    (tmp_path / "common").mkdir()
+    (tmp_path / "common" / "app.css").write_text("body { color: red }")
+    (tmp_path / "common" / "app.css.gz").write_bytes(gzip.compress(b"body { color: red }"))
+    monkeypatch.setattr(pages, "FRONTEND_DIR", tmp_path)
+    stamped = client.get("/common/app.css?v=abc", headers={"Accept-Encoding": "gzip, br"})
+    assert "immutable" in stamped.headers["Cache-Control"] and stamped.headers["Content-Encoding"] == "gzip"
+    assert gzip.decompress(stamped.data) == b"body { color: red }" and stamped.mimetype == "text/css"
+    plain = client.get("/common/app.css")                       # no ?v=: checked each time, and not zipped if not asked
+    assert plain.headers["Cache-Control"] == "no-cache" and "Content-Encoding" not in plain.headers and plain.data == b"body { color: red }"
+    assert client.get("/common/app.css", headers={"If-None-Match": plain.headers["ETag"]}).status_code == 304

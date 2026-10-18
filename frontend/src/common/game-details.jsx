@@ -3,7 +3,9 @@
 // Timeline. Styled by common/game-details.css.
 // Loaded before each page's own scripts, which share one global scope with it,
 // so everything here is named gd.../GD... except the two components pages use:
-// GameDetails and GameDetailsPopup.
+// GameDetails and GameDetailsPopup. Its rows are in the files loaded after it:
+// game-details-sections.jsx (status, achievements, saves), game-details-series.jsx,
+// game-details-edit.jsx (editing) and game-details-rom.jsx (the ROM file).
 
 const GD_API = window.location.origin;
 // Inside the Android app (android/) a game starts in the phone's own RetroArch
@@ -61,7 +63,6 @@ const gdThumb = (mediaPath, height, version) => `${GD_API}/api/thumb/${height}/$
 const gdMedia = (mediaPath) => `${GD_API}/api/media/${gdEncode(mediaPath)}`;
 // "Sonic (USA) [!]" -> "Sonic"
 const gdTitle = (name) => (name || '').replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/\s+/g, ' ').trim() || name || '';
-const gdBytes = (n) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(2)} GB`;
 const gdAgo = (ms) => {
     const s = Math.max(0, (Date.now() - ms) / 1000);
     if (s < 90) return 'just now';
@@ -125,351 +126,6 @@ function GDSection({ id, title, summary, children }) {
     );
 }
 
-const GD_STATUSES = [['playing', 'Playing', '⏵'], ['backlog', 'Backlog', '🕓'], ['finished', 'Finished', '✔']];
-
-// Favourite, play status and collections
-function GDStatus({ system, game, notify, onChanged }) {
-    const [status, setStatus] = React.useState(game.play_status || null);
-    const [favorite, setFavorite] = React.useState(!!game.favorite);
-    const [member, setMember] = React.useState(game.collections || []);
-    const [collections, setCollections] = React.useState(null);
-    const [newName, setNewName] = React.useState('');
-    const [menuOpen, setMenuOpen] = React.useState(false);
-    const [find, setFind] = React.useState('');
-    const menuRef = React.useRef(null);
-    React.useEffect(() => {
-        if (!menuOpen) return;
-        const close = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
-        const esc = (e) => { if (e.key === 'Escape') { e.stopPropagation(); setMenuOpen(false); } };
-        document.addEventListener('mousedown', close);
-        document.addEventListener('keydown', esc, true);
-        return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc, true); };
-    }, [menuOpen]);
-    React.useEffect(() => {
-        setStatus(game.play_status || null);
-        setFavorite(!!game.favorite);
-        setMember(game.collections || []);
-        setMenuOpen(false);
-        setFind('');
-        setNewName('');
-    }, [system, game.path]);
-    // Fetched at first, and again each time the checklist opens (the Collections tool may have changed them)
-    React.useEffect(() => {
-        fetch(`${GD_API}/api/library-state`).then(r => r.json()).then(d => {
-            if (!d.success) return;
-            setCollections(d.collections);
-            // ...and which of them hold this game now (another page may have changed that)
-            const key = `${system}/${String(game.path).replace(/^(\.\/)+/, '')}`;
-            setMember(d.collections.filter(c => (c.games || []).includes(key)).map(c => c.id));
-        }).catch(() => {});
-    }, [menuOpen]);
-
-    const who = { system, rom_path: game.path };
-    const send = async (url, body, method = 'PUT') => {
-        try {
-            const res = await fetch(`${GD_API}${url}`, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-            const d = await res.json();
-            if (!d.success && notify) notify(d.error || 'That didn\'t work', 'error');
-            return d;
-        } catch (e) {
-            if (notify) notify(e.message, 'error');
-            return { success: false };
-        }
-    };
-    // The game object is the page's own, so lists drawn from it follow
-    const changed = (patch) => {
-        Object.assign(game, patch);
-        if (onChanged) onChanged(patch);
-        window.dispatchEvent(new Event('retromanager:game-changed'));
-    };
-    const pickStatus = async (key) => {
-        const next = status === key ? null : key;
-        const d = await send('/api/play-status', { ...who, status: next });
-        if (d.success) { setStatus(next); changed({ play_status: next }); }
-    };
-    const toggleFavorite = async () => {
-        const d = await send('/api/favorite', { ...who, favorite: !favorite });
-        if (d.success) { setFavorite(d.favorite); changed({ favorite: d.favorite, has_metadata: true }); }
-    };
-    // (one change at a time: a second click before the first is answered would be sent from the old state)
-    const [toggling, setToggling] = React.useState(null);
-    const toggleCollection = async (id) => {
-        if (toggling) return;
-        setToggling(id);
-        const d = await send(`/api/collections/${id}/games`, { ...who, member: !member.includes(id) });
-        setToggling(null);
-        if (d.success) {
-            setMember(d.collections);
-            const key = `${system}/${String(game.path).replace(/^(\.\/)+/, '')}`;
-            setCollections(prev => (prev || []).map(c => c.id !== id ? c : { ...c, games: d.collections.includes(id) ? [...new Set([...c.games, key])] : c.games.filter(g => g !== key) }));
-            changed({ collections: d.collections });
-        }
-    };
-    const createCollection = async () => {
-        const name = newName.trim();
-        if (!name) return;
-        const d = await send('/api/collections', { name }, 'POST');
-        if (!d.success) return;
-        setCollections(prev => [...(prev || []), d.collection]);
-        setNewName('');
-        toggleCollection(d.collection.id);
-    };
-
-    return (
-        <div className="gd-status">
-            <button className={`gd-chip${favorite ? ' on gd-fav' : ''}`} onClick={toggleFavorite} aria-pressed={favorite}
-                title={favorite ? 'Remove from favourites' : 'Add to favourites (EmulationStation shows these too)'}>{favorite ? '★' : '☆'} Favourite</button>
-            <span role="group" aria-label="Play status" className="gd-chip-group">
-                {GD_STATUSES.map(([key, label, icon]) => (
-                    <button key={key} className={`gd-chip${status === key ? ' on' : ''}`} onClick={() => pickStatus(key)} aria-pressed={status === key}>{icon} {label}</button>
-                ))}
-            </span>
-            <span ref={menuRef} className="gd-menu-wrap admin-only">
-                <button className={`gd-chip${member.length ? ' on' : ''}`} onClick={() => setMenuOpen(o => !o)} aria-haspopup="dialog" aria-expanded={menuOpen}
-                    title="Choose which collections this game is in">
-                    📁 {member.length === 0 ? 'Collections' : member.length === 1 ? ((collections || []).find(c => c.id === member[0]) || {}).name || '1 collection' : `${member.length} collections`} ▾
-                </button>
-                {menuOpen && (
-                    <div role="dialog" aria-label="Collections" className="gd-menu">
-                        {(collections || []).length > 6 && (
-                            <input type="search" autoFocus value={find} placeholder="Find a collection" onChange={e => setFind(e.target.value)} />
-                        )}
-                        <div className="gd-menu-list">
-                            {collections && !collections.length && <div className="gd-note">No collections yet. Name one below to start it with this game.</div>}
-                            {(collections || []).filter(c => c.name.toLowerCase().includes(find.trim().toLowerCase())).map(c => (
-                                <label key={c.id}>
-                                    <input type="checkbox" checked={member.includes(c.id)} disabled={!!toggling} onChange={() => toggleCollection(c.id)} />
-                                    <span className="gd-menu-name">{c.name}</span>
-                                    <span className="gd-note">{c.games.length}</span>
-                                </label>
-                            ))}
-                        </div>
-                        <div className="gd-menu-new">
-                            <input type="text" value={newName} placeholder="New collection..." maxLength={60} onChange={e => setNewName(e.target.value)}
-                                onKeyDown={e => { if (e.key === 'Enter') createCollection(); }} />
-                            <button className="gd-btn small" onClick={createCollection} disabled={!newName.trim()}>Add</button>
-                        </div>
-                    </div>
-                )}
-            </span>
-        </div>
-    );
-}
-
-// The game's RetroAchievements: completion, then every achievement with the
-// earned ones in colour. Not shown at all without a RetroAchievements API key (Tools > Settings).
-function GDAchievements({ system, game }) {
-    const [data, setData] = React.useState(null);
-    const [error, setError] = React.useState(null);
-    const [loading, setLoading] = React.useState(false);
-    // Whose progress to show (a name from Settings; '' is the main user), remembered in this browser
-    const [who, setWhoState] = React.useState(() => { try { return localStorage.getItem('retromanager.achievements.who') || ''; } catch (e) { return ''; } });
-    const setWho = (name) => { setWhoState(name); try { localStorage.setItem('retromanager.achievements.who', name); } catch (e) {} };
-    const [filter, setFilter] = React.useState('all'); // all | earned | locked
-    const [showAll, setShowAll] = React.useState(false);
-    const PREVIEW_COUNT = 12;
-
-    const load = React.useCallback((refresh) => {
-        let cancelled = false;
-        setLoading(true);
-        setError(null);
-        const params = new URLSearchParams({ rom: game.path, ...(who ? { who } : {}), ...(refresh ? { refresh: '1' } : {}) });
-        fetch(`${GD_API}/api/systems/${encodeURIComponent(system)}/achievements?${params}`)
-            .then(r => r.json())
-            .then(d => { if (!cancelled) d.success ? setData(d) : setError(d.error || 'Could not load achievements'); })
-            .catch(err => { if (!cancelled) setError(err.message); })
-            .finally(() => { if (!cancelled) setLoading(false); });
-        return () => { cancelled = true; };
-    }, [system, game.path, who]);
-
-    React.useEffect(() => {
-        setData(null);
-        setFilter('all');
-        setShowAll(false);
-        return load(false);
-    }, [load]);
-
-    if (data && !data.configured) return null;
-    const section = (summary, content) => <GDSection id="achievements" title="Achievements" summary={summary}>{content}</GDSection>;
-    if (error) return section('Couldn\'t load', <div className="gd-note gd-error">{error}</div>);
-    if (!data) return section('Looking up…', <div className="gd-note">Looking this game up on RetroAchievements...</div>);
-    if (!data.matched) {
-        return section('Not recognised', (
-            <div className="gd-row">
-                <span className="gd-note">RetroAchievements doesn't recognise this ROM file, so it has no achievements to show.</span>
-                <button className="gd-btn small" disabled={loading} onClick={() => load(true)}>{loading ? 'Checking...' : 'Check again'}</button>
-            </div>
-        ));
-    }
-    if (!data.total) {
-        return section('None yet', <div className="gd-note">RetroAchievements knows this game (<a href={data.url} target="_blank" rel="noopener noreferrer">{data.title}</a>) but has no achievements for it yet.</div>);
-    }
-
-    const list = data.achievements.filter(a => filter === 'all' || (filter === 'earned' ? a.earned : !a.earned));
-    const shown = showAll ? list : list.slice(0, PREVIEW_COUNT);
-    const TYPE_LABELS = { progression: 'Progression', win_condition: 'Beats the game', missable: 'Missable' };
-    // RetroAchievements gives times in UTC
-    const earnedDate = (text) => new Date(text.replace(' ', 'T') + 'Z');
-    const summary = data.user ? `${data.earned} of ${data.total} · ${Math.round(data.completion)}%` : `${data.total} to earn`;
-
-    return section(summary, (
-        <>
-            <div className="gd-row" style={{alignItems: 'baseline'}}>
-                {data.user ? (
-                    <>
-                        <span className="gd-big">{Math.round(data.completion)}%</span>
-                        <span>
-                            <b>{data.earned}</b> of {data.total} earned · {data.points_earned} of {data.points} points
-                            {data.earned_hardcore > 0 && ` · ${data.earned_hardcore} in hardcore`}
-                        </span>
-                    </>
-                ) : (
-                    <span>{data.total} achievements · {data.points} points</span>
-                )}
-                <span style={{flex: 1}} />
-                <a href={data.url} target="_blank" rel="noopener noreferrer" className="gd-small">{data.title} on RetroAchievements ↗</a>
-                <button className="gd-btn small" disabled={loading} onClick={() => load(true)} title="Fetch the latest from RetroAchievements">{loading ? 'Refreshing...' : 'Refresh'}</button>
-            </div>
-            {data.user ? (
-                <div className="gd-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(data.completion)} aria-label="Achievements earned">
-                    <div style={{width: `${data.completion}%`, background: data.earned === data.total ? 'var(--success)' : 'var(--accent-orange)'}} />
-                </div>
-            ) : <div className="gd-note">Add your RetroAchievements user name in Tools › Settings to show which ones have been earned.</div>}
-            {data.user && (
-                <div className="gd-row gd-small" style={{margin: '10px 0'}}>
-                    <span className="gd-note">Earned by {(data.people || []).length > 1 ? (
-                        <select value={who || data.people[0]} onChange={e => setWho(e.target.value)} aria-label="Whose achievements">
-                            {data.people.map(p => <option key={p} value={p}>{p}</option>)}
-                        </select>
-                    ) : data.user}</span>
-                    {[['all', `All ${data.total}`], ['earned', `Earned ${data.earned}`], ['locked', `Not yet ${data.total - data.earned}`]].map(([key, label]) => (
-                        <button key={key} className={`gd-btn small${filter === key ? ' primary' : ''}`} onClick={() => { setFilter(key); setShowAll(false); }}>{label}</button>
-                    ))}
-                </div>
-            )}
-            {!list.length && <div className="gd-note">{filter === 'earned' ? 'None earned yet.' : 'Every achievement is earned.'}</div>}
-            <div className="gd-cheevos">
-                {shown.map(a => (
-                    <div key={a.id} className={`gd-cheevo${a.earned ? ' earned' : ''}${a.earned || !data.user ? '' : ' locked'}`}>
-                        <img src={a.earned || !data.user ? a.badge : a.badge_locked} alt="" loading="lazy" width="44" height="44" onError={e => { e.target.style.visibility = 'hidden'; }} />
-                        <div style={{flex: 1, minWidth: 0}}>
-                            <div className="gd-cheevo-title">
-                                {a.earned && <span className="gd-ok" aria-label="Earned">✓ </span>}
-                                {a.title} <span className="gd-note">({a.points})</span>
-                            </div>
-                            <div className="gd-note">{a.description}</div>
-                            <div className={`gd-tiny${a.earned ? ' gd-ok' : ' gd-note'}`}>
-                                {a.earned && <span title={earnedDate(a.earned).toLocaleString()}>Earned {gdAgo(earnedDate(a.earned).getTime())}{a.hardcore ? ' · hardcore' : ''}</span>}
-                                {a.earned && TYPE_LABELS[a.type] && ' · '}
-                                {TYPE_LABELS[a.type]}
-                            </div>
-                        </div>
-                    </div>
-                ))}
-            </div>
-            {list.length > PREVIEW_COUNT && (
-                <button className="gd-btn small" style={{marginTop: 8}} onClick={() => setShowAll(v => !v)}>
-                    {showAll ? 'Show fewer' : `Show all ${list.length}`}
-                </button>
-            )}
-        </>
-    ));
-}
-
-// Saves and save states found for the game, by person
-function GDSaves({ system, game }) {
-    const [data, setData] = React.useState(null);
-    const [error, setError] = React.useState(null);
-    const [expanded, setExpanded] = React.useState({});
-    const PREVIEW_COUNT = 5;
-
-    React.useEffect(() => {
-        let cancelled = false;
-        setData(null);
-        setError(null);
-        setExpanded({});
-        fetch(`${GD_API}/api/systems/${encodeURIComponent(system)}/saves?${new URLSearchParams({ rom: game.path })}`)
-            .then(r => r.json())
-            .then(d => { if (!cancelled) d.success ? setData(d) : setError(d.error || 'Could not load saves'); })
-            .catch(err => { if (!cancelled) setError(err.message); });
-        return () => { cancelled = true; };
-    }, [system, game.path]);
-
-    const section = (summary, content) => <GDSection id="saves" title="Saves" summary={summary}>{content}</GDSection>;
-    if (error) return section('Couldn\'t load', <div className="gd-note gd-error">{error}</div>);
-    if (!data) return section('Looking…', <div className="gd-note">Looking for saves...</div>);
-    if (!Object.values(data.available || {}).some(Boolean)) {
-        return section('Not set up', <div className="gd-note">The saves folders aren't mounted. Add them to docker-compose.yml (see the README).</div>);
-    }
-
-    // Each person in the configured order, then the shared in-game saves,
-    // then older states that sit outside anyone's folder (collapsed)
-    const groupOf = (s) => s.profile !== 'shared' ? s.profile : s.root === 'saves' ? 'shared-saves' : 'shared-states';
-    const GROUP_LABELS = { 'shared-saves': 'In-game saves (shared)', 'shared-states': "Old save states, not in a person's folder" };
-    const groups = [...data.profiles, 'shared-saves', 'shared-states']
-        .map(profile => ({ profile, items: data.saves.filter(s => groupOf(s) === profile) }))
-        .filter(g => g.items.length);
-    if (!groups.length) return section('None', <div className="gd-note">No saves or save states for this game.</div>);
-
-    const shot = (s) => `${GD_API}/api/save-screenshot/${s.root}/${gdEncode(s.screenshot)}`;
-    const row = (s) => (
-        <div key={`${s.root}/${s.path}`} className="gd-save">
-            {s.screenshot
-                ? <a className="gd-save-shot" href={shot(s)} target="_blank" rel="noopener noreferrer" title="Open the screenshot"><img src={shot(s)} alt="" loading="lazy" /></a>
-                : <span className="gd-save-shot" aria-hidden="true">{s.kind === 'save' ? '💾' : '⏸'}</span>}
-            <div style={{flex: 1, minWidth: 0}}>
-                <div className="gd-cheevo-title">
-                    {s.label}
-                    {s.empty && <span className="gd-badge" title="The file is there but nothing was ever saved in it: the game starts with no save">Empty</span>}
-                    {s.conflict && <span className="gd-badge" title="Syncthing kept two versions of this file">Sync conflict</span>}
-                </div>
-                <div className="gd-note gd-clip" title={`${s.root}/${s.path}`}>{s.root}/{s.path}</div>
-            </div>
-            <div className="gd-small" style={{textAlign: 'right', flexShrink: 0}}>
-                <div title={new Date(s.modified).toLocaleString()}>{gdAgo(new Date(s.modified).getTime())}</div>
-                <div className="gd-note">{gdBytes(s.size)}</div>
-            </div>
-        </div>
-    );
-    const newestOverall = Math.max(...data.saves.map(s => new Date(s.modified).getTime()));
-
-    return section(`${data.saves.length} file${data.saves.length === 1 ? '' : 's'} · latest ${gdAgo(newestOverall)}`, (
-        <>
-            <div className="gd-row gd-small">
-                <span className="gd-note" style={{flex: 1, minWidth: 200}}>
-                    Found by file name in the saves and savestates folders.
-                    {data.saves.some(s => s.conflict) && ' Resolve sync conflicts in Tools › Saves.'}
-                </span>
-                <a className="gd-btn small" href={`${GD_API}/api/systems/${encodeURIComponent(system)}/saves/download?${new URLSearchParams({ rom: game.path })}`}>Download all (zip)</a>
-            </div>
-            {groups.map(({ profile, items }) => {
-                const open = expanded[profile] ?? profile !== 'shared-states';
-                const showAll = expanded[`${profile}:all`];
-                const shown = showAll ? items : items.slice(0, PREVIEW_COUNT);
-                return (
-                    <div key={profile} style={{marginTop: 10}}>
-                        <button className="gd-group-head" onClick={() => setExpanded(prev => ({ ...prev, [profile]: !open }))} aria-expanded={open}>
-                            <span className="gd-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
-                            {GROUP_LABELS[profile] || profile[0].toUpperCase() + profile.slice(1)}
-                            <span className="gd-note">{items.length} file{items.length > 1 ? 's' : ''} · latest {gdAgo(new Date(items[0].modified).getTime())}</span>
-                        </button>
-                        {open && (
-                            <div className="gd-saves">
-                                {shown.map(row)}
-                                {items.length > PREVIEW_COUNT && (
-                                    <button className="gd-btn small" style={{alignSelf: 'flex-start'}} onClick={() => setExpanded(prev => ({ ...prev, [`${profile}:all`]: !showAll }))}>
-                                        {showAll ? 'Show fewer' : `Show all ${items.length}`}
-                                    </button>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                );
-            })}
-        </>
-    ));
-}
-
 // The game's manual (a PDF), read in place over the page
 // A game's picture over the page, as large as fits the screen; a tap, Escape or Back-in-the-app closes it
 function GDPicture({ name, url, onClose }) {
@@ -515,192 +171,6 @@ function GDManual({ name, url, onClose }) {
     );
 }
 
-// --- Series: the other games in this one's series, and which of them you have ---
-// (backend/series_index.py; the lists come from IGDB)
-const gdCover = (imageId) => imageId ? `https://images.igdb.com/igdb/image/upload/t_cover_small/${imageId}.jpg` : null;
-const gdPut = (url, body) => fetch(`${GD_API}${url}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
-// A library game's page, on whichever of the Library and the Console you're on
-const gdGameUrl = (have) => `${window.location.pathname.startsWith('/console') ? '/console' : '/'}?${new URLSearchParams({ system: have.system, game: have.path })}`;
-
-// A series' games in release order. The ones you have are solid and link to
-// your copy; the rest are faint, each with Want and Not interested.
-//   view     the series, as /api/series/game gives it
-//   reload   fetch it again (after a mark changes)
-//   here     { system, path } of the game this is shown for, which is outlined
-function GDSeriesGames({ view, reload, here, notify }) {
-    const [show, setShow] = React.useState('all');   // all | missing | want
-    const [showHidden, setShowHidden] = React.useState(false);
-    const act = async (url, body) => {
-        try {
-            const d = await gdPut(url, body);
-            if (!d.success && notify) notify(d.error || 'That didn\'t work', 'error');
-        } catch (e) { if (notify) notify(e.message, 'error'); }
-        reload();
-    };
-    const mark = (game, value) => act('/api/series/mark', { id: game.id, mark: game.mark === value ? null : value });
-    const isHidden = (g) => g.mark === 'skip' || g.platform_skipped;
-    const missing = view.games.filter(g => !g.have.length);
-    const hidden = missing.filter(isHidden);
-    const wanted = missing.filter(g => g.mark === 'want');
-    const shown = view.games.filter(g => (show === 'all' || !g.have.length) && (show !== 'want' || g.mark === 'want') && (showHidden || !isHidden(g)));
-    // Platforms among the games you're missing, to hide one in a go (arcade, mobile...)
-    const platforms = {};
-    missing.filter(g => !g.platform_skipped).forEach(g => g.platforms.forEach(p => { platforms[p] = (platforms[p] || 0) + 1; }));
-    const isHere = (g) => here && g.have.some(h => h.system === here.system && h.path === String(here.path).replace(/^(\.\/)+/, ''));
-    const year = (g) => g.date ? new Date(g.date * 1000).getUTCFullYear() : null;
-    return (
-        <div className="gd-series">
-            <div className="gd-row gd-small">
-                {[['all', `All ${view.total}`], ['missing', `Missing ${view.total - view.have}`], ['want', `Want ${wanted.length}`]].map(([key, label]) => (
-                    <button key={key} className={`gd-btn small${show === key ? ' primary' : ''}`} onClick={() => setShow(key)}>{label}</button>
-                ))}
-                {Object.keys(platforms).length > 1 && (
-                    <select value="" aria-label="Hide a platform's games in this series" onChange={e => { if (e.target.value) act('/api/series/platform', { series: view.key, platform: e.target.value, skip: true }); }}>
-                        <option value="">Hide a platform…</option>
-                        {Object.entries(platforms).sort((a, b) => b[1] - a[1]).map(([p, n]) => <option key={p} value={p}>{p} ({n})</option>)}
-                    </select>
-                )}
-                {view.skipped_platforms.map(p => (
-                    <button key={p} className="gd-chip on" title="Show this platform's games again" onClick={() => act('/api/series/platform', { series: view.key, platform: p, skip: false })}>{p} hidden ×</button>
-                ))}
-                {hidden.length > 0 && (
-                    <label className="gd-note" style={{display: 'inline-flex', gap: 5, alignItems: 'center', cursor: 'pointer'}}>
-                        <input type="checkbox" checked={showHidden} onChange={e => setShowHidden(e.target.checked)} /> Show the {hidden.length} not wanted
-                    </label>
-                )}
-            </div>
-            {!shown.length && <div className="gd-note">{show === 'want' ? 'Nothing on the want list from this series yet.' : 'Nothing to show.'}</div>}
-            <div className="gd-series-grid">
-                {shown.map(g => {
-                    const have = g.have[0];
-                    return (
-                        <div key={g.id} className={`gd-series-game${have ? ' have' : ''}${isHidden(g) ? ' hidden' : ''}${g.mark === 'want' ? ' want' : ''}${isHere(g) ? ' here' : ''}`}>
-                            {gdCover(g.cover) ? <img src={gdCover(g.cover)} alt="" loading="lazy" onError={e => { e.target.style.visibility = 'hidden'; }} /> : <span className="gd-series-nocover" aria-hidden="true">🎮</span>}
-                            <div className="gd-series-text">
-                                {have
-                                    ? <a className="gd-series-name" href={gdGameUrl(have)} title={g.have.length > 1 ? `You have ${g.have.length} copies` : 'Open your copy'}>{g.name}</a>
-                                    : <span className="gd-series-name">{g.name}</span>}
-                                <span className="gd-note">{[year(g), g.type, g.platforms.slice(0, 4).join(' / ') + (g.platforms.length > 4 ? ' …' : '')].filter(Boolean).join(' · ')}</span>
-                                {have ? <span className="gd-tiny gd-ok">{isHere(g) ? 'This game' : `In your library${g.have.length > 1 ? ` ×${g.have.length}` : ''}`}</span> : (
-                                    <span className="gd-series-marks">
-                                        {g.platform_skipped ? <span className="gd-tiny gd-note">Platform hidden</span> : <>
-                                            <button className={`gd-chip${g.mark === 'want' ? ' on gd-fav' : ''}`} aria-pressed={g.mark === 'want'} onClick={() => mark(g, 'want')}>{g.mark === 'want' ? '★ Wanted' : '☆ Want'}</button>
-                                            <button className={`gd-chip${g.mark === 'skip' ? ' on' : ''}`} aria-pressed={g.mark === 'skip'} onClick={() => mark(g, 'skip')}
-                                                title={g.mark === 'skip' ? 'Put it back in the list' : 'Not interested: hide it and leave it out of the count'}>{g.mark === 'skip' ? 'Restore' : '✕'}</button>
-                                        </>}
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
-
-// Search IGDB for the game a library game is, and pick it (onDone runs after)
-function GDSeriesPicker({ system, game, onDone, notify }) {
-    const [query, setQuery] = React.useState(gdTitle(game.name));
-    const [candidates, setCandidates] = React.useState(null);
-    const search = React.useCallback(async (text) => {
-        setCandidates(null);
-        try {
-            const d = await (await fetch(`${GD_API}/api/series/candidates?${new URLSearchParams({ system, rom: game.path, ...(text ? { q: text } : {}) })}`)).json();
-            setCandidates(d.success ? d.candidates : []);
-        } catch (e) { setCandidates([]); }
-    }, [system, game.path]);
-    React.useEffect(() => { search(''); }, [search]);
-    const choose = async (id) => {
-        const d = await gdPut('/api/series/match', { system, rom_path: game.path, id }).catch(e => ({ success: false, error: e.message }));
-        if (!d.success && notify) notify(d.error || 'That didn\'t work', 'error');
-        if (onDone) onDone();
-    };
-    return (
-        <div className="gd-series-candidates">
-            <div className="gd-row">
-                <input type="search" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') search(query); }} aria-label="Search IGDB" />
-                <button className="gd-btn small" onClick={() => search(query)}>Search</button>
-            </div>
-            {!candidates && <div className="gd-note">Searching IGDB...</div>}
-            {candidates && !candidates.length && <div className="gd-note">Nothing found. Try a shorter name.</div>}
-            {(candidates || []).map(c => (
-                <button key={c.id} className="gd-series-candidate" onClick={() => choose(c.id)}>
-                    <b>{c.name}</b> <span className="gd-note">{[c.year, c.series || 'no series'].filter(Boolean).join(' · ')}</span>
-                </button>
-            ))}
-        </div>
-    );
-}
-
-// The Series row of the panel. Nothing without IGDB keys (Tools > Settings).
-function GDSeries({ system, game, notify }) {
-    const [data, setData] = React.useState(null);
-    const [error, setError] = React.useState(null);
-    const [fixing, setFixing] = React.useState(false);
-    const [query, setQuery] = React.useState('');
-    const [candidates, setCandidates] = React.useState(null);
-    const load = React.useCallback(() => {
-        let cancelled = false;
-        fetch(`${GD_API}/api/series/game?${new URLSearchParams({ system, rom: game.path })}`).then(r => r.json())
-            .then(d => { if (!cancelled) d.success ? (setData(d), setError(null)) : setError(d.error || 'Could not load the series'); })
-            .catch(e => { if (!cancelled) setError(e.message); });
-        return () => { cancelled = true; };
-    }, [system, game.path]);
-    React.useEffect(() => { setData(null); setError(null); setFixing(false); setCandidates(null); return load(); }, [load]);
-
-    if (error && !data) return <GDSection id="series" title="Series" summary="Couldn't load"><div className="gd-note gd-error">{error}</div></GDSection>;
-    if (!data || !data.configured) return null;
-
-    const search = async (text) => {
-        setCandidates(null);
-        try {
-            const d = await (await fetch(`${GD_API}/api/series/candidates?${new URLSearchParams({ system, rom: game.path, ...(text ? { q: text } : {}) })}`)).json();
-            setCandidates(d.success ? d.candidates : []);
-        } catch (e) { setCandidates([]); }
-    };
-    const choose = async (id) => {
-        const d = await gdPut('/api/series/match', { system, rom_path: game.path, id }).catch(e => ({ success: false, error: e.message }));
-        if (!d.success && notify) notify(d.error || 'That didn\'t work', 'error');
-        setFixing(false);
-        setData(null);
-        load();
-    };
-    const series = data.series;
-    const matched = data.match && data.match.id;
-    const fix = (
-        <div className="gd-series-fix">
-            <span className="gd-note">
-                {matched ? <>Matched to <b>{data.match.name}</b> on IGDB{data.match.how === 'loose' ? ' (a near match)' : data.match.how === 'manual' ? ' (chosen by you)' : ''}.</> : "IGDB didn't have a game by this name."}
-                {' '}<button className="gd-linkbutton" onClick={() => { setFixing(f => !f); if (!fixing) { setQuery(gdTitle(game.name)); search(''); } }}>{fixing ? 'Cancel' : matched ? 'Wrong game?' : 'Find it'}</button>
-            </span>
-            {fixing && (
-                <div className="gd-series-candidates">
-                    <div className="gd-row">
-                        <input type="search" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') search(query); }} aria-label="Search IGDB" />
-                        <button className="gd-btn small" onClick={() => search(query)}>Search</button>
-                        {data.match && data.match.how === 'manual' && <button className="gd-btn small" onClick={() => choose(null)}>Match it automatically again</button>}
-                    </div>
-                    {!candidates && <div className="gd-note">Searching IGDB...</div>}
-                    {candidates && !candidates.length && <div className="gd-note">Nothing found.</div>}
-                    {(candidates || []).map(c => (
-                        <button key={c.id} className="gd-series-candidate" onClick={() => choose(c.id)}>
-                            <b>{c.name}</b> <span className="gd-note">{[c.year, c.series || 'no series'].filter(Boolean).join(' · ')}</span>
-                        </button>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-    if (!series) return <GDSection id="series" title="Series" summary={matched ? 'Not in one' : 'Not found'}>{fix}</GDSection>;
-    return (
-        <GDSection id="series" title={series.kind === 'franchise' ? `${series.name} games` : `${series.name} series`} summary={`${series.have} of ${series.total}`}>
-            <GDSeriesGames view={series} reload={load} here={{ system, path: game.path }} notify={notify} />
-            {fix}
-        </GDSection>
-    );
-}
-
 // The panel. Give it the game itself (`game`, as the Library has it), or
 // `system` and `path` and it fetches the game, showing `seed` (whatever the
 // page already knows: name, desc, pictures...) until that arrives.
@@ -716,11 +186,9 @@ function GDSeries({ system, game, notify }) {
 //   onDeleted    (rom path) after the game is removed
 //   editState    a ref kept at {dirty, save}, for a page that asks before
 //                leaving unsaved edits
-//   onScrape     the Library's Fill the gaps for this game (while its details are being edited,
-//                Scrape fills the form from Scraper instead)
-//   Scraper      the Library's scrape popup; without it Scrape opens the game
-//                in the Library
-function GameDetails({ system, systemLabel, game, path, seed, actions, notify, onChanged, onSaved, onDeleted, editState, Scraper, onScrape }) {
+//   onScrape     the Library's Fill the gaps for this game; without it Scrape opens the game
+//                in the Library, in Fill the gaps
+function GameDetails({ system, systemLabel, game, path, seed, actions, notify, onChanged, onSaved, onDeleted, editState, onScrape }) {
     gdUsePhone();   // (in the phone app: redrawn when the connection or the phone's games change)
     const [pinning, setPinning] = React.useState(false);
     // In the phone app: the "more" menu beside Play
@@ -742,7 +210,6 @@ function GameDetails({ system, systemLabel, game, path, seed, actions, notify, o
     const [draft, setDraft] = React.useState(null);
     const [saving, setSaving] = React.useState(false);
     const [deleting, setDeleting] = React.useState(false);
-    const [scraping, setScraping] = React.useState(false);
     const [picturePref, setPicturePref] = useGdPicture();
     const [manualOpen, setManualOpen] = React.useState(false);
     const [pictureOpen, setPictureOpen] = React.useState(false);
@@ -769,7 +236,7 @@ function GameDetails({ system, systemLabel, game, path, seed, actions, notify, o
     const full = base && override && override.key === key ? { ...base, ...override.fields } : base;
     const shown = full || seed;
     // Another game: nothing of the last one's editing carries over
-    React.useEffect(() => { setDraft(null); setOverride(null); setDeleting(false); setScraping(false); }, [key]);
+    React.useEffect(() => { setDraft(null); setOverride(null); setDeleting(false); }, [key]);
     // The page's copy is fresh again
     React.useEffect(() => { setOverride(null); }, [game, fetched]);
     const keep = (fields) => setOverride(o => ({ key, fields: { ...(o && o.key === key ? o.fields : {}), ...fields } }));
@@ -806,14 +273,6 @@ function GameDetails({ system, systemLabel, game, path, seed, actions, notify, o
         setReload(n => n + 1);
         if (onSaved) onSaved(newPath || full.path, fields);
     };
-    // What a scrape found goes into the fields, for you to save; media it downloaded is already there
-    const applyScrape = (merged) => {
-        const media = Object.fromEntries(GD_MEDIA.map(m => m[0]).filter(f => typeof merged[f] === 'string' && merged[f] !== full[f]).map(f => [f, merged[f]]));
-        if (Object.keys(media).length) keep(media);
-        const filled = gdAutoFill({ ...full, ...media, ...Object.fromEntries(GD_EDIT_FIELDS.map(f => [f, merged[f]])) }).game;
-        setDraft(Object.fromEntries(GD_EDIT_FIELDS.map(f => [f, filled[f]])));
-        report('Filled in from the scrape. Save to write it.', 'success');
-    };
     // The page can ask before leaving unsaved edits, and save them
     React.useEffect(() => {
         gdUnsaved.dirty = dirty;
@@ -828,22 +287,6 @@ function GameDetails({ system, systemLabel, game, path, seed, actions, notify, o
         window.addEventListener('retromanager:edit-game', edit);
         return () => window.removeEventListener('retromanager:edit-game', edit);
     }, []);
-    // "Search one source by hand", from Fill the gaps: the scrape popup, for this game
-    React.useEffect(() => {
-        const classic = (e) => {
-            if (Scraper && full && e.detail && e.detail.system === system && gdEncode(e.detail.path) === gdEncode(full.path)) setScraping(true);
-        };
-        window.addEventListener('retromanager:classic-scrape', classic);
-        return () => window.removeEventListener('retromanager:classic-scrape', classic);
-    }, [key, !!full]);
-    // Scrape, pressed on another page, opened the game here
-    React.useEffect(() => {
-        const want = window.gdScrapeOnOpen;
-        if (Scraper && full && want && want.system === system && gdEncode(want.path) === gdEncode(full.path)) {
-            window.gdScrapeOnOpen = null;
-            setScraping(true);
-        }
-    }, [key, !!full]);
     if (!shown) return <div className="gd"><div className="gd-note">Loading...</div></div>;
 
     const field = gdPictureField(shown, picturePref);
@@ -921,10 +364,10 @@ function GameDetails({ system, systemLabel, game, path, seed, actions, notify, o
                             <button className="gd-btn admin-only gd-edit-button" onClick={startEdit} title="Edit this game’s details (E)">{gdIcon('pencil')}Edit</button>
                             <button className="gd-btn gd-icon gd-delete-button admin-only" onClick={() => setDeleting(true)} title="Remove this game" aria-label="Delete">{gdIcon('bin')}</button>
                         </>)}
-                        {full && (Scraper
-                            ? <button className="gd-btn admin-only" onClick={() => (onScrape && !draft ? onScrape(full) : setScraping(true))}
-                                title={onScrape && !draft ? "Every source's pictures and details for this game, beside what it has, to choose from" : 'Look this game up and fill in its details'}>Scrape</button>
-                            : !draft && !gdPhone && <a className="gd-btn admin-only" href={`/?${new URLSearchParams({ system, game: full.path, scrape: '1' })}`} title="Look this game up, in the Library">Scrape</a>)}
+                        {full && !draft && (onScrape
+                            ? <button className="gd-btn admin-only" onClick={() => onScrape(full)}
+                                title="Every source's pictures and details for this game, beside what it has, to choose from">Scrape</button>
+                            : !gdPhone && <a className="gd-btn admin-only" href={`/?${new URLSearchParams({ system, game: full.path, scrape: '1' })}`} title="Look this game up, in the Library's Fill the gaps">Scrape</a>)}
                     </div>
                 </div>
                 <div className="gd-body">
@@ -968,7 +411,6 @@ function GameDetails({ system, systemLabel, game, path, seed, actions, notify, o
                 </div>
                 {deleting && full && <GDDelete system={system} game={full} notify={report} onClose={() => setDeleting(false)}
                     onDeleted={() => { setDeleting(false); if (onDeleted) onDeleted(full.path); }} />}
-                {Scraper && full && <Scraper isOpen={scraping} onClose={() => setScraping(false)} gameData={draft ? { ...full, ...draft } : full} systemName={system} onApplyMetadata={applyScrape} />}
                 {pictureOpen && field && <GDPicture name={gdTitle(shown.name || shown.title)} url={gdMedia(shown[field])} onClose={() => setPictureOpen(false)} />}
                 {manualOpen && shown.manuals && <GDManual name={gdTitle(shown.name || shown.title)} url={gdMedia(shown.manuals)} onClose={() => setManualOpen(false)} />}
                 {!full && (

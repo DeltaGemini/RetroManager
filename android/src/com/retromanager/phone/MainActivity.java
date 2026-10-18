@@ -67,7 +67,9 @@ public class MainActivity extends Activity {
     OfflineCache cache;
     Player player;
     Setup setup;
-    private Updater updater;
+    Updater updater;
+    final Share share = new Share(this);
+    final PhoneSettings phone = new PhoneSettings(this);
     WebView web;
     volatile Folder folder;
     private AlertDialog progress;
@@ -163,128 +165,14 @@ public class MainActivity extends Activity {
         // (not when the app is only being brought back from the recent apps)
         if (state == null && (getIntent().getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0) {
             playFrom(getIntent());
-            sharedToUs(getIntent());
+            share.sharedToUs(getIntent());
         }
     }
 
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         playFrom(intent);
-        sharedToUs(intent);
-    }
-
-    /** The files an intent carries: the one it names, or the several clipped to it. */
-    private static List<Uri> shared(Intent intent) {
-        List<Uri> files = new ArrayList<>();
-        if (intent.getClipData() != null) {
-            for (int i = 0; i < intent.getClipData().getItemCount(); i++) {
-                Uri file = intent.getClipData().getItemAt(i).getUri();
-                if (file != null && !files.contains(file)) files.add(file);
-            }
-        }
-        Uri one = intent.getData() != null ? intent.getData() : (Uri) intent.getParcelableExtra(Intent.EXTRA_STREAM);
-        if (one != null && !files.contains(one)) files.add(one);
-        List<Uri> several = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
-        if (several != null) for (Uri file : several) if (file != null && !files.contains(file)) files.add(file);
-        return files;
-    }
-
-    /** Files shared to the app from another (a game downloaded in the browser,
-     *  say): they're sent to RetroManager, which stages them, and its Add games
-     *  page opens on them, as sharing to the installed web app does. */
-    private void sharedToUs(Intent intent) {
-        String action = intent == null ? null : intent.getAction();
-        if (!Intent.ACTION_SEND.equals(action) && !Intent.ACTION_SEND_MULTIPLE.equals(action)) return;
-        List<Uri> files = shared(intent);
-        intent.setAction(Intent.ACTION_MAIN);
-        String server = prefs.server();
-        if (files.isEmpty() || server == null) {
-            if (server == null) say("Set RetroManager up first.");
-            return;
-        }
-        new Thread(() -> {
-            String boundary = "----RetroManager" + System.nanoTime();
-            HttpURLConnection connection = null;
-            try {
-                // Each file's name and size, to say how far along it is
-                String[] names = new String[files.size()];
-                long[] sizes = new long[files.size()];
-                long total = 0;
-                for (int i = 0; i < files.size(); i++) {
-                    names[i] = "file" + (i + 1);
-                    try (android.database.Cursor cursor = getContentResolver().query(files.get(i), new String[]{android.provider.OpenableColumns.DISPLAY_NAME, android.provider.OpenableColumns.SIZE}, null, null, null)) {
-                        if (cursor != null && cursor.moveToFirst()) {
-                            if (!cursor.isNull(0)) names[i] = cursor.getString(0);
-                            if (!cursor.isNull(1)) sizes[i] = cursor.getLong(1);
-                        }
-                    } catch (Exception e) {
-                        // a name of our own, and no size
-                    }
-                    total += sizes[i];
-                }
-                connection = (HttpURLConnection) new URL(server + "/share").openConnection();
-                connection.setRequestMethod("POST");
-                connection.setDoOutput(true);
-                connection.setInstanceFollowRedirects(false);
-                connection.setConnectTimeout(5000);
-                connection.setReadTimeout(120000);
-                // Each file's lines before it, and the length of it all when every size is known
-                // (which every server takes; without one it goes in chunks)
-                byte[][] heads = new byte[files.size()][];
-                byte[] end = ("--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
-                long length = end.length;
-                boolean sized = true;
-                for (int i = 0; i < files.size(); i++) {
-                    String name = names[i].replace("\"", "'").replace("\r", " ").replace("\n", " ");
-                    heads[i] = ("--" + boundary + "\r\nContent-Disposition: form-data; name=\"roms\"; filename=\"" + name + "\"\r\nContent-Type: application/octet-stream\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
-                    length += heads[i].length + sizes[i] + 2;
-                    if (sizes[i] <= 0) sized = false;
-                }
-                if (sized) connection.setFixedLengthStreamingMode(length);
-                else connection.setChunkedStreamingMode(256 * 1024);
-                connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
-                String cookies = CookieManager.getInstance().getCookie(server + "/share");
-                if (cookies != null) connection.setRequestProperty("Cookie", cookies);
-                long done = 0, last = 0;
-                byte[] buffer = new byte[256 * 1024];
-                try (java.io.OutputStream out = connection.getOutputStream()) {
-                    for (int i = 0; i < files.size(); i++) {
-                        String name = names[i];
-                        out.write(heads[i]);
-                        try (java.io.InputStream in = getContentResolver().openInputStream(files.get(i))) {
-                            if (in == null) throw new java.io.IOException(name + " couldn't be opened");
-                            int n;
-                            while ((n = in.read(buffer)) >= 0) {
-                                out.write(buffer, 0, n);
-                                done += n;
-                                long now = android.os.SystemClock.elapsedRealtime();
-                                if (now - last > 200) {
-                                    last = now;
-                                    progress("Sending " + name + " to RetroManager", done, total);
-                                }
-                            }
-                        }
-                        out.write("\r\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                    }
-                    out.write(end);
-                }
-                int status = connection.getResponseCode();
-                progress(null, 0, 0);
-                if (status >= 400) {
-                    alert("Not sent", "RetroManager answered " + status + ".");
-                    return;
-                }
-                // (it answers with where its Add games page is, with how many it took)
-                String where = connection.getHeaderField("Location");
-                String page = where == null ? "/import?shared=" + files.size() : where.startsWith("http") ? where.substring(where.indexOf('/', 8)) : where;
-                runOnUiThread(() -> web.loadUrl(server + page));
-            } catch (Exception e) {
-                progress(null, 0, 0);
-                alert("Not sent", "The files couldn't be sent to RetroManager: " + e.getMessage());
-            } finally {
-                if (connection != null) connection.disconnect();
-            }
-        }).start();
+        share.sharedToUs(intent);
     }
 
     /** A game's icon on the home screen was pressed (see Bridge.pin): the game starts. */
@@ -363,7 +251,7 @@ public class MainActivity extends Activity {
         super.onResume();
         web.onResume();
         // Back from RetroArch, most likely: did the game begin there, and has its save changed
-        player.checkLaunch();
+        player.launcher.checkLaunch();
         player.sendSaves();
         // (and the roms folder may have changed meanwhile: something else may keep it in step)
         romsChanged();
@@ -378,8 +266,7 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onPause() {
-        stick = null;
-        padRepeat.removeCallbacks(stickAgain);
+        pads.stop();
         web.onPause();
         CookieManager.getInstance().flush();
         super.onPause();
@@ -391,76 +278,16 @@ public class MainActivity extends Activity {
         super.onDestroy();
     }
 
-    // --- A controller ---
-    // A page inside the app isn't given a controller's presses, so they're passed
-    // to it (RMPad, in the Console): the D-pad or stick chooses, A opens or plays,
-    // B goes back, X is the game's page, L1 and R1 a page up and down.
+    // --- A controller: Pad.java passes its presses to the page ---
 
-    private final android.os.Handler padRepeat = new android.os.Handler(android.os.Looper.getMainLooper());
-    private String stick;
-    private final Runnable stickAgain = new Runnable() {
-        @Override public void run() {
-            if (stick == null) return;
-            pad(stick);
-            padRepeat.postDelayed(this, 110);
-        }
-    };
-
-    private static String padKey(int code) {
-        switch (code) {
-            case android.view.KeyEvent.KEYCODE_DPAD_UP: return "ArrowUp";
-            case android.view.KeyEvent.KEYCODE_DPAD_DOWN: return "ArrowDown";
-            case android.view.KeyEvent.KEYCODE_DPAD_LEFT: return "ArrowLeft";
-            case android.view.KeyEvent.KEYCODE_DPAD_RIGHT: return "ArrowRight";
-            case android.view.KeyEvent.KEYCODE_DPAD_CENTER:
-            case android.view.KeyEvent.KEYCODE_BUTTON_A:
-            case android.view.KeyEvent.KEYCODE_BUTTON_START: return "Enter";
-            case android.view.KeyEvent.KEYCODE_BUTTON_B: return "Escape";
-            case android.view.KeyEvent.KEYCODE_BUTTON_X: return "e";
-            case android.view.KeyEvent.KEYCODE_BUTTON_L1: return "PageUp";
-            case android.view.KeyEvent.KEYCODE_BUTTON_R1: return "PageDown";
-            default: return null;
-        }
-    }
-
-    private static boolean fromPad(int source) {
-        return (source & android.view.InputDevice.SOURCE_GAMEPAD) == android.view.InputDevice.SOURCE_GAMEPAD
-                || (source & android.view.InputDevice.SOURCE_JOYSTICK) == android.view.InputDevice.SOURCE_JOYSTICK
-                || (source & android.view.InputDevice.SOURCE_DPAD) == android.view.InputDevice.SOURCE_DPAD;
-    }
-
-    private void pad(String key) {
-        if (!isFinishing() && !isDestroyed()) web.evaluateJavascript("window.RMPad&&window.RMPad('" + key + "')", null);
-    }
+    private final Pad pads = new Pad(this);
 
     @Override public boolean dispatchKeyEvent(android.view.KeyEvent event) {
-        String key = fromPad(event.getSource()) ? padKey(event.getKeyCode()) : null;
-        if (key == null) return super.dispatchKeyEvent(event);
-        // (held down, only the ones that move carry on)
-        if (event.getAction() == android.view.KeyEvent.ACTION_DOWN && (event.getRepeatCount() == 0 || key.startsWith("Arrow") || key.startsWith("Page"))) pad(key);
-        return true;
+        return pads.key(event) || super.dispatchKeyEvent(event);
     }
 
     @Override public boolean dispatchGenericMotionEvent(android.view.MotionEvent event) {
-        if ((event.getSource() & android.view.InputDevice.SOURCE_JOYSTICK) != android.view.InputDevice.SOURCE_JOYSTICK
-                || event.getAction() != android.view.MotionEvent.ACTION_MOVE) return super.dispatchGenericMotionEvent(event);
-        // The D-pad of many controllers is a "hat"; the left stick does the same
-        float x = event.getAxisValue(android.view.MotionEvent.AXIS_HAT_X), y = event.getAxisValue(android.view.MotionEvent.AXIS_HAT_Y);
-        if (Math.abs(x) < 0.5f && Math.abs(y) < 0.5f) {
-            x = event.getAxisValue(android.view.MotionEvent.AXIS_X);
-            y = event.getAxisValue(android.view.MotionEvent.AXIS_Y);
-        }
-        String now = Math.abs(x) > 0.6f && Math.abs(x) >= Math.abs(y) ? (x < 0 ? "ArrowLeft" : "ArrowRight")
-                : Math.abs(y) > 0.6f ? (y < 0 ? "ArrowUp" : "ArrowDown") : null;
-        if (now == null ? stick != null : !now.equals(stick)) {
-            stick = now;
-            padRepeat.removeCallbacks(stickAgain);
-            if (now != null) {
-                pad(now);
-                padRepeat.postDelayed(stickAgain, 380);
-            }
-        }
-        return true;
+        return pads.motion(event) || super.dispatchGenericMotionEvent(event);
     }
 
     @SuppressWarnings("deprecation")
@@ -483,7 +310,7 @@ public class MainActivity extends Activity {
             new Thread(() -> player.claim(here, prefs.unclaimed(), true)).start();
         }
         player.refreshCores();
-        checkUpdate(false);
+        updater.checkUpdate(false);
         refreshShortcuts();
         romsChanged();
         web.clearHistory();
@@ -795,117 +622,6 @@ public class MainActivity extends Activity {
         });
     }
 
-    /** What's in the phone's roms folder, system by system, with how much room it takes. */
-    private void storage() {
-        Folder folder = this.folder;
-        if (folder == null) return;
-        say("Looking through the roms folder…");
-        new Thread(() -> {
-            List<String> names = new ArrayList<>(), labels = new ArrayList<>();
-            List<List<Object[]>> all = new ArrayList<>();
-            long total = 0;
-            for (Folder.Entry system : folder.list("roms")) {
-                if (!system.folder || system.name.startsWith(".")) continue;
-                List<Object[]> files = new ArrayList<>();
-                sizes(folder, "roms/" + system.name, "", 0, files);
-                if (files.isEmpty()) continue;
-                long size = 0;
-                for (Object[] file : files) size += (Long) file[1];
-                total += size;
-                files.sort((a, b) -> Long.compare((Long) b[1], (Long) a[1]));
-                names.add(system.name);
-                all.add(files);
-                String label = player.systemEntry(system.name).optString("label", system.name);
-                labels.add(label + ": " + files.size() + (files.size() == 1 ? " file, " : " files, ") + Player.size(size));
-            }
-            String free;
-            try {
-                free = ", " + Player.size(new android.os.StatFs(folder.path()).getAvailableBytes()) + " free";
-            } catch (Exception e) {
-                free = "";
-            }
-            String title = "On this phone: " + Player.size(total) + free;
-            runOnUiThread(() -> {
-                if (isFinishing() || isDestroyed()) return;
-                new AlertDialog.Builder(this).setTitle(title).setItems(labels.toArray(new String[0]), (dialog, which) -> {
-                    List<Object[]> files = all.get(which);
-                    String[] rows = new String[Math.min(files.size(), 300)];
-                    for (int i = 0; i < rows.length; i++) rows[i] = Player.size((Long) files.get(i)[1]) + "  " + files.get(i)[0];
-                    // (largest first; pressing one offers to take that game off the phone)
-                    new AlertDialog.Builder(this).setTitle(labels.get(which)).setItems(rows, (d, row) -> {
-                        String path = (String) files.get(row)[0];
-                        player.remove(names.get(which), path.substring(path.lastIndexOf('/') + 1), path);
-                    }).setPositiveButton("Close", null).show();
-                }).setPositiveButton("Close", null).show();
-            });
-        }).start();
-    }
-
-    static void sizes(Folder folder, String base, String inside, int depth, List<Object[]> found) {
-        for (Folder.Entry entry : folder.list(inside.isEmpty() ? base : base + "/" + inside)) {
-            String path = inside.isEmpty() ? entry.name : inside + "/" + entry.name;
-            if (entry.name.startsWith(".")) continue;
-            if (!entry.folder) found.add(new Object[]{path, entry.size});
-            else if (depth < 3) sizes(folder, base, path, depth + 1, found);
-        }
-    }
-
-    private long version() {
-        try {
-            return getPackageManager().getPackageInfo(getPackageName(), 0).getLongVersionCode();
-        } catch (Exception e) {
-            return 0;
-        }
-    }
-
-    /** Whether RetroManager has a newer build of this app (android/build.sh puts
-     *  it there, with its number in /app/version.json): says so once for each,
-     *  or every time when asked (`asked`). */
-    void checkUpdate(boolean asked) {
-        String server = prefs.server();
-        if (server == null) return;
-        new Thread(() -> {
-            long newest = 0;
-            String name = "";
-            try {
-                HttpURLConnection connection = (HttpURLConnection) new URL(server + "/app/version.json").openConnection();
-                connection.setConnectTimeout(4000);
-                connection.setReadTimeout(4000);
-                if (connection.getResponseCode() == 200) {
-                    try (java.io.InputStream in = connection.getInputStream()) {
-                        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-                        OfflineCache.copy(in, out);
-                        JSONObject described = new JSONObject(out.toString("UTF-8"));
-                        newest = described.optLong("code");
-                        name = described.optString("name");
-                    }
-                }
-                connection.disconnect();
-            } catch (Exception e) {
-                if (asked) say("RetroManager couldn't be asked.");
-                return;
-            }
-            long found = newest;
-            String called = name;
-            if (found <= version()) {
-                if (asked) say("This is the newest version.");
-                return;
-            }
-            if (!asked && found == prefs.toldOf()) return;
-            runOnUiThread(() -> {
-                if (isFinishing() || isDestroyed()) return;
-                try {
-                    ask(spec("confirm", "A newer version of this app is ready", "Version " + called + ". It's fetched and installed over this one: Android asks you to confirm it. Your games, saves and settings stay.").put("yes", "Update"), (index, text) -> {
-                        if (index == 0) updater.install(server);
-                        else prefs.toldOf(found);
-                    });
-                } catch (org.json.JSONException e) {
-                    // nothing to ask with
-                }
-            });
-        }).start();
-    }
-
     static final String TAILSCALE = "com.tailscale.ipn";
 
     /** Whether RetroManager answers now (not from the main thread). */
@@ -946,7 +662,7 @@ public class MainActivity extends Activity {
                     String id = pinned.getId();
                     int slash = id.indexOf('/');
                     if (!id.startsWith("game:") || slash < 0) continue;
-                    Intent play = player.direct(id.substring(5, slash), id.substring(slash + 1));
+                    Intent play = player.launcher.direct(id.substring(5, slash), id.substring(slash + 1));
                     if (play != null) changed.add(new ShortcutInfo.Builder(this, id).setIntent(play).build());
                 }
                 if (!changed.isEmpty()) shortcuts.updateShortcuts(changed);
@@ -1045,7 +761,7 @@ public class MainActivity extends Activity {
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
         if (request == PICK_FILES) {
-            List<Uri> files = result == RESULT_OK && data != null ? shared(data) : new ArrayList<>();
+            List<Uri> files = result == RESULT_OK && data != null ? Share.shared(data) : new ArrayList<>();
             if (picking != null) picking.onReceiveValue(files.isEmpty() ? null : files.toArray(new Uri[0]));
             picking = null;
             return;
@@ -1072,147 +788,6 @@ public class MainActivity extends Activity {
         }
         if (prefs.server() == null) askServer(null, null);
         else open();
-    }
-
-    // --- This phone's settings (📱 in the page's header) ---
-
-    void settings() {
-        if (isFinishing() || isDestroyed()) return;
-        List<String> labels = new ArrayList<>();
-        List<Runnable> actions = new ArrayList<>();
-        labels.add("RetroManager: " + prefs.server());
-        actions.add(() -> askServer(null, null));
-        labels.add("RetroArch folder: " + (folder == null ? "not chosen" : folder.path()));
-        actions.add(this::askFolder);
-        List<String> installed = player.installed();
-        labels.add("RetroArch app: " + (installed.isEmpty() ? "not installed" : player.retroArch()));
-        actions.add(() -> {
-            if (installed.isEmpty()) alert("RetroArch isn't installed", "Install RetroArch from retroarch.com, and its cores from inside it.");
-            else new AlertDialog.Builder(this).setTitle("RetroArch app")
-                    .setItems(installed.toArray(new String[0]), (dialog, which) -> prefs.retroArch(installed.get(which))).show();
-        });
-        JSONArray profiles = prefs.profiles();
-        if (profiles.length() > 0) {
-            String profile = prefs.profile();
-            labels.add("Saves (with login off): " + (profile == null ? "asked at the first game" : profile.isEmpty() ? "stay on this phone" : profile + "'s"));
-            actions.add(() -> {
-                String[] options = new String[profiles.length() + 1];
-                options[0] = "Nobody: saves stay on this phone";
-                for (int i = 0; i < profiles.length(); i++) options[i + 1] = profiles.optString(i);
-                new AlertDialog.Builder(this).setTitle("Whose saves does this phone play with?")
-                        .setItems(options, (dialog, which) -> prefs.profile(which == 0 ? "" : options[which])).show();
-            });
-        }
-        labels.add("Emulators…");
-        actions.add(this::emulators);
-        labels.add("Games on this phone…");
-        actions.add(this::storage);
-        labels.add("Forget the pages kept for offline (" + Player.size(cache.size()) + ")");
-        actions.add(() -> {
-            cache.clear();
-            say("Forgotten. Pictures in the media folder stay.");
-        });
-        String mine;
-        try {
-            mine = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-        } catch (Exception e) {
-            mine = "?";
-        }
-        labels.add("App version " + mine + ": look for a newer one");
-        actions.add(() -> checkUpdate(true));
-        labels.add("Reload");
-        actions.add(() -> {
-            cache.reached(true);
-            web.reload();
-        });
-        new AlertDialog.Builder(this).setTitle("This phone").setItems(labels.toArray(new String[0]), (dialog, which) -> actions.get(which).run())
-                .setPositiveButton("Close", null).show();
-    }
-
-    /** What plays each system's games: RetroArch with one of its cores, or an emulator of its own. */
-    private void emulators() {
-        JSONArray systems = player.systems();
-        if (systems.length() == 0) {
-            alert("Emulators", "The list of systems comes from RetroManager, which hasn't been reached yet.");
-            return;
-        }
-        History history = new History(folder);
-        String[] labels = new String[systems.length()];
-        for (int i = 0; i < labels.length; i++) {
-            JSONObject system = systems.optJSONObject(i);
-            JSONObject plays = player.choose(history, system.optString("name"), null, Player.players(system));
-            labels[i] = system.optString("label") + ": " + (plays == null ? "nothing yet" : plays.optString("name"))
-                    + (plays != null && prefs.core(system.optString("name")) != null ? " (chosen)" : "");
-        }
-        new AlertDialog.Builder(this).setTitle("Emulators").setItems(labels, (dialog, which) -> emulators(systems.optJSONObject(which).optString("name"), null, null))
-                .setPositiveButton("Close", null).show();
-    }
-
-    /** One system's, or with `rom` one game's own: everything that could play it,
-     *  with what's known of each on this phone. */
-    void emulators(String name) {
-        emulators(name, null, null);
-    }
-
-    void emulators(String name, String rom, String title) {
-        runOnUiThread(() -> {
-            if (isFinishing() || isDestroyed()) return;
-            JSONObject system = player.systemEntry(name);
-            JSONArray players = Player.players(system);
-            History history = new History(folder);
-            java.util.Set<String> failed = prefs.failed(name);
-            // What's chosen is kept for the system, or for the one game
-            String key = rom == null ? name : name + "/" + rom;
-            List<String> labels = new ArrayList<>();
-            List<Runnable> actions = new ArrayList<>();
-            labels.add(rom == null ? "Automatic" : "As " + system.optString("label", name) + " is played");
-            actions.add(() -> prefs.core(key, null));
-            for (int i = 0; i < players.length(); i++) {
-                JSONObject one = players.optJSONObject(i);
-                if ("core".equals(one.optString("kind"))) {
-                    String core = one.optString("core");
-                    labels.add(one.optString("name") + (failed.contains(core) ? " (didn't start when tried)" : history.used(core) ? " (installed)" : ""));
-                    actions.add(() -> {
-                        prefs.failed(name, core, false);
-                        prefs.core(key, one.optString("id"));
-                    });
-                } else if (player.has(one.optString("package"))) {
-                    labels.add(one.optString("name") + " (installed; keeps its own saves)");
-                    actions.add(() -> prefs.core(key, one.optString("id")));
-                } else {
-                    labels.add("Get " + one.optString("name") + " (not installed)");
-                    actions.add(() -> start(new Intent(Intent.ACTION_VIEW, Uri.parse(one.optString("get"))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)));
-                }
-            }
-            labels.add("Another RetroArch core…");
-            actions.add(() -> typeCore(name, key, title != null ? title : system.optString("label", name)));
-            String chosen = prefs.core(key);
-            try {
-                ask(spec("choose", (title != null ? title : system.optString("label", name)) + (chosen == null ? "" : ": " + chosen.replace("retroarch:", "RetroArch: ").replace("app:", "")), null)
-                        .put("options", new JSONArray(labels)), (index, text) -> {
-                    if (index < 0) return;
-                    actions.get(index).run();
-                    // (the page marks the systems nothing plays)
-                    tellPage();
-                });
-            } catch (org.json.JSONException e) {
-                // nothing to ask with
-            }
-        });
-    }
-
-    private void typeCore(String name, String key, String label) {
-        try {
-            ask(spec("input", label, "The core's file name in RetroArch, without \"_libretro_android.so\".").put("hint", "snes9x").put("yes", "Use"), (index, text) -> {
-                String core = index != 0 || text == null ? "" : text.trim().replace("_libretro_android.so", "");
-                if (core.isEmpty()) return;
-                prefs.failed(name, core, false);
-                prefs.core(key, "retroarch:" + core);
-                tellPage();
-            });
-        } catch (org.json.JSONException e) {
-            // nothing to ask with
-        }
     }
 
     /** Tells the page that what the phone has, or can play, may have changed. */

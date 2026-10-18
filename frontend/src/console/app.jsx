@@ -639,6 +639,20 @@ function ConsoleGames({ system, list, startOn, startShowing = true, fromHome, on
         window.dispatchEvent(new Event('retromanager:console-lists'));
     };
     const removed = () => { setGames(all => all && all.filter(g => keyOf(g) !== chosen)); setShowing(false); };
+    // The panel moved on to another game (a patched ROM added as a new game, a ROM file renamed):
+    // that one, fetched and put in the list if it's new, is the one shown
+    const movedTo = async (path, fields) => {
+        const bare = String(path || '').replace(/^(\.\/)+/, '');
+        if (!game || !bare || bare === String(game.path).replace(/^(\.\/)+/, '')) { saved(fields); return; }
+        const where = game._system || (system && system.name);
+        try {
+            const d = await (await fetch(`${API_BASE}/api/systems/${encodeURIComponent(where)}/games/${bare.split('/').map(encodeURIComponent).join('/')}`)).json();
+            if (!d.success) return;
+            const next = { ...d.game, ...(game._system ? { _system: game._system, _system_label: game._system_label } : {}) };
+            setGames(all => [...(all || []).filter(g => keyOf(g) !== keyOf(next)), next]);
+            setChosen(keyOf(next));
+        } catch (e) { /* stays on the game it was */ }
+    };
 
     // Esc, Backspace or left goes back (the list has the other keys)
     useEffect(() => {
@@ -685,7 +699,7 @@ function ConsoleGames({ system, list, startOn, startShowing = true, fromHome, on
                             : <button className="gd-btn small" style={{marginBottom: 12}} onClick={() => setShowing(false)}>‹ Games</button>)}
                         {game && (
                             <GameDetails system={systemOf(game, system)} systemLabel={game._system_label || systemName(system)} game={game}
-                                onSaved={(path, fields) => saved(fields)} onChanged={statusChanged} onDeleted={removed} />
+                                onSaved={movedTo} onChanged={statusChanged} onDeleted={removed} />
                         )}
                     </div>
                 </div>
