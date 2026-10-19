@@ -201,7 +201,7 @@ function ConsoleBubble({ el, children }) {
 
 // How the first screen is laid out, behind the button by the search (drawn
 // like the phone app's own settings, whose styles it borrows)
-function ConsoleSettings({ onClose, sortMode, setSortMode, view, setView, tilePicture, tileShape, setTileShape, systemPictures, hidden, toggleRow, rows }) {
+function ConsoleSettings({ onClose, sortMode, setSortMode, view, setView, tilePicture, tileShape, setTileShape, systemPictures, hidden, toggleRow, rows, phoneOnly, setPhoneOnly }) {
     useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); onClose(); } };
         document.addEventListener('keydown', onKey, true);
@@ -252,6 +252,12 @@ function ConsoleSettings({ onClose, sortMode, setSortMode, view, setView, tilePi
                     <section className="rm-set-group"><h3>Show the systems as</h3>
                         <div className="rm-set-rows">{SYSTEM_VIEWS.map(([key, label]) => pick(key, label, key === view, () => setView(key)))}</div>
                     </section>
+                    {/* (in the phone app) */}
+                    {gdPhone && (
+                        <section className="rm-set-group"><h3>Systems</h3>
+                            <div className="rm-set-rows">{pick('phoneOnly', 'Hide systems with no games on this phone', phoneOnly, () => setPhoneOnly(!phoneOnly))}</div>
+                        </section>
+                    )}
                 </div>
             </div>
         </div>, document.body);
@@ -278,10 +284,13 @@ function ConsoleSystems({ systems, home, installed, pad }) {
     const phone = gdUsePhone();
     const onPhone = (system) => (gdPhone && phone.counts[system.name]) || 0;
     const away = (system) => !!gdPhone && phone.offline && !onPhone(system);
+    // (and, chosen in the Console settings, the systems with none left out altogether)
+    const [phoneOnly, setPhoneOnlyState] = React.useState(() => rememberedChoice('retromanager.console.phoneOnly', v => v === 'on' || v === 'off', 'off') === 'on');
+    const setPhoneOnly = (on) => { setPhoneOnlyState(on); rememberChoice('retromanager.console.phoneOnly', on ? 'on' : 'off'); };
     const shown = React.useMemo(() => {
-        const sorted = systems.filter(s => s.rom_count > 0).sort(SYSTEM_SORTS[sortMode] || SYSTEM_SORTS.name);
+        const sorted = systems.filter(s => s.rom_count > 0 && !(gdPhone && phoneOnly && !onPhone(s))).sort(SYSTEM_SORTS[sortMode] || SYSTEM_SORTS.name);
         return gdPhone && phone.offline ? [...sorted.filter(s => !away(s)), ...sorted.filter(away)] : sorted;
-    }, [systems, sortMode, phone.offline, phone.counts]);
+    }, [systems, sortMode, phone.offline, phone.counts, phoneOnly]);
     // The chosen tile is remembered by its key, so it stays chosen when the order changes
     const [chosen, setChosen] = React.useState(() => (consoleParams().get('system') ? `s:${consoleParams().get('system')}` : null));
     const [view, setViewState] = React.useState(() => rememberedChoice('retromanager.console.view', v => SYSTEM_VIEWS.some(x => x[0] === v), 'row'));
@@ -547,7 +556,7 @@ function ConsoleSystems({ systems, home, installed, pad }) {
                 </div>
             )}
             {settingsOpen && <ConsoleSettings onClose={() => setSettingsOpen(false)} sortMode={sortMode} setSortMode={setSortMode} view={view} setView={setView}
-                tilePicture={tilePicture} tileShape={tileShape} setTileShape={setTileShape} systemPictures={systemPictures} hidden={hidden} toggleRow={toggleRow}
+                tilePicture={tilePicture} tileShape={tileShape} setTileShape={setTileShape} systemPictures={systemPictures} hidden={hidden} toggleRow={toggleRow} phoneOnly={phoneOnly} setPhoneOnly={setPhoneOnly}
                 rows={[['recent', 'Continue playing', home && home.recent && home.recent.length], ['added', 'Recently added', home && home.added && home.added.length],
                     ...(gdPhone ? [['installed', 'Installed games', installed && installed.length]] : [])]} />}
             <ConsoleBubble el={currentEl}>{bubble()}</ConsoleBubble>

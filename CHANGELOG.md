@@ -6,6 +6,10 @@ Each version's big changes, then the bugs found and fixed since the version befo
 
 (Renamed to the version, with its date, when it's released.)
 
+### Big changes
+
+1. **Only the systems on your phone**: in the phone app, the Console settings can hide the systems that have no games on this phone.
+
 ### Bugs fixed
 
 - The Starship Panels themes: the header's elbow was empty on a phone (the theme hides the logo, and narrow screens hide the name). RetroManager's name is its title now, in tall capitals, always in the phone app and wherever a page has room beside its links.
