@@ -417,6 +417,13 @@ html:root[data-palette^="panels"] .rm-header {
 }
 html:root[data-palette^="panels"] .rm-brand { color: var(--lc-a); }
 html:root[data-palette^="panels"] .rm-brand img { display: none; }
+/* (no logo, so the name is the header's title: tall capitals in the elbow. The phone app's header
+   (rm-app-header: no page links) keeps it at every width; a narrow page's gives its room to the links.
+   Not :has(), which older Android WebViews don't know.) */
+html:root[data-palette^="panels"] .rm-brand { flex-shrink: 1; min-width: 0; font-size: 21px; font-weight: 700; letter-spacing: 0.03em; line-height: 1; }
+html:root[data-palette^="panels"] .rm-brand span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html:root[data-palette^="panels"] .rm-app-header .rm-brand { display: flex; }
+html:root[data-palette^="panels"] .rm-app-header .rm-brand span { display: block; }
 html:root[data-palette^="panels"] .rm-nav { align-self: center; gap: 4px; }
 html:root[data-palette^="panels"] .rm-nav a { color: #000; background: var(--lc-c); border: none; border-radius: 999px; padding: 6px 12px; margin: 0; font-weight: 700; }
 @media (max-width: 700px) {

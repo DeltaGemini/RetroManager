@@ -606,7 +606,7 @@
         // In the phone app the Console page is all there is: no other views, and
         // nothing that changes the library. It says whether the server's there instead.
         if (app) {
-            return h('header', { className: 'rm-header' },
+            return h('header', { className: 'rm-header rm-app-header' },
                 h('a', { className: 'rm-brand', href: '/console', 'aria-label': 'RetroManager' },
                     h('img', { src: '/icons/icon-192.png', alt: '' }), h('span', null, 'RetroManager')),
                 h('div', { className: 'rm-actions' },
